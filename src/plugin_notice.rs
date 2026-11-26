@@ -766,7 +766,7 @@ impl Listener {
         let stop = Arc::new(AtomicBool::new(false));
         let stopping = stop.clone();
         thread::Builder::new()
-            .name("daozai-plugin-notice".into())
+            .name("lingqi-plugin-notice".into())
             .spawn(move || {
                 while let Ok((stream, _)) = listener.accept() {
                     if stopping.load(Ordering::Relaxed) {
@@ -856,7 +856,7 @@ mod tests {
         fn new() -> Self {
             Self(
                 std::env::temp_dir()
-                    .join(format!("daozai-plugin-notice-{}", random_token().unwrap())),
+                    .join(format!("lingqi-plugin-notice-{}", random_token().unwrap())),
             )
         }
     }

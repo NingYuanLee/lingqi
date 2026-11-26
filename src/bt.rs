@@ -93,7 +93,7 @@ pub fn spawn()->Service {
     let stop=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     #[cfg(windows)] {
         let stopped=stop.clone();
-        let _=std::thread::Builder::new().name("daozai-bluetooth".into()).spawn(move||windows::run(tx,stopped));
+        let _=std::thread::Builder::new().name("lingqi-bluetooth".into()).spawn(move||windows::run(tx,stopped));
     }
     #[cfg(not(windows))] let _=tx;
     Service{rx,stop}
@@ -104,7 +104,7 @@ pub fn spawn_receivers(store:compat::Store,wake:impl Fn()+Send+'static)->Service
     let (tx,rx)=std::sync::mpsc::sync_channel(1);
     let stop=std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let stopped=stop.clone();
-    let _=std::thread::Builder::new().name("daozai-usb-receivers".into()).spawn(move||receivers::run(tx,stopped,store,wake));
+    let _=std::thread::Builder::new().name("lingqi-usb-receivers".into()).spawn(move||receivers::run(tx,stopped,store,wake));
     Service{rx,stop}
 }
 #[cfg(test)]

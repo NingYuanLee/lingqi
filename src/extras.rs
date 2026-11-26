@@ -1,4 +1,4 @@
-//! 设置、通知队列与岛仔表情。
+//! 设置、通知队列与灵栖表情。
 use crate::settings_theme::color as settings_color;
 use crate::app::{App, Cmd, Env, NotificationSound, Phase, HUD_TRACK_W, HUD_TRACK_X, HUD_W, PAGE_NAMES};
 use crate::paint::{Card, H};
@@ -67,7 +67,7 @@ impl Alert {
 fn reminder_module(title:&str)->Option<usize> {
     use crate::app::*;
     match title {
-        "岛仔已暂停音乐功能"=>Some(MUSIC_PAGE),
+        "灵栖已暂停音乐功能"=>Some(MUSIC_PAGE),
         "专注计时"=>Some(FOCUS_PAGE),
         "喝水时间到了"|SIT_TITLE|"今日饮水目标达成"=>Some(WATER_PAGE),
         "待办到时间了"=>Some(TODO_PAGE),
@@ -497,7 +497,7 @@ impl App {
         if crate::messenger::suppresses_toast(&app,&id,crate::messenger::toast_suppression(&self.settings)){return;}
         let client=crate::app::Messenger::from_notification_id(&id).filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast);
         let id=client.map(|client|client.adapter().notification_id.to_string()).unwrap_or(id);
-        // 岛仔自己发出的系统提醒会被通知中心回传；已在历史里的同一内容不再入队，避免重复显示。
+        // 灵栖自己发出的系统提醒会被通知中心回传；已在历史里的同一内容不再入队，避免重复显示。
         if crate::messenger::Messenger::from_notification_id(&id).is_none() && self.history.iter().any(|a|format!("{} · {}",a.title,a.body)==body){return;}
         if !self.notification_apps.observe(&id,&app) || !self.settings.notifications{return;}
         let unread=client.map(|client|unread.filter(|u|u.source==client && u.pid!=0).unwrap_or(crate::app::Unread::of(client)));
@@ -1139,7 +1139,7 @@ impl App {
             0=>{
                 let choices=[("吉祥物",self.settings.pet),("极简刘海",self.settings.minimal),("系统提示",self.settings.system_hud),("全屏隐藏",self.settings.hide_fullscreen)];
                 for (i,(name,on)) in choices.iter().enumerate(){let x=42.0+(i%2) as f32*169.0;let y=57.0+(i/2) as f32*27.0;let text=format!("{}  {}",name,if *on{"开"}else{"关"});if setting_button(c,x,y,158.0,&text,*on,&format!("general-{i}")){match i{0=>self.set_pet(!self.settings.pet),1=>self.set_minimal(!self.settings.minimal),2=>self.settings.system_hud=!self.settings.system_hud,_=>self.settings.hide_fullscreen=!self.settings.hide_fullscreen}}}
-                c.text(42.0,116.0,"岛仔收起时常驻；极简模式保留细线",10.5,W::Regular,theme::GRAY,H::Left);
+                c.text(42.0,116.0,"灵栖收起时常驻；极简模式保留细线",10.5,W::Regular,theme::GRAY,H::Left);
             }
             1 if self.health_time=>self.health_time_page(c),
             1=>{
@@ -1440,131 +1440,9 @@ pub(crate) fn settings_label(ui:&mut egui::Ui,text:&str){
     ui.label(egui::RichText::new(text).size(11.5).color(settings_color(ctx,Color32::from_gray(185),Color32::from_gray(70))));
     ui.add_space(2.0);
 }
-const SUPPORT_RECENT_URI: &str = "support-recent-uri";
-const SUPPORT_WALL_URI: &str = "support-wall-uri";
-const BUNDLED_SUPPORTERS: usize = 108;
 
-fn support_author(ui:&mut egui::Ui, supporters: &mut crate::supporters::State){
-    supporters.refresh(ui.ctx());
-    let snapshot = supporters.snapshot();
-    let wall_id = egui::Id::new("support-author-wall");
-    if ui.ctx().data(|data| data.get_temp::<bool>(wall_id).unwrap_or(false)) {
-        release_support_image(ui.ctx(), SUPPORT_RECENT_URI);
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("感谢墙").size(17.0).strong());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.link("← 返回").clicked() {
-                    ui.ctx().data_mut(|data| data.insert_temp(wall_id, false));
-                }
-            });
-        });
-        ui.label(egui::RichText::new("按累计支持排序").size(11.0).weak());
-        ui.add_space(4.0);
-        let image = match snapshot {
-            Some(data) => egui::Image::from_bytes(format!("bytes://supporters/wall-{}.webp", data.version), data.wall.clone()),
-            None => egui::Image::new(egui::include_image!("../assets/support/wall.webp")),
-        }.fit_to_original_size(1.0).max_width(ui.available_width()).alt_text("岛仔感谢墙");
-        add_support_image(ui, image, SUPPORT_WALL_URI);
-        return;
-    }
-    release_support_image(ui.ctx(), SUPPORT_WALL_URI);
-    let id=egui::Id::new("support-author-open");
-    let open=ui.ctx().data(|data|data.get_temp::<bool>(id).unwrap_or(false));
-    if !open {release_support_codes(ui.ctx());}
-    let dark=ui.visuals().dark_mode;
-    ui.scope(|ui|{
-    if !open {
-    egui::Frame::new().fill(if dark{Color32::from_rgb(42,37,53)}else{Color32::from_rgb(239,233,250)})
-        .corner_radius(10.0).inner_margin(egui::Margin::symmetric(12,8)).show(ui,|ui|{
-            let image_width=120.0;
-            let text_width=(ui.available_width()-image_width-ui.spacing().item_spacing.x).max(0.0);
-            ui.horizontal(|ui|{
-                ui.allocate_ui_with_layout(egui::vec2(text_width,64.0),egui::Layout::top_down(egui::Align::Min).with_main_align(egui::Align::Center),|ui|{
-                    ui.set_max_width(text_width);
-                    ui.label(egui::RichText::new("请小唐喝杯咖啡").size(19.0).strong());
-                    ui.add(egui::Label::new("岛仔陪你认真生活，你的支持，陪小唐把它慢慢做好。").wrap());
-                });
-                ui.add(egui::Image::new(egui::include_image!("../assets/support/daozai-coffee.svg")).fit_to_exact_size(egui::vec2(image_width,62.5)));
-            });
-        });
-    } else {
-        ui.set_min_height(200.0);
-        let ctx=ui.ctx().clone();
-        // 只解码一次并裁出二维码区域，按实际显示像素缩小：原图解码后两张合计约 17MB，缩小后不到 1MB。
-        let pixels=((180.0*ctx.pixels_per_point()).ceil() as u32).clamp(180,600);
-        ui.columns(2,|columns|{
-            for (i,(name,bytes,crop,color)) in [
-                ("微信支付",include_bytes!("../assets/support/support-wechat-original.jpg").as_slice(),[330.0,370.0,600.0],Color32::from_rgb(5,160,80)),
-                ("支付宝",include_bytes!("../assets/support/support-alipay-original.jpg").as_slice(),[200.0,660.0,860.0],Color32::from_rgb(22,120,255)),
-            ].into_iter().enumerate(){
-                let texture_id=egui::Id::new(("support-author-qr",i));
-                let texture=ctx.data_mut(|data|data.get_temp::<egui::TextureHandle>(texture_id)).filter(|texture|texture.size()==[pixels as usize;2]).unwrap_or_else(||{
-                    let image=support_code_image(bytes,crop,pixels);
-                    let texture=ctx.load_texture(name,image,egui::TextureOptions::LINEAR);
-                    ctx.data_mut(|data|data.insert_temp(texture_id,texture.clone()));texture
-                });
-                let uv=egui::Rect::from_min_max(egui::pos2(0.0,0.0),egui::pos2(1.0,1.0));
-                columns[i].vertical_centered(|ui|{
-                    ui.label(egui::RichText::new(name).color(color).strong());
-                    let side=ui.available_width().min(156.0);
-                    ui.add(egui::Image::new((texture.id(),egui::vec2(side,side))).uv(uv));
-                    ui.label(egui::RichText::new(if i==0{"打开微信扫一扫"}else{"打开支付宝扫一扫"}).size(11.0));
-                });
-            }
-        });
-    }
-    });
-    let button=egui::Button::new(egui::RichText::new(if open{"返回"}else{"请喝咖啡 · 支持作者"}).color(Color32::from_rgb(33,27,51)))
-        .fill(Color32::from_rgb(182,163,245)).corner_radius(8.0);
-    if ui.add_sized([ui.available_width(),32.0],button).clicked(){
-        ui.ctx().data_mut(|data|data.insert_temp(id,!open));
-    }
-    ui.add_space(if open{4.0}else{7.0});
-    ui.label(egui::RichText::new("完全自愿 · 感谢每一份支持 · 不影响功能使用").size(11.0).color(ui.visuals().weak_text_color()));
-    if !open {
-        ui.add_space(4.0);
-        ui.separator();
-        let count = snapshot.map_or(BUNDLED_SUPPORTERS, |data| data.count);
-        ui.label(format!("已有 {count} 位朋友请岛仔喝过咖啡"));
-        ui.horizontal_wrapped(|ui| {
-            ui.label(egui::RichText::new("最近支持").size(11.0).weak());
-            let image = match snapshot {
-                Some(data) => egui::Image::from_bytes(format!("bytes://supporters/recent-{}.webp", data.version), data.recent.clone()),
-                None => egui::Image::new(egui::include_image!("../assets/support/recent.webp")),
-            }.max_size(egui::vec2(190.0, 29.0)).alt_text("最近支持的朋友");
-            add_support_image(ui, image, SUPPORT_RECENT_URI);
-            if ui.link("查看感谢墙 →").clicked() {
-                ui.ctx().data_mut(|data| data.insert_temp(wall_id, true));
-            }
-        });
-    } else {
-        release_support_image(ui.ctx(), SUPPORT_RECENT_URI);
-    }
-}
 
-fn add_support_image(ui: &mut egui::Ui, image: egui::Image<'_>, key: &str) {
-    if let Some(uri) = image.uri() {
-        let previous = ui.ctx().data_mut(|data| {
-            let slot = data.get_temp_mut_or_default::<String>(egui::Id::new(key));
-            (slot.as_str() != uri).then(|| std::mem::replace(slot, uri.to_owned()))
-        });
-        if let Some(previous) = previous.filter(|old| !old.is_empty()) {
-            ui.ctx().forget_image(&previous);
-        }
-    }
-    ui.add(image);
-}
 
-fn release_support_image(ctx: &egui::Context, key: &str) {
-    if let Some(uri) = ctx.data_mut(|data| data.remove_temp::<String>(egui::Id::new(key))) {
-        ctx.forget_image(&uri);
-    }
-}
-
-fn release_support_images(ctx: &egui::Context) {
-    let uris = ctx.data_mut(|data| [SUPPORT_RECENT_URI, SUPPORT_WALL_URI].map(|key| data.remove_temp::<String>(egui::Id::new(key))));
-    for uri in uris.into_iter().flatten() { ctx.forget_image(&uri); }
-}
 pub(crate) fn settings_control_row(ui:&mut egui::Ui,title:&str,label_width:f32,controls:impl FnOnce(&mut egui::Ui)->egui::Response)->egui::Response{
     ui.horizontal(|ui|{
         // 同一张卡片里的控件左缘对齐：标签列至少 SETTINGS_LABEL_W。
@@ -1659,7 +1537,7 @@ pub(crate) const SETTINGS_TAB_PLUGIN_DETAIL: usize = 18;
 /// 插件和关于固定在左下角，上方一条细线和功能页分开。
 /// 第四列是这一项之前的分组标题。
 const SETTINGS_GROUPS: [(&str,usize,usize,&str);15 + cfg!(feature="sdk-js") as usize] = [
-    ("通用",0,0,"岛仔"), ("外观",SETTINGS_TAB_APPEARANCE,SETTINGS_TAB_APPEARANCE,""), ("位置",SETTINGS_TAB_POSITION,SETTINGS_TAB_POSITION,""), ("页面管理",SETTINGS_TAB_PAGES,SETTINGS_TAB_PAGES,""),
+    ("通用",0,0,"灵栖"), ("外观",SETTINGS_TAB_APPEARANCE,SETTINGS_TAB_APPEARANCE,""), ("位置",SETTINGS_TAB_POSITION,SETTINGS_TAB_POSITION,""), ("页面管理",SETTINGS_TAB_PAGES,SETTINGS_TAB_PAGES,""),
     ("音乐",1,1,"功能"), ("专注与健康",2,3,""), ("待办与置物",4,5,""), ("消息提醒",6,6,""), ("邮箱",7,7,""), ("日程",8,8,""), ("AI 额度",11,11,""), ("天气",12,12,""), ("系统性能",15,15,""), ("无线设备",SETTINGS_TAB_WIRELESS,SETTINGS_TAB_WIRELESS,""),
     #[cfg(feature="sdk-js")] ("插件",SETTINGS_TAB_PLUGINS,SETTINGS_TAB_PLUGINS,""),
     ("关于",9,9,""),
@@ -1818,17 +1696,15 @@ impl App {
         if !self.module_on(crate::app::CALENDAR_PAGE) {self.calendar.form.open=false;}
         if !self.module_on(crate::app::QUOTA_PAGE)&&self.quota.connect_open {self.quota_close_connection();}
         if !self.settings_open{
-            if self.window_layout().close(){release_support_images(ctx);}
-            release_support_codes(ctx);
             self.weather_source.close();
         }
         self.updates.poll(ctx);
         self.updates.dialog_ui(ctx);
         if !self.settings_open{return;}
-        let id=egui::ViewportId::from_hash_of("daozai-settings");
+        let id=egui::ViewportId::from_hash_of("lingqi-settings");
         let focus_requested=std::mem::take(&mut self.settings_focus_requested);
         let opening=self.window_layout().open();
-        ctx.show_viewport_immediate(id,egui::ViewportBuilder::default().with_title("岛仔设置").with_icon(theme::app_icon()).with_inner_size([690.0,560.0]).with_min_inner_size([600.0,450.0]).with_visible(false).with_active(false).with_window_level(egui::WindowLevel::Normal),|ctx,_|{
+        ctx.show_viewport_immediate(id,egui::ViewportBuilder::default().with_title("灵栖设置").with_icon(theme::app_icon()).with_inner_size([690.0,560.0]).with_min_inner_size([600.0,450.0]).with_visible(false).with_active(false).with_window_level(egui::WindowLevel::Normal),|ctx,_|{
             let restored=opening && self.window_layout().restore(ctx);
             if !restored{self.window_layout().observe(ctx);}
             let dark=self.settings.settings_theme.dark(crate::settings_theme::system_dark(ctx));
@@ -1954,7 +1830,6 @@ impl App {
                 ui.add_space(6.0);
                 // 合并页：健康（3）并入专注（2），置物（4→5）并入待办，旧序号仍能打开对应页面。
                 let tab=match self.settings_tab {3=>2,5=>4,t=>t};
-                if tab != 9 { release_support_images(ctx); }
                 let scroll = egui::ScrollArea::vertical().auto_shrink([false,false]);
                 #[cfg(feature="sdk-js")]
                 let scroll = if let Some((id, _)) = plugin { scroll.id_salt(("settings-plugin-scroll", id)) }
@@ -2139,7 +2014,7 @@ impl App {
                             setting_row(ui,"开机启动","",&mut a);
                             if a!=autostart{self.pending.push(Cmd::ToggleAutostart);}
                             ui.separator();
-                            setting_row(ui,"全屏时隐藏","全屏隐藏岛仔，健康提醒静默保留",&mut self.settings.hide_fullscreen);
+                            setting_row(ui,"全屏时隐藏","全屏隐藏灵栖，健康提醒静默保留",&mut self.settings.hide_fullscreen);
                             ui.separator();
                             #[cfg(windows)]
                             let supported = crate::native::Window::capture_exclusion_supported();
@@ -2151,16 +2026,16 @@ impl App {
                             let material_forced = false;
                             let mut enabled = self.settings.exclude_from_capture || material_forced;
                             ui.add_enabled_ui(supported && !material_forced, |ui| {
-                                setting_row(ui, "在截图和录屏中隐藏岛仔", "桌面上照常显示，支持的截图和录屏工具会略过岛仔。", &mut enabled);
+                                setting_row(ui, "在截图和录屏中隐藏灵栖", "桌面上照常显示，支持的截图和录屏工具会略过灵栖。", &mut enabled);
                             });
                             if material_forced {
-                                settings_hint(ui,"材质生效时需隐藏岛仔自身，才能读取它背后的画面。停用材质后恢复原设置。");
+                                settings_hint(ui,"材质生效时需隐藏灵栖自身，才能读取它背后的画面。停用材质后恢复原设置。");
                             } else if enabled != self.settings.exclude_from_capture {
                                 self.capture_exclusion_request = Some(enabled);
                                 self.capture_exclusion_error = None;
                             }
                             let error = self.capture_exclusion_error.as_deref()
-                                .or((!supported).then_some("当前系统不支持在截图和录屏中隐藏岛仔。"));
+                                .or((!supported).then_some("当前系统不支持在截图和录屏中隐藏灵栖。"));
                             if let Some(error) = error {
                                 ui.add(egui::Label::new(egui::RichText::new(error).size(11.5)
                                     .color(settings_color(ctx, Color32::from_rgb(238,181,91), Color32::from_rgb(139,88,12)))).wrap());
@@ -2171,7 +2046,7 @@ impl App {
                         settings_card(ui,|ui|{
                             settings_advanced(ui,"settings-general-advanced",|ui|{
                                 let before=self.settings.render_compat;
-                                setting_row(ui,"兼容渲染（Direct3D 12）","出现黑框、闪烁或打开设置后崩溃时开启；切换后重启岛仔生效",&mut self.settings.render_compat);
+                                setting_row(ui,"兼容渲染（Direct3D 12）","出现黑框、闪烁或打开设置后崩溃时开启；切换后重启灵栖生效",&mut self.settings.render_compat);
                                 // 手动关闭后不再显示自动切换的原因；再次开启视为手动开启。
                                 if before!=self.settings.render_compat {self.settings.render_compat_reason.clear();}
                                 if !self.settings.render_compat_reason.is_empty() {settings_hint(ui,&self.settings.render_compat_reason);}
@@ -2179,7 +2054,7 @@ impl App {
                             // 待重启的提示不折叠，收起「高级」也能看到。
                             if self.settings.render_compat!=self.render_compat_running {
                                 ui.horizontal(|ui|{
-                                    ui.label(egui::RichText::new("兼容渲染重启岛仔后生效").size(12.0).color(Color32::from_rgb(230,150,40)));
+                                    ui.label(egui::RichText::new("兼容渲染重启灵栖后生效").size(12.0).color(Color32::from_rgb(230,150,40)));
                                     if ui.button("立即重启").clicked(){self.pending.push(Cmd::RestartApp);}
                                 });
                             }
@@ -2237,7 +2112,7 @@ impl App {
                             if minimal!=self.settings.minimal {self.set_minimal(minimal);}
                             ui.separator();
                             let mut pet=self.settings.pet;
-                            setting_row(ui,"岛仔吉祥物","收起时常驻，播放音乐时一起唱歌",&mut pet);
+                            setting_row(ui,"灵栖吉祥物","收起时常驻，播放音乐时一起唱歌",&mut pet);
                             if pet!=self.settings.pet {self.set_pet(pet);}
                             #[cfg(feature="sdk-js")]
                             self.plugins.appearance_picker(ui,crate::sdk_spike::local::appearance_assets::Kind::Pet,None);
@@ -2288,7 +2163,7 @@ impl App {
                             setting_row(ui,"顶栏适配","顶部有菜单栏或任务栏时使用",&mut self.settings.avoid_top_bar);
                             if self.settings.avoid_top_bar {
                                 settings_control_row_right(ui,"显示方式",|ui|{
-                                    settings_segmented(ui,&mut self.settings.top_bar_on_top,&[(false,"避开顶栏"),(true,"岛仔置顶")],90.0);
+                                    settings_segmented(ui,&mut self.settings.top_bar_on_top,&[(false,"避开顶栏"),(true,"灵栖置顶")],90.0);
                                 });
                                 if self.settings.top_bar_on_top {
                                     settings_hint(ui,"岛体显示在顶栏上方。");
@@ -2296,7 +2171,7 @@ impl App {
                                     let reserved=crate::display_layout::selected(&self.displays,&self.settings.display_id).map_or(0,|d|{
                                         let b=crate::display_layout::placement_bounds(d,true);(b.top-d.bounds.top).max(0)
                                     });
-                                    settings_hint(ui,&if reserved>0 {format!("已检测到顶栏，岛体下移 {reserved} 像素。")}else{"未检测到顶栏；没有向系统登记的顶栏可尝试“岛仔置顶”。".to_string()});
+                                    settings_hint(ui,&if reserved>0 {format!("已检测到顶栏，岛体下移 {reserved} 像素。")}else{"未检测到顶栏；没有向系统登记的顶栏可尝试“灵栖置顶”。".to_string()});
                                 }
                             }
                         });
@@ -2510,7 +2385,7 @@ impl App {
                             ui.separator();
                             let sync_before=self.settings.mail_sync_operations;
                             ui.add_enabled_ui(self.mail.manage.pending.is_empty(),|ui|{
-                                setting_row(ui,"同步邮件操作到邮箱","已读、删除和恢复同步到邮箱；关闭时只整理岛仔里的记录，切换不会补交之前的操作",&mut self.settings.mail_sync_operations);
+                                setting_row(ui,"同步邮件操作到邮箱","已读、删除和恢复同步到邮箱；关闭时只整理灵栖里的记录，切换不会补交之前的操作",&mut self.settings.mail_sync_operations);
                             });
                             if sync_before!=self.settings.mail_sync_operations{self.mail_manage_mode_changed();}
                             ui.separator();
@@ -2849,7 +2724,7 @@ impl App {
                         }
                     }
                     _=>{
-                        settings_label(ui,"岛仔 Daozai");
+                        settings_label(ui,"灵栖 Lingqi");
                         settings_card(ui,|ui|{
                             ui.horizontal(|ui|{
                                 ui.label(egui::RichText::new(format!("版本 {}",env!("CARGO_PKG_VERSION"))).size(13.0));
@@ -2860,15 +2735,13 @@ impl App {
                             ui.horizontal_wrapped(|ui|{
                                 if ui.button("打开本地数据目录").clicked(){self.pending.push(Cmd::Open(crate::model::config_dir()));}
                                 if ui.button("收集诊断").clicked(){
-                                    // 另起 `daozai.exe --collect-diagnostics`：在新窗口里收集，诊断包保存到桌面并自动选中。
-                                    if crate::diagnostics_tool::launch().is_err(){self.say("无法启动诊断收集，请从开始菜单打开「收集岛仔诊断」");}
+                                    // 另起 `lingqi.exe --collect-diagnostics`：在新窗口里收集，诊断包保存到桌面并自动选中。
+                                    if crate::diagnostics_tool::launch().is_err(){self.say("无法启动诊断收集，请从开始菜单打开「收集灵栖诊断」");}
                                 }
                                 ui.label(egui::RichText::new("设备图标：Solar Icons · 480 Design").size(11.0).color(settings_color(ctx,Color32::from_gray(150),Color32::from_gray(105))));
                                 ui.hyperlink_to("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/");
                             });
                         });
-                        settings_label(ui,"支持作者");
-                        settings_card(ui,|ui|support_author(ui,&mut self.supporters));
                     }
                     }
                 });
@@ -2877,42 +2750,8 @@ impl App {
             if before!=format!("{:?}",self.settings){self.settings.save();}
             ctx.set_style(original_style);
         });
-        if !self.settings_open && self.window_layout().close(){release_support_images(ctx);}
         if self.settings_open&&self.module_on(crate::app::WEATHER_PAGE) {self.weather_tutorial_ui(ctx);}
         else {self.weather_source.close();}
     }
 }
 
-/// 收款码只在「支持作者」卡片展开时占用贴图；收起卡片或关闭设置窗口即释放。
-fn release_support_codes(ctx:&egui::Context){
-    ctx.data_mut(|data|for i in 0..2usize {data.remove::<egui::TextureHandle>(egui::Id::new(("support-author-qr",i)));});
-}
-
-/// 从原图裁出二维码区域 `[x, y, 边长]` 并缩放到 `pixels` 见方。
-fn support_code_image(bytes:&[u8],crop:[f32;3],pixels:u32)->egui::ColorImage {
-    let image=image::load_from_memory(bytes).expect("内置收款码图片有效");
-    let side=(crop[2] as u32).min(image.width().saturating_sub(crop[0] as u32)).min(image.height().saturating_sub(crop[1] as u32));
-    let code=image.crop_imm(crop[0] as u32,crop[1] as u32,side,side).resize_exact(pixels,pixels,image::imageops::FilterType::Lanczos3).to_rgba8();
-    egui::ColorImage::from_rgba_unmultiplied([pixels as usize,pixels as usize],code.as_raw())
-}
-
-#[test]
-fn support_codes_are_cropped_small_and_released_when_hidden(){
-    for (bytes,crop) in [(include_bytes!("../assets/support/support-wechat-original.jpg").as_slice(),[330.0,370.0,600.0]),(include_bytes!("../assets/support/support-alipay-original.jpg").as_slice(),[200.0,660.0,860.0])] {
-        let image=support_code_image(bytes,crop,360);
-        assert_eq!(image.size,[360,360]);
-        assert!(image.pixels.len()*4<=600*1024,"每张收款码贴图应小于 0.6MB");
-        // 裁剪结果应是二维码本身：同时含有大量深色与浅色像素。
-        let dark=image.pixels.iter().filter(|p|p.r()<80).count() as f32/image.pixels.len() as f32;
-        assert!((0.2..0.8).contains(&dark),"裁剪区域不像二维码：深色占比 {dark}");
-    }
-    let ctx=egui::Context::default();
-    let _=ctx.run(Default::default(),|ctx|{
-        let texture=ctx.load_texture("qr",egui::ColorImage::new([4,4],Color32::WHITE),Default::default());
-        ctx.data_mut(|data|data.insert_temp(egui::Id::new(("support-author-qr",0usize)),texture));
-    });
-    assert_eq!(ctx.tex_manager().read().allocated().filter(|(_,meta)|meta.name=="qr").count(),1);
-    release_support_codes(&ctx);
-    let _=ctx.run(Default::default(),|_|{});
-    assert_eq!(ctx.tex_manager().read().allocated().filter(|(_,meta)|meta.name=="qr").count(),0,"收起后应释放收款码贴图");
-}

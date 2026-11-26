@@ -278,7 +278,7 @@ mod tests {
             assert_eq!(baseline.len(), 1);
             assert_eq!(baseline[0].name, "小米无线键鼠套装 2");
             let mut data = json!({
-                "id":"daozai.wireless-receivers","api_version":1,"version":"1.1.0",
+                "id":"lingqi.wireless-receivers","api_version":1,"version":"1.1.0",
                 "receivers":[
                     {"vid":"2717","pid":"5055","name":"兼容包里的同型号名称"},
                     {"vid":"046D","pid":"C542","name":"罗技 Nano 接收器"}
@@ -330,7 +330,7 @@ mod tests {
         };
         assert_xiaomi();
         let data = json!({
-            "id":"daozai.wireless-receivers","api_version":1,"version":"1.0.1",
+            "id":"lingqi.wireless-receivers","api_version":1,"version":"1.0.1",
             "receivers":[{"vid":"2717","pid":"5055","name":"兼容包里的同型号名称"}]
         });
         let package = Package::parse(&serde_json::to_vec(&data).unwrap()).unwrap();

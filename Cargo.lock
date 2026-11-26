@@ -515,48 +515,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
-name = "daozai"
-version = "0.6.70"
-dependencies = [
- "ab_glyph",
- "base64 0.22.1",
- "bytemuck",
- "chrono",
- "chrono-tz",
- "clipboard-win",
- "eframe",
- "egui_extras",
- "flate2",
- "iana-time-zone",
- "image",
- "imap",
- "imap-proto",
- "keyring",
- "mailparse",
- "memmap2",
- "native-tls",
- "pollster",
- "raw-window-handle",
- "regex",
- "ring",
- "roxmltree",
- "rquickjs",
- "rrule",
- "serde",
- "serde_json",
- "svgtypes",
- "tungstenite",
- "ureq",
- "url",
- "wasmi",
- "wgpu",
- "windows",
- "windows-sys 0.61.2",
- "zip",
- "zstd",
-]
-
-[[package]]
 name = "data-encoding"
 version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1593,6 +1551,48 @@ dependencies = [
  "libc",
  "plain",
  "redox_syscall 0.9.5",
+]
+
+[[package]]
+name = "lingqi"
+version = "0.1.0"
+dependencies = [
+ "ab_glyph",
+ "base64 0.22.1",
+ "bytemuck",
+ "chrono",
+ "chrono-tz",
+ "clipboard-win",
+ "eframe",
+ "egui_extras",
+ "flate2",
+ "iana-time-zone",
+ "image",
+ "imap",
+ "imap-proto",
+ "keyring",
+ "mailparse",
+ "memmap2",
+ "native-tls",
+ "pollster",
+ "raw-window-handle",
+ "regex",
+ "ring",
+ "roxmltree",
+ "rquickjs",
+ "rrule",
+ "serde",
+ "serde_json",
+ "svgtypes",
+ "tungstenite",
+ "ureq",
+ "url",
+ "wasmi",
+ "wgpu",
+ "windows",
+ "windows-sys 0.61.2",
+ "zip",
+ "zstd",
 ]
 
 [[package]]

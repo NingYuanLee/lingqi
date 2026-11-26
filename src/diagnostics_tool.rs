@@ -9,7 +9,7 @@ pub fn requested(mut args: impl Iterator<Item = String>) -> bool {
     args.any(|arg| arg == ARG)
 }
 
-/// 应用内按钮启动一次独立的收集进程，当前岛仔可以继续运行。
+/// 应用内按钮启动一次独立的收集进程，当前灵栖可以继续运行。
 pub fn launch() -> std::io::Result<()> {
     std::process::Command::new(std::env::current_exe()?)
         .arg(ARG)
@@ -271,7 +271,7 @@ mod archive {
 
         fs::create_dir_all(output_dir)?;
         let output = output_dir.join(format!(
-            "岛仔诊断-{}-{}.zip",
+            "灵栖诊断-{}-{}.zip",
             time.format("%Y%m%d-%H%M%S-%9f"),
             std::process::id()
         ));
@@ -294,7 +294,7 @@ mod archive {
 
     fn reveal(path: &Path) {
         let message = format!(
-            "诊断包已保存到：\n{}\n\n诊断包包含岛仔日志和系统状态。音乐日志可能包含歌名和歌手，请自行决定是否分享。\n\n点击确定后查看诊断包。",
+            "诊断包已保存到：\n{}\n\n诊断包包含灵栖日志和系统状态。音乐日志可能包含歌名和歌手，请自行决定是否分享。\n\n点击确定后查看诊断包。",
             path.display()
         );
         let message_wide = wide(OsStr::new(&message));
@@ -303,7 +303,7 @@ mod archive {
             MessageBoxW(
                 None,
                 PCWSTR(message_wide.as_ptr()),
-                w!("岛仔诊断"),
+                w!("灵栖诊断"),
                 MB_OK | MB_ICONINFORMATION,
             );
             let initialized = CoInitializeEx(None, COINIT_APARTMENTTHREADED).is_ok();
@@ -325,7 +325,7 @@ mod archive {
         #[test]
         fn archive_keeps_allowed_logs_and_redacts_paths_without_reading_credentials() {
             let root = std::env::temp_dir().join(format!(
-                "daozai-diagnostics-fixture-{}-{}",
+                "lingqi-diagnostics-fixture-{}-{}",
                 std::process::id(),
                 chrono::Utc::now().timestamp_nanos_opt().unwrap()
             ));
@@ -395,10 +395,10 @@ mod tests {
     #[test]
     fn only_the_explicit_switch_starts_collection() {
         assert!(requested(
-            ["daozai.exe".to_string(), ARG.to_string()].into_iter()
+            ["lingqi.exe".to_string(), ARG.to_string()].into_iter()
         ));
         assert!(!requested(
-            ["daozai.exe".to_string(), "--settings".to_string()].into_iter()
+            ["lingqi.exe".to_string(), "--settings".to_string()].into_iter()
         ));
     }
 }

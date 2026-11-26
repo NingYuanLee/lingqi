@@ -1,12 +1,12 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
-//! Windows 外壳：无边框透明窗口 + 托盘 + 系统数据，界面全部交给 `daozai::app::App`。
+//! Windows 外壳：无边框透明窗口 + 托盘 + 系统数据，界面全部交给 `lingqi::app::App`。
 
 use eframe::egui::{self, Color32, Pos2};
-use daozai::app::{self, App, Cmd, Env, Options};
-use daozai::smtc;
+use lingqi::app::{self, App, Cmd, Env, Options};
+use lingqi::smtc;
 #[cfg(windows)]
-use daozai::messenger::{self,OpenError,TaskbarEvent};
-use daozai::poll_clock::PollClock;
+use lingqi::messenger::{self,OpenError,TaskbarEvent};
+use lingqi::poll_clock::PollClock;
 use std::time::{Duration, Instant};
 
 mod diagnostics;
@@ -26,7 +26,7 @@ struct Shell {
     seek_rx: Option<(&'static str,std::sync::mpsc::Receiver<bool>)>,
     media_control:Option<smtc::ControlWorker>,
     music_volume_rx:Option<(String,std::sync::mpsc::Receiver<bool>)>,
-    _resource_monitor:Option<daozai::resources::Monitor>,
+    _resource_monitor:Option<lingqi::resources::Monitor>,
     resource_at:PollClock,
     guard_notified:bool,
     media_enabled: smtc::Poller,
@@ -36,28 +36,28 @@ struct Shell {
     placement_at: PollClock,
     placement_scale: f32,
     #[cfg(windows)]
-    placed_bounds: Option<daozai::display_layout::Bounds>,
+    placed_bounds: Option<lingqi::display_layout::Bounds>,
     #[cfg(windows)]
     horizontal_width: f32,
     /// 上次定位时的目标屏幕、水平位置与 OLED 像素偏移；变化后立即重新定位，不等下一次轮询。
-    placement_key: (String, i32, daozai::model::Dock, bool, (i32, i32)),
+    placement_key: (String, i32, lingqi::model::Dock, bool, (i32, i32)),
     /// OLED 像素偏移当前实际使用的位移；展开、拖拽、隐藏时保持不变。
     #[cfg(windows)]
     oled_shift: (i32, i32),
     win_x: f32,
     sys: (Option<u8>, bool, PollClock),
     #[cfg(windows)]
-    system_state: daozai::system::Snapshot,
+    system_state: lingqi::system::Snapshot,
     #[cfg(windows)]
     system_ready: bool,
     #[cfg(windows)]
-    system_rx: std::sync::mpsc::Receiver<daozai::system::Observation>,
-    fullscreen: Option<daozai::display_layout::Bounds>,
-    input_state:daozai::input::Monitor,
+    system_rx: std::sync::mpsc::Receiver<lingqi::system::Observation>,
+    fullscreen: Option<lingqi::display_layout::Bounds>,
+    input_state:lingqi::input::Monitor,
     #[cfg(windows)]
-    input_keys:Option<daozai::input::Shortcuts>,
+    input_keys:Option<lingqi::input::Shortcuts>,
     #[cfg(windows)]
-    incoming: Option<daozai::system::Notifications>,
+    incoming: Option<lingqi::system::Notifications>,
     #[cfg(windows)]
     messengers:messenger::Runtime,
     #[cfg(windows)]
@@ -71,11 +71,11 @@ struct Shell {
     hidden: bool,
     /// 毛玻璃皮肤的背景亮度采样（仅毛玻璃皮肤运行）。
     #[cfg(windows)]
-    backdrop: Option<daozai::backdrop::Sampler>,
+    backdrop: Option<lingqi::backdrop::Sampler>,
     #[cfg(windows)]
-    native: Option<daozai::native::Window>,
+    native: Option<lingqi::native::Window>,
     #[cfg(all(windows, feature = "sdk-material"))]
-    material: Option<daozai::material::Runtime>,
+    material: Option<lingqi::material::Runtime>,
     #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
     material_debug: bool,
     #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
@@ -85,30 +85,30 @@ struct Shell {
     #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
     material_failed: bool,
     #[cfg(windows)]
-    tray: Option<daozai::tray::Tray>,
+    tray: Option<lingqi::tray::Tray>,
     #[cfg(windows)]
     autostart: bool,
     /// v0.5.4：蓝牙音频设备（后台线程推送）与音量回声的静默窗口。
     #[cfg(windows)]
-    bt_rx: Option<daozai::bt::Service>,
-    bt: Vec<daozai::bt::Device>,
+    bt_rx: Option<lingqi::bt::Service>,
+    bt: Vec<lingqi::bt::Device>,
     bt_ready: bool,
     #[cfg(windows)]
-    receiver_rx: Option<daozai::bt::Service>,
-    receivers: Vec<daozai::bt::Device>,
+    receiver_rx: Option<lingqi::bt::Service>,
+    receivers: Vec<lingqi::bt::Device>,
     volume_quiet: PollClock,
     /// v0.5.5：邮件收信服务（工作线程），以及上次同步给它的账号/开关快照。
     /// 邮箱模块开启时才存在；关闭后收信与整理线程随之退出。
-    mail: Option<daozai::mail::Service>,
-    mail_sig: Option<(bool, u32, Vec<daozai::mail::Account>)>,
+    mail: Option<lingqi::mail::Service>,
+    mail_sig: Option<(bool, u32, Vec<lingqi::mail::Account>)>,
     /// v0.5.6：日程（CalDAV）服务与上次下发的配置。
     /// 日程模块开启时才存在。
-    cal: Option<daozai::calendar::Service>,
-    cal_sig: Option<(Vec<daozai::calendar::Config>, bool)>,
+    cal: Option<lingqi::calendar::Service>,
+    cal_sig: Option<(Vec<lingqi::calendar::Config>, bool)>,
     /// 置物架模块开启且记录剪贴板时才监听系统剪贴板。
-    clipboard_watch: Option<daozai::clipboard::Watcher>,
-    quota: daozai::quota::Service,
-    quota_sig: Option<(bool,Vec<daozai::quota::Account>)>,
+    clipboard_watch: Option<lingqi::clipboard::Watcher>,
+    quota: lingqi::quota::Service,
+    quota_sig: Option<(bool,Vec<lingqi::quota::Account>)>,
     quota_at: PollClock,
 }
 
@@ -118,12 +118,12 @@ impl Shell {
     /// 按模块开关启停后台服务：关闭的模块不保留任何线程，重新开启时从头对齐配置。
     fn reconcile_modules(&mut self,ctx:&egui::Context){
         let mail_on=self.app.module_on(app::MAIL_PAGE);
-        if mail_on!=self.mail.is_some() {self.mail=mail_on.then(daozai::mail::Service::start);self.mail_sig=None;}
+        if mail_on!=self.mail.is_some() {self.mail=mail_on.then(lingqi::mail::Service::start);self.mail_sig=None;}
         let cal_on=self.app.module_on(app::CALENDAR_PAGE);
-        if cal_on!=self.cal.is_some() {self.cal=cal_on.then(daozai::calendar::Service::start);self.cal_sig=None;}
+        if cal_on!=self.cal.is_some() {self.cal=cal_on.then(lingqi::calendar::Service::start);self.cal_sig=None;}
         let clipboard_on=self.app.clipboard_active();
         if clipboard_on!=self.clipboard_watch.is_some() {
-            self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();daozai::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
+            self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();lingqi::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
         }
     }
 
@@ -152,7 +152,7 @@ impl Shell {
     }
 
     #[cfg(windows)]
-    fn sync_capture_exclusion(app: &mut App, window: Option<&mut daozai::native::Window>) -> bool {
+    fn sync_capture_exclusion(app: &mut App, window: Option<&mut lingqi::native::Window>) -> bool {
         #[cfg(feature = "sdk-material")]
         if app.material_capture_forced {
             app.capture_exclusion_request = None;
@@ -186,7 +186,7 @@ impl Shell {
     }
 
     #[cfg(all(windows, feature = "sdk-material"))]
-    fn restore_capture_preference(app: &mut App, window: Option<&mut daozai::native::Window>) {
+    fn restore_capture_preference(app: &mut App, window: Option<&mut lingqi::native::Window>) {
         app.material_capture_forced = false;
         if let Some(window) = window {
             window.restore_capture_exclusion(app.settings.exclude_from_capture);
@@ -196,7 +196,7 @@ impl Shell {
 
     #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
     fn reconcile_material(&mut self, ctx: &egui::Context, state: Option<&eframe::egui_wgpu::RenderState>) {
-        use daozai::material::{Options, Runtime};
+        use lingqi::material::{Options, Runtime};
 
         if self.material_debug { return; }
         let spec = self.app.material_spec();
@@ -256,9 +256,9 @@ impl Shell {
         diagnostics::startup("加载本地配置");
         let mut app = App::new(&cc.egui_ctx, Options::default());
         #[cfg(all(windows, feature = "sdk-material"))]
-        let material_debug = daozai::material::debug_requested();
+        let material_debug = lingqi::material::debug_requested();
         app.render_compat_running=running_compat;
-        #[cfg(feature="record")] let quota_demo=std::env::var("DAOZAI_QUOTA_DEMO").is_ok();
+        #[cfg(feature="record")] let quota_demo=std::env::var("LINGQI_QUOTA_DEMO").is_ok();
         #[cfg(not(feature="record"))] let quota_demo=false;
         diagnostics::startup("迁移配置");
         if !quota_demo{app.migrate_merged_switches();}
@@ -266,19 +266,19 @@ impl Shell {
         if std::env::args().any(|arg|arg=="--settings"){app.open_settings();}
         if std::env::args().any(|arg|arg=="--calendar"){app.open_calendar(None);}
         #[cfg(feature="record")]
-        if std::env::var("DAOZAI_MAIL_DEMO").is_ok(){app.mail_demo();}
+        if std::env::var("LINGQI_MAIL_DEMO").is_ok(){app.mail_demo();}
         #[cfg(feature="record")]
-        if std::env::var("DAOZAI_CAL_DEMO").is_ok(){app.calendar_demo();}
+        if std::env::var("LINGQI_CAL_DEMO").is_ok(){app.calendar_demo();}
         #[cfg(feature="record")]
-        if let Ok(mode)=std::env::var("DAOZAI_QUOTA_DEMO"){app.quota_demo(&mode);}
+        if let Ok(mode)=std::env::var("LINGQI_QUOTA_DEMO"){app.quota_demo(&mode);}
         diagnostics::startup("初始化媒体和托盘");
         let media = smtc::shared();
         let media_enabled=smtc::spawn_poller(media.clone(),cc.egui_ctx.clone());
         media_enabled.store(app.settings.visible_pages[0],std::sync::atomic::Ordering::Relaxed);
         #[cfg(windows)]
-        let autostart = daozai::tray::autostart_enabled();
+        let autostart = lingqi::tray::autostart_enabled();
         #[cfg(windows)]
-        let tray = if profiling_island(){None}else{app.start_tray(daozai::tray::State {
+        let tray = if profiling_island(){None}else{app.start_tray(lingqi::tray::State {
             pet: app.settings.pet,
             minimal: app.settings.minimal,
             autostart,
@@ -287,19 +287,19 @@ impl Shell {
         #[cfg(windows)]
         app.start_plugin_notices(&cc.egui_ctx);
         #[cfg(windows)]
-        let incoming=if app.settings.read_notifications {match daozai::system::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 无法读取通知：{}",e.code());None}}}else{None};
+        let incoming=if app.settings.read_notifications {match lingqi::system::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 无法读取通知：{}",e.code());None}}}else{None};
         // 音频、网络与输入法查询由后台完成，避免首帧等待系统服务。
         diagnostics::startup("创建后台采样与窗口");
         let initial_input=None;
-        #[cfg(windows)] let system_state=daozai::system::Snapshot::default();
-        #[cfg(windows)] let system_rx=daozai::system::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
+        #[cfg(windows)] let system_state=lingqi::system::Snapshot::default();
+        #[cfg(windows)] let system_rx=lingqi::system::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
         // 岛体大小只作用于主窗口，在首帧之前生效，避免启动时先按 100% 闪一下。
         #[cfg(windows)] eframe::set_root_viewport_scale(app.settings.island_scale());
         #[cfg(windows)]
         let native = {
-            let mut window = daozai::native::Window::new(cc);
+            let mut window = lingqi::native::Window::new(cc);
             #[cfg(feature = "sdk-material")]
-            let material_window = window.as_ref().and_then(daozai::native::Window::material_window).is_some();
+            let material_window = window.as_ref().and_then(lingqi::native::Window::material_window).is_some();
             #[cfg(not(feature = "sdk-material"))]
             let material_window = false;
             if !material_window {
@@ -311,23 +311,23 @@ impl Shell {
             window
         };
         #[cfg(all(windows, feature = "sdk-material"))]
-        if let Some(error) = daozai::material::take_startup_failure() {
+        if let Some(error) = lingqi::material::take_startup_failure() {
             #[cfg(feature = "sdk-js")]
             if !material_debug {
                 persist_material_failure(&mut app);
             }
             app.alert("材质加载失败", error, 0, false);
-        } else if daozai::material::falling_back() {
+        } else if lingqi::material::falling_back() {
             app.say("材质加载失败，已恢复普通绘制");
         } else {
             #[cfg(feature = "sdk-js")]
             if !material_debug
                 && app.settings.render_compat
                 && app.material_spec().is_some()
-                && native.as_ref().and_then(daozai::native::Window::material_window).is_none()
+                && native.as_ref().and_then(lingqi::native::Window::material_window).is_none()
             {
                 let error = "无法使用 Direct3D 12 透明交换链，已恢复普通绘制";
-                daozai::material::Runtime::report_failure(error);
+                lingqi::material::Runtime::report_failure(error);
                 persist_material_failure(&mut app);
                 app.alert("材质加载失败", error, 0, false);
             }
@@ -337,7 +337,7 @@ impl Shell {
             .filter(|window| material_debug && window.material_window().is_some())
             .zip(cc.wgpu_render_state.as_ref())
             .and_then(|(_, state)| {
-                match daozai::material::Runtime::debug(state) {
+                match lingqi::material::Runtime::debug(state) {
                     Ok(runtime) => Some(runtime),
                     Err(error) => {
                         disable_material(&mut app, &cc.egui_ctx, error, false);
@@ -360,7 +360,7 @@ impl Shell {
             seek_rx: None,
             media_control:None,
             music_volume_rx:None,
-            _resource_monitor:daozai::resources::Monitor::start(daozai::model::config_dir().join("diagnostics")),
+            _resource_monitor:lingqi::resources::Monitor::start(lingqi::model::config_dir().join("diagnostics")),
             resource_at:PollClock::default(),
             guard_notified:false,
             media_enabled,
@@ -370,7 +370,7 @@ impl Shell {
             placement_scale: 0.0,
             #[cfg(windows)] placed_bounds:None,
             #[cfg(windows)] horizontal_width:app::WIN_W,
-            placement_key: (String::new(), 0, daozai::model::Dock::Top, true, (0, 0)),
+            placement_key: (String::new(), 0, lingqi::model::Dock::Top, true, (0, 0)),
             #[cfg(windows)]
             oled_shift: (0, 0),
             win_x: 0.0,
@@ -380,8 +380,8 @@ impl Shell {
             #[cfg(windows)] system_ready:false,
             #[cfg(windows)] system_rx,
             fullscreen:None,
-            input_state:daozai::input::Monitor::new(initial_input),
-            #[cfg(windows)] input_keys:daozai::input::Shortcuts::start(),
+            input_state:lingqi::input::Monitor::new(initial_input),
+            #[cfg(windows)] input_keys:lingqi::input::Shortcuts::start(),
             #[cfg(windows)] incoming,
             #[cfg(windows)] messengers:Default::default(),
             #[cfg(windows)] unread_at:PollClock::default(),
@@ -418,13 +418,13 @@ impl Shell {
             cal: None,
             cal_sig: None,
             clipboard_watch: None,
-            quota: daozai::quota::Service::start(), quota_sig: None, quota_at: PollClock::default(),
+            quota: lingqi::quota::Service::start(), quota_sig: None, quota_at: PollClock::default(),
         }
     }
 
     #[cfg(windows)]
     fn poll_tray(&mut self) {
-        use daozai::tray::{self, Event};
+        use lingqi::tray::{self, Event};
         let events = self.tray.as_ref().map(|t| t.poll()).unwrap_or_default();
         for e in events {
             match e {
@@ -502,7 +502,7 @@ impl Shell {
         #[cfg(not(windows))]
         let (backdrop,glass_blur)=(None,false);
         #[cfg(windows)]
-        let screen_locked=daozai::system::screen_locked();
+        let screen_locked=lingqi::system::screen_locked();
         #[cfg(not(windows))]
         let screen_locked=false;
         Env {
@@ -531,7 +531,7 @@ impl Shell {
                 #[cfg(not(windows))] {false}
             },
             idle_seconds: {
-                #[cfg(windows)] {Some(daozai::system::idle_seconds())}
+                #[cfg(windows)] {Some(lingqi::system::idle_seconds())}
                 #[cfg(not(windows))] {None}
             },
             screen_locked,
@@ -559,7 +559,7 @@ impl Shell {
             #[cfg(all(windows, feature = "sdk-material"))]
             material_active: self.material.is_some() && self.placed && !self.hidden && !screen_locked,
             #[cfg(all(windows, feature = "sdk-material"))]
-            material_appearance: self.material.as_ref().map_or_else(Default::default, daozai::material::Runtime::appearance),
+            material_appearance: self.material.as_ref().map_or_else(Default::default, lingqi::material::Runtime::appearance),
         }
     }
 }
@@ -573,7 +573,7 @@ impl eframe::App for Shell {
     fn raw_input_hook(&mut self, ctx:&egui::Context, input:&mut egui::RawInput) {
         if input.viewport_id != egui::ViewportId::ROOT || self.native.is_none() {return;}
         let size=if self.app.settings.dock.is_side() {
-            egui::vec2(daozai::side_dock::SIDE_W,daozai::side_dock::SIDE_H)
+            egui::vec2(lingqi::side_dock::SIDE_W,lingqi::side_dock::SIDE_H)
         } else {
             let width = self.next_horizontal_width(ctx.pixels_per_point());
             if self.horizontal_width != width {
@@ -591,23 +591,23 @@ impl eframe::App for Shell {
         self.reconcile_material(ctx, _frame.wgpu_render_state());
         #[cfg(windows)]
         self.app.poll_plugin_notices();
-        daozai::resources::FRAMES.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
+        lingqi::resources::FRAMES.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
         let frame_start=Instant::now();
         let mut marks:Vec<(&str,Duration)>=Vec::with_capacity(10);
         macro_rules! mark {($name:expr)=>{marks.push(($name,frame_start.elapsed()));}}
         if self.resource_at.ready(Duration::from_secs(30)){
             let (count,bytes)={let textures=ctx.tex_manager();let textures=textures.read();(textures.num_allocated(),textures.allocated().map(|(_,info)|info.bytes_used()).sum())};
-            daozai::resources::TEXTURES.store(count,std::sync::atomic::Ordering::Relaxed);
-            daozai::resources::TEXTURE_BYTES.store(bytes,std::sync::atomic::Ordering::Relaxed);
-            daozai::resources::GALLEYS.store(ctx.fonts(|fonts|fonts.num_galleys_in_cache()),std::sync::atomic::Ordering::Relaxed);
+            lingqi::resources::TEXTURES.store(count,std::sync::atomic::Ordering::Relaxed);
+            lingqi::resources::TEXTURE_BYTES.store(bytes,std::sync::atomic::Ordering::Relaxed);
+            lingqi::resources::GALLEYS.store(ctx.fonts(|fonts|fonts.num_galleys_in_cache()),std::sync::atomic::Ordering::Relaxed);
             self.resource_at=PollClock::now();
         }
         let music_on=self.app.module_on(app::MUSIC_PAGE);
-        let guarded=daozai::resources::GUARD.tripped();
+        let guarded=lingqi::resources::GUARD.tripped();
         if music_on && guarded && !self.guard_notified {
             // 资源保护熔断：停止音乐会话轮询（含封面、网易云日志）与歌词查询，保住用户电脑，重启后恢复。
             self.guard_notified=true;self.app.opts.fetch_lyrics=false;
-            self.app.alert("岛仔已暂停音乐功能","检测到资源占用异常，已暂停读取音乐信息和歌词。重启岛仔即可恢复；诊断记录在数据目录的 diagnostics 文件夹。",0,false);
+            self.app.alert("灵栖已暂停音乐功能","检测到资源占用异常，已暂停读取音乐信息和歌词。重启灵栖即可恢复；诊断记录在数据目录的 diagnostics 文件夹。",0,false);
         }
         self.media_enabled.store(music_on && !guarded,std::sync::atomic::Ordering::Relaxed);
         if !music_on {
@@ -659,14 +659,14 @@ impl eframe::App for Shell {
         #[cfg(windows)]
         if refresh || self.placement_key.0!=placement_key.0 {
             self.placement_at=PollClock::now();
-            self.app.displays=daozai::display_layout::connected();
+            self.app.displays=lingqi::display_layout::connected();
         }
         #[cfg(windows)]
-        let display=daozai::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
+        let display=lingqi::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
         #[cfg(windows)]
         let bounds=display.map(|d|d.dock_bounds(self.app.settings.dock,self.app.settings.avoids_top_bar()));
         #[cfg(windows)]
-        if self.app.settings.dock==daozai::model::Dock::Bottom && display.is_some_and(|d|d.auto_bottom!=0) && !self.hidden {
+        if self.app.settings.dock==lingqi::model::Dock::Bottom && display.is_some_and(|d|d.auto_bottom!=0) && !self.hidden {
             ctx.request_repaint_after(Duration::from_millis(32));
         }
         #[cfg(windows)]
@@ -719,10 +719,10 @@ impl eframe::App for Shell {
                 self.system_ready=true;
                 self.fullscreen=observation.fullscreen;
             }
-            self.hidden=!self.app.dragging_position() && daozai::display_layout::hide_for_fullscreen(self.app.settings.hide_fullscreen,self.fullscreen,daozai::display_layout::selected(&self.app.displays,&self.app.settings.display_id).map(|d|d.bounds));
+            self.hidden=!self.app.dragging_position() && lingqi::display_layout::hide_for_fullscreen(self.app.settings.hide_fullscreen,self.fullscreen,lingqi::display_layout::selected(&self.app.displays,&self.app.settings.display_id).map(|d|d.bounds));
             // 毛玻璃：在岛体左右两侧和画布底边（都在窗口区域之外）取样，估计岛背后的明暗。
             if self.app.effective_skin().is_glass() && !self.hidden {
-                let sampler=self.backdrop.get_or_insert_with(daozai::backdrop::Sampler::start);
+                let sampler=self.backdrop.get_or_insert_with(lingqi::backdrop::Sampler::start);
                 let ppp=ctx.pixels_per_point();
                 if let Some(origin)=self.native.as_ref().and_then(|w|w.logical_origin(ppp)) {
                     let points=self.app.backdrop_points(self.horizontal_width);
@@ -734,7 +734,7 @@ impl eframe::App for Shell {
             mark!("系统状态与取样");
             let wireless_on=self.app.module_on(app::BLUETOOTH_PAGE);
             if self.app.settings.bluetooth_notifications || wireless_on {
-                if self.bt_rx.is_none() {self.bt_rx=Some(daozai::bt::spawn());}
+                if self.bt_rx.is_none() {self.bt_rx=Some(lingqi::bt::spawn());}
             } else {
                 self.bt_rx=None;
                 self.bt.clear();
@@ -746,7 +746,7 @@ impl eframe::App for Shell {
             if wireless_on {
                 let service=self.receiver_rx.get_or_insert_with(||{
                     let ctx=ctx.clone();
-                    daozai::bt::spawn_receivers(self.app.wireless_compat_store(),move||ctx.request_repaint())
+                    lingqi::bt::spawn_receivers(self.app.wireless_compat_store(),move||ctx.request_repaint())
                 });
                 while let Ok(found)=service.rx.try_recv(){self.receivers=found;}
             } else {
@@ -764,9 +764,9 @@ impl eframe::App for Shell {
             if let Some(rx)=&self.incoming {
                 rx.taskbar_settings(&self.app.settings);
                 while let Ok(event)=rx.try_recv(){match event {
-                    daozai::system::Incoming::Revoked=>{self.app.settings.read_notifications=false;self.app.settings.save();},
-                    daozai::system::Incoming::Status(s)=>self.app.listener_status=s,
-                    daozai::system::Incoming::Message(a,id,b,target)=>{
+                    lingqi::system::Incoming::Revoked=>{self.app.settings.read_notifications=false;self.app.settings.save();},
+                    lingqi::system::Incoming::Status(s)=>self.app.listener_status=s,
+                    lingqi::system::Incoming::Message(a,id,b,target)=>{
                         if target.is_some_and(|target|self.messengers.track(target)==Err(OpenError::Exited)){continue;}
                         self.app.receive_notification_from(a,id,b,target.map(|target|target.unread));
                     }
@@ -855,7 +855,7 @@ impl eframe::App for Shell {
             let (mail_enabled,mail_interval)=(self.app.mail_active(),self.app.settings.mail_interval);
             if !self.mail_sig.as_ref().is_some_and(|known|(known.0,known.1)==(mail_enabled,mail_interval) && known.2.as_slice()==self.app.mail_accounts()){
                 let sig=(mail_enabled,mail_interval,self.app.mail_accounts().to_vec());
-                let accounts:&[daozai::mail::Account]=if sig.0{ &sig.2 }else{ &[] };
+                let accounts:&[lingqi::mail::Account]=if sig.0{ &sig.2 }else{ &[] };
                 mail.sync(accounts,sig.1);
                 self.mail_sig=Some(sig);
             }
@@ -864,7 +864,7 @@ impl eframe::App for Shell {
         // 日程连接或自动同步开关变化时下发给工作线程。
         // 录制/截图演示用的是假账号，别让真服务去连（会立刻失败、把状态改成红色）。
         #[cfg(feature="record")]
-        let cal_demo=std::env::var("DAOZAI_CAL_DEMO").is_ok();
+        let cal_demo=std::env::var("LINGQI_CAL_DEMO").is_ok();
         #[cfg(not(feature="record"))]
         let cal_demo=false;
         if let Some(service)=&self.cal {
@@ -877,7 +877,7 @@ impl eframe::App for Shell {
             }
             while let Some(ev)=service.try_recv(){self.app.calendar_event(ev);}
         }
-        #[cfg(feature="record")] let quota_demo=std::env::var("DAOZAI_QUOTA_DEMO").is_ok();
+        #[cfg(feature="record")] let quota_demo=std::env::var("LINGQI_QUOTA_DEMO").is_ok();
         #[cfg(not(feature="record"))] let quota_demo=false;
         if !quota_demo {
             let (active,config)=(self.app.quota_active(),self.app.quota_config());
@@ -904,7 +904,7 @@ impl eframe::App for Shell {
                 let width = self.horizontal_width;
                 #[cfg(not(windows))]
                 let width = app::WIN_W;
-                let size=if self.app.settings.dock.is_side() {egui::vec2(daozai::side_dock::SIDE_W,daozai::side_dock::SIDE_H)} else {egui::vec2(width,app::WIN_H)};
+                let size=if self.app.settings.dock.is_side() {egui::vec2(lingqi::side_dock::SIDE_W,lingqi::side_dock::SIDE_H)} else {egui::vec2(width,app::WIN_H)};
                 let win = egui::Rect::from_min_size(ui.max_rect().min,size);
                 let mut draw = || self.app.frame(ui, win, &env);
                 #[cfg(all(windows, feature = "sdk-material"))]
@@ -940,13 +940,13 @@ impl eframe::App for Shell {
             let hovering=env.cursor.is_some_and(|p|out.hit.contains(p)||out.notice_hit.is_some_and(|r|r.contains(p)));
             let shift=if !self.app.settings.oled_shift {(0,0)}
                 else if !self.hidden && !hovering && self.app.oled_shift_idle(ctx) {
-                    ctx.request_repaint_after(daozai::oled_shift::until_next_step(self.t0.elapsed()));
-                    let target=daozai::oled_shift::shift(true,self.app.settings.dock,self.t0.elapsed());
-                    daozai::oled_shift::toward(self.oled_shift,target)
+                    ctx.request_repaint_after(lingqi::oled_shift::until_next_step(self.t0.elapsed()));
+                    let target=lingqi::oled_shift::shift(true,self.app.settings.dock,self.t0.elapsed());
+                    lingqi::oled_shift::toward(self.oled_shift,target)
                 } else {self.oled_shift};
             if shift!=self.oled_shift {
                 self.oled_shift=shift;
-                let display=daozai::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
+                let display=lingqi::display_layout::selected(&self.app.displays,&self.app.settings.display_id);
                 if display.is_some_and(|d|self.native.as_mut().is_some_and(|w|w.place_on_display(ctx.pixels_per_point(),d.dock_bounds(self.app.settings.dock,self.app.settings.avoids_top_bar()),self.app.placement_offset(),self.app.settings.dock,shift,self.horizontal_width))) {
                     self.placement_key.4=shift;
                 }
@@ -975,7 +975,7 @@ impl eframe::App for Shell {
                 if shot.is_none() || changed || interactive {
                     // 输入结束后，短暂的切换过渡仍需逐帧交付。
                     let now=Instant::now();
-                    match daozai::layered::readback_delay(self.readback_at,now,interactive,out.repaint_after) {
+                    match lingqi::layered::readback_delay(self.readback_at,now,interactive,out.repaint_after) {
                         None=>{
                             self.readback_at=Some(now);
                             let data=if let Some(deadline)=startup_capture {
@@ -1011,14 +1011,14 @@ impl eframe::App for Shell {
                 ctx.request_repaint_after(wait);
             }
             let pill_hover=(!self.hidden && out.resident_clip.is_some()
-                && self.app.settings.island_shape==daozai::model::IslandShape::Pill).then_some(out.hit);
+                && self.app.settings.island_shape==lingqi::model::IslandShape::Pill).then_some(out.hit);
             native.watch_collapsed_pill_edge(pill_hover,ppp,self.app.settings.dock);
             native_cost=native_start.elapsed();
             _frame.root_window_offset=native.paint_offset();
             native.set_page_scroll_area(out.page_scroll_area.filter(|_|!self.hidden && out.expanded),ppp);
-            if !self.hidden && self.app.settings.dock==daozai::model::Dock::Top {
+            if !self.hidden && self.app.settings.dock==lingqi::model::Dock::Top {
                 let on_top=self.app.settings.avoid_top_bar && self.app.settings.top_bar_on_top;
-                if let Some(display)=daozai::display_layout::selected(&self.app.displays,&self.app.settings.display_id)
+                if let Some(display)=lingqi::display_layout::selected(&self.app.displays,&self.app.settings.display_id)
                     .filter(|_|on_top || out.top_bar_notice.is_some()) {
                     let notice=out.top_bar_notice.filter(|_|!on_top).map(|rect|(rect,ppp));
                     native.keep_above_top_bar(display.bounds,notice);
@@ -1105,16 +1105,16 @@ impl eframe::App for Shell {
                         self.app.save_window_before_exit();
                         #[cfg(windows)] if let Some(tray)=&self.tray {tray.exit_process();}
                         std::process::exit(0);
-                    }else{self.app.say("无法重新启动岛仔，请从托盘退出后手动打开");}
+                    }else{self.app.say("无法重新启动灵栖，请从托盘退出后手动打开");}
                 }
                 Cmd::Open(p) => {if let Err(e)=open_path(&p){self.app.say(e);}},
                 Cmd::OpenUrl(url)=>{
-                    if let Some(url)=daozai::mail::web_url(&url) {
+                    if let Some(url)=lingqi::mail::web_url(&url) {
                         if open_path(std::path::Path::new(&url)).is_err(){self.app.say("无法打开默认浏览器，请检查 Windows 默认应用设置");}
                     }
                 },
                 Cmd::CalendarImport=>{
-                    #[cfg(windows)] match daozai::system::pick_files_for("选择要导入的日历文件（.ics）",true){
+                    #[cfg(windows)] match lingqi::system::pick_files_for("选择要导入的日历文件（.ics）",true){
                         Ok(files)=>if !files.is_empty(){
                             let read:Vec<(String,String)>=files.iter().map(|path|{
                                 let name=path.file_name().map(|n|n.to_string_lossy().to_string()).unwrap_or_default();
@@ -1127,16 +1127,16 @@ impl eframe::App for Shell {
                     }
                 },
                 Cmd::AddFiles=>{
-                    #[cfg(windows)] match daozai::system::pick_files(){Ok(files)=>if !files.is_empty(){self.app.on_drop(files);self.app.show_page(3);},Err(e)=>self.app.say(format!("无法选择文件：{}",e.code()))}
+                    #[cfg(windows)] match lingqi::system::pick_files(){Ok(files)=>if !files.is_empty(){self.app.on_drop(files);self.app.show_page(3);},Err(e)=>self.app.say(format!("无法选择文件：{}",e.code()))}
                 },
                 Cmd::DragFile(p)=>{
-                    #[cfg(windows)] if let Err(e)=daozai::system::drag_file(&p){self.app.say(format!("无法拖出文件：{}",e.code()));}
+                    #[cfg(windows)] if let Err(e)=lingqi::system::drag_file(&p){self.app.say(format!("无法拖出文件：{}",e.code()));}
                     ctx.input_mut(|i| i.pointer=Default::default());
                 },
                 Cmd::DisconnectNotifications=>{#[cfg(windows)]{self.incoming=None;self.app.settings.read_notifications=false;self.app.settings.save();self.app.listener_status="已断开，不再读取 Windows 通知".into();}},
-                Cmd::Reveal(p)=>{let _=daozai::child_process::spawn(std::process::Command::new("explorer.exe").arg(format!("/select,{}",p.display())));},
+                Cmd::Reveal(p)=>{let _=lingqi::child_process::spawn(std::process::Command::new("explorer.exe").arg(format!("/select,{}",p.display())));},
                 Cmd::QuotaChooseFile=>{
-                    #[cfg(windows)] match daozai::system::pick_files_for("选择 AI 账号的登录 JSON 文件",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("无法选择登录文件")}
+                    #[cfg(windows)] match lingqi::system::pick_files_for("选择 AI 账号的登录 JSON 文件",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("无法选择登录文件")}
                 },
                 Cmd::QuotaRefresh=>{
                     if self.quota_at.ready(Duration::from_secs(15)) {
@@ -1146,25 +1146,25 @@ impl eframe::App for Shell {
                 },
                 Cmd::QuotaConnected=>{self.quota_sig=None;},
                 Cmd::ToggleAutostart=>{
-                    #[cfg(windows)] {let want=!self.autostart;match daozai::tray::set_autostart(want){Ok(())=>self.autostart=want,Err(e)=>self.app.say(e)}}
+                    #[cfg(windows)] {let want=!self.autostart;match lingqi::tray::set_autostart(want){Ok(())=>self.autostart=want,Err(e)=>self.app.say(e)}}
                 },
                 Cmd::SetVolume(v)=>{
-                    #[cfg(windows)] daozai::system::set_volume(v);
+                    #[cfg(windows)] lingqi::system::set_volume(v);
                     self.volume_quiet=PollClock::now();
                 },
                 Cmd::ToggleMute=>{
-                    #[cfg(windows)] daozai::system::toggle_mute();
+                    #[cfg(windows)] lingqi::system::toggle_mute();
                     self.volume_quiet=PollClock::now();
                 },
                 Cmd::Copy(text)=>{ctx.copy_text(text);self.app.say("已复制");},
                 Cmd::Notify(title,body,sound)=>{
                     #[cfg(windows)] {
-                        if sound==app::NotificationSound::Health {daozai::tray::play_health_sound();}
+                        if sound==app::NotificationSound::Health {lingqi::tray::play_health_sound();}
                         if let Some(tray)=&self.tray {tray.notify(&title,&body,sound==app::NotificationSound::System);}
                     }
                 },
                 cmd @ (Cmd::RequestNotifications|Cmd::RequestQqNotifications)=>{
-                    #[cfg(windows)] {self.app.settings.qq_only=matches!(cmd,Cmd::RequestQqNotifications);self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match daozai::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
+                    #[cfg(windows)] {self.app.settings.qq_only=matches!(cmd,Cmd::RequestQqNotifications);self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match lingqi::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
                 },
                 // 模块关闭时设置项已置灰；万一仍有命令到达，只提示，不为它临时启动服务。
                 Cmd::MailSync=>if let Some(mail)=&self.mail {
@@ -1179,8 +1179,8 @@ impl eframe::App for Shell {
                 Cmd::CalendarSync=>match &self.cal {Some(cal)=>cal.sync_now(),None=>self.app.say(MODULE_OFF)},
                 Cmd::CalendarMonth(month)=>if let Some(cal)=&self.cal {cal.view_month(month);},
                 Cmd::CalendarForget=>{
-                    if let Err(error)=daozai::calendar::forget_config(){self.app.say(&error);continue;}
-                    if let Some(old)=self.app.forget_calendar(){daozai::calendar::secrets::delete(&old);}
+                    if let Err(error)=lingqi::calendar::forget_config(){self.app.say(&error);continue;}
+                    if let Some(old)=self.app.forget_calendar(){lingqi::calendar::secrets::delete(&old);}
                     if let Some(cal)=&self.cal {
                         let configs=self.app.calendar_configs();
                         cal.configure(configs.clone(),self.app.settings.calendar_auto_sync);
@@ -1212,13 +1212,13 @@ impl eframe::App for Shell {
         let elapsed=frame_start.elapsed();
         if elapsed>=Duration::from_millis(60) {
             let (page,open)=self.app.debug_state();
-            daozai::resources::append_log(&daozai::model::config_dir().join("diagnostics"),"frames",
+            lingqi::resources::append_log(&lingqi::model::config_dir().join("diagnostics"),"frames",
                 &format!("帧 {:.0} ms｜页面 {}｜展开 {}｜前置 {:.0}｜岛体 {:.0}（插件 {:.1}）｜窗口 {:.0}｜设置 {:.0}",
                     elapsed.as_secs_f64()*1000.0,page,open,pre_cost.as_secs_f64()*1000.0,draw_cost.as_secs_f64()*1000.0,
-                    daozai::resources::PLUGIN_FRAME_US.load(std::sync::atomic::Ordering::Relaxed) as f64/1000.0,
+                    lingqi::resources::PLUGIN_FRAME_US.load(std::sync::atomic::Ordering::Relaxed) as f64/1000.0,
                     native_cost.as_secs_f64()*1000.0,settings_cost.as_secs_f64()*1000.0));
         }
-        // 设了 DAOZAI_FRAME_TRACE 时逐帧记下动画帧：上一帧逻辑和逻辑之外（绘制、读回、提交、等待）各占多少。
+        // 设了 LINGQI_FRAME_TRACE 时逐帧记下动画帧：上一帧逻辑和逻辑之外（绘制、读回、提交、等待）各占多少。
         thread_local!{
             static PREVIOUS_FRAME:std::cell::Cell<Option<(Instant,Duration)>>=const{std::cell::Cell::new(None)};
             static PREVIOUS_PARTS:std::cell::Cell<[Duration;4]>=const{std::cell::Cell::new([Duration::ZERO;4])};
@@ -1226,17 +1226,17 @@ impl eframe::App for Shell {
         let parts=PREVIOUS_PARTS.replace([pre_cost,settings_cost,elapsed.saturating_sub(pre_cost+draw_cost+native_cost+settings_cost),update_start.elapsed().saturating_sub(elapsed)]);
         // 动画帧会请求很快的下一帧；闲置和定时刷新不计。
         let animating=out.repaint_after<=Duration::from_millis(34)
-            || ctx.requested_repaint_last_pass() && std::env::var_os("DAOZAI_FRAME_TRACE").is_some();
+            || ctx.requested_repaint_last_pass() && std::env::var_os("LINGQI_FRAME_TRACE").is_some();
         if let Some((start,logic))=PREVIOUS_FRAME.get().filter(|_|animating) {
             let interval=frame_start.duration_since(start);
-            if std::env::var_os("DAOZAI_FRAME_TRACE").is_some() {
+            if std::env::var_os("LINGQI_FRAME_TRACE").is_some() {
                 let (page,open)=self.app.debug_state();
-                daozai::resources::append_log(&daozai::model::config_dir().join("diagnostics"),"frames",
+                lingqi::resources::append_log(&lingqi::model::config_dir().join("diagnostics"),"frames",
                     &format!("间隔 {:.0} ms｜页面 {}｜展开 {}｜上帧逻辑 {:.1}（前置 {:.1}、设置窗口 {:.1}、其余 {:.1}、材质与提醒 {:.1}）｜逻辑之外 {:.1}｜本帧岛体 {:.1}（插件 {:.1}）｜窗口 {:.1}｜本帧前置：{}｜过渡 {} 交互起点 {} 兼容 {}",
                         interval.as_secs_f64()*1000.0,page,open,logic.as_secs_f64()*1000.0,
                         parts[0].as_secs_f64()*1000.0,parts[1].as_secs_f64()*1000.0,parts[2].as_secs_f64()*1000.0,parts[3].as_secs_f64()*1000.0,
                         interval.saturating_sub(logic).as_secs_f64()*1000.0,draw_cost.as_secs_f64()*1000.0,
-                        daozai::resources::PLUGIN_FRAME_US.load(std::sync::atomic::Ordering::Relaxed) as f64/1000.0,
+                        lingqi::resources::PLUGIN_FRAME_US.load(std::sync::atomic::Ordering::Relaxed) as f64/1000.0,
                         native_cost.as_secs_f64()*1000.0,pre_parts,out.interactive_transition,
                         _frame.interactive_frame_start.is_some(),self.app.render_compat_running));
             }
@@ -1249,15 +1249,15 @@ impl eframe::App for Shell {
 
 /// 额度线程只关心总开关和账号身份；别名、置顶只影响显示，改了不重新查询。
 /// `enabled` 是生效的开关：AI 额度模块开启且额度设置里打开。
-fn quota_sig(enabled:bool,config:&daozai::quota::Config)->(bool,Vec<daozai::quota::Account>){
+fn quota_sig(enabled:bool,config:&lingqi::quota::Config)->(bool,Vec<lingqi::quota::Account>){
     (enabled,config.accounts.iter().cloned().map(|mut a|{a.alias.clear();a.pinned=false;a}).collect())
 }
 
 /// 与 `quota_sig(enabled,config)==*known` 等价，但每帧调用时不复制账号。
-fn quota_sig_matches(known:&(bool,Vec<daozai::quota::Account>),enabled:bool,config:&daozai::quota::Config)->bool{
+fn quota_sig_matches(known:&(bool,Vec<lingqi::quota::Account>),enabled:bool,config:&lingqi::quota::Config)->bool{
     known.0==enabled && known.1.len()==config.accounts.len() && known.1.iter().zip(&config.accounts).all(|(known,current)|{
         // 不用 `..`：账号新增字段时这里会编译失败，提醒决定新字段是否需要重新查询。
-        let daozai::quota::Account{id,provider,alias:_,source,slot,enabled,pinned:_}=current;
+        let lingqi::quota::Account{id,provider,alias:_,source,slot,enabled,pinned:_}=current;
         known.id==*id && known.provider==*provider && known.source==*source && known.slot==*slot && known.enabled==*enabled
     })
 }
@@ -1296,10 +1296,10 @@ mod messenger_foreground_tests {
 #[cfg(test)]
 mod quota_sig_tests {
     use super::*;
-    use daozai::quota::{Account,Config};
+    use lingqi::quota::{Account,Config};
 
     fn account(id:&str)->Account{
-        Account{id:id.into(),provider:daozai::quota::Provider::Claude,alias:"工作".into(),source:"a.json".into(),slot:None,enabled:true,pinned:false}
+        Account{id:id.into(),provider:lingqi::quota::Provider::Claude,alias:"工作".into(),source:"a.json".into(),slot:None,enabled:true,pinned:false}
     }
 
     #[test]
@@ -1456,7 +1456,7 @@ mod open_path_tests {
 
     #[test]
     fn unassociated_files_offer_open_with_and_cancellation_is_normal(){
-        let path=std::env::temp_dir().join(format!("岛仔 无关联-{}.daozai-open-test",std::process::id()));
+        let path=std::env::temp_dir().join(format!("灵栖 无关联-{}.lingqi-open-test",std::process::id()));
         std::fs::write(&path,b"fixture").unwrap();
         for cancel in [false,true]{
             let mut chosen=false;
@@ -1470,7 +1470,7 @@ mod open_path_tests {
 
     #[test]
     fn default_apps_urls_and_other_errors_never_open_the_file_picker(){
-        let file=std::env::temp_dir().join(format!("daozai-open-errors-{}",std::process::id()));
+        let file=std::env::temp_dir().join(format!("lingqi-open-errors-{}",std::process::id()));
         std::fs::write(&file,b"fixture").unwrap();
         for result in [Ok(()),Err(error(ERROR_ACCESS_DENIED)),Err(error(ERROR_FILE_NOT_FOUND))]{
             let success=result.is_ok();
@@ -1482,9 +1482,9 @@ mod open_path_tests {
         for (path,result,success) in [
             ("https://example.com",Ok(()),true),
             ("https://example.com",Err(error(ERROR_NO_ASSOCIATION)),false),
-            ("missing.daozai-open-test",Err(error(ERROR_NO_ASSOCIATION)),false),
-            ("missing.daozai-open-test",Err(error(ERROR_FILE_NOT_FOUND)),false),
-            ("blocked.daozai-open-test",Err(error(ERROR_ACCESS_DENIED)),false),
+            ("missing.lingqi-open-test",Err(error(ERROR_NO_ASSOCIATION)),false),
+            ("missing.lingqi-open-test",Err(error(ERROR_FILE_NOT_FOUND)),false),
+            ("blocked.lingqi-open-test",Err(error(ERROR_ACCESS_DENIED)),false),
         ]{
             let actual=open_path_result(std::path::Path::new(path),result,||panic!("非文件关联问题不能弹出打开方式"));
             assert_eq!(actual.is_ok(),success);
@@ -1494,12 +1494,12 @@ mod open_path_tests {
 
 fn main() -> std::process::ExitCode {
     #[cfg(any(feature="sdk-js",feature="sdk-wasm"))]
-    if let Some(code)=daozai::sdk_spike::command(){return code;}
+    if let Some(code)=lingqi::sdk_spike::command(){return code;}
     diagnostics::install();
-    // 收集诊断：在单实例检查、创建窗口和初始化显卡之前处理，岛仔启动即崩溃、卡死时也能用。
+    // 收集诊断：在单实例检查、创建窗口和初始化显卡之前处理，灵栖启动即崩溃、卡死时也能用。
     #[cfg(windows)]
-    if daozai::diagnostics_tool::requested(std::env::args()) {
-        return match daozai::diagnostics_tool::run(&daozai::model::config_dir()) {
+    if lingqi::diagnostics_tool::requested(std::env::args()) {
+        return match lingqi::diagnostics_tool::run(&lingqi::model::config_dir()) {
             Ok(_) => std::process::ExitCode::SUCCESS,
             Err(error) => {diagnostics::report("诊断收集未完成。", &error); std::process::ExitCode::FAILURE}
         };
@@ -1507,22 +1507,22 @@ fn main() -> std::process::ExitCode {
     match run() {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
-            diagnostics::report("岛仔启动或运行失败。", &error.to_string());
+            diagnostics::report("灵栖启动或运行失败。", &error.to_string());
             std::process::ExitCode::FAILURE
         }
     }
 }
 
-// 性能复测使用独立数据目录，避开日常岛仔的托盘和安装信息。
+// 性能复测使用独立数据目录，避开日常灵栖的托盘和安装信息。
 fn profiling_island()->bool {
-    cfg!(feature="sdk-js") && std::env::var_os("DAOZAI_DATA_DIR").is_some() && std::env::args().any(|a|a=="--sdk-profile-island")
+    cfg!(feature="sdk-js") && std::env::var_os("LINGQI_DATA_DIR").is_some() && std::env::args().any(|a|a=="--sdk-profile-island")
 }
 
 #[cfg(all(windows, feature = "sdk-material"))]
 fn replace_material_window(fallback: bool) -> bool {
     let args: &[&str] = match (fallback, profiling_island()) {
-        (true, true) => &[daozai::material::FALLBACK_ARG, "--sdk-profile-island"],
-        (true, false) => &[daozai::material::FALLBACK_ARG],
+        (true, true) => &[lingqi::material::FALLBACK_ARG, "--sdk-profile-island"],
+        (true, false) => &[lingqi::material::FALLBACK_ARG],
         (false, true) => &["--sdk-profile-island"],
         (false, false) => &[],
     };
@@ -1536,7 +1536,7 @@ fn request_material_restart(app: &mut App, ctx: &egui::Context, fallback: bool) 
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         true
     } else {
-        app.say("无法重新启动岛仔，请从托盘退出后手动打开");
+        app.say("无法重新启动灵栖，请从托盘退出后手动打开");
         ctx.request_repaint();
         false
     }
@@ -1545,13 +1545,13 @@ fn request_material_restart(app: &mut App, ctx: &egui::Context, fallback: bool) 
 #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
 fn persist_material_failure(app: &mut App) {
     if let Err(error) = app.deactivate_material() {
-        daozai::material::Runtime::report_failure(&format!("无法保存材质停用状态：{error}"));
+        lingqi::material::Runtime::report_failure(&format!("无法保存材质停用状态：{error}"));
     }
 }
 
 #[cfg(all(windows, feature = "sdk-material"))]
 fn disable_material(app: &mut App, ctx: &egui::Context, error: String, _installed: bool) {
-    daozai::material::Runtime::report_failure(&error);
+    lingqi::material::Runtime::report_failure(&error);
     #[cfg(feature = "sdk-js")]
     if _installed {
         persist_material_failure(app);
@@ -1566,17 +1566,17 @@ fn run() -> eframe::Result<()> {
     diagnostics::wait_for_previous_instance();
     // 单实例（与原版同名互斥体）
     #[cfg(windows)]
-    if !profiling_island() && !daozai::tray::single_instance() {
-        if !daozai::tray::activate_existing(std::env::args().any(|arg|arg=="--calendar")) {
-            diagnostics::report("岛仔已在运行，但暂时无法打开窗口。\n请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe 后重试。", "已有实例可能正在启动或已无响应。请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 daozai.exe，再重新启动。");
+    if !profiling_island() && !lingqi::tray::single_instance() {
+        if !lingqi::tray::activate_existing(std::env::args().any(|arg|arg=="--calendar")) {
+            diagnostics::report("灵栖已在运行，但暂时无法打开窗口。\n请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 lingqi.exe 后重试。", "已有实例可能正在启动或已无响应。请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 lingqi.exe，再重新启动。");
         }
         return Ok(());
     }
     #[cfg(windows)]
-    if !profiling_island(){std::thread::spawn(daozai::record_install_size);}
+    if !profiling_island(){std::thread::spawn(lingqi::record_install_size);}
     diagnostics::startup("初始化图形窗口");
     let viewport = egui::ViewportBuilder::default()
-        .with_title("岛仔").with_icon(daozai::theme::app_icon())
+        .with_title("灵栖").with_icon(lingqi::theme::app_icon())
         .with_inner_size([app::CANVAS_W, app::WIN_H])
         .with_decorations(false)
         .with_transparent(true)
@@ -1587,15 +1587,15 @@ fn run() -> eframe::Result<()> {
         .with_visible(false);
     let opts = eframe::NativeOptions { viewport, vsync: !cfg!(windows), ..Default::default() };
     graphics::run(opts,|opts|{
-        let result=eframe::run_native("岛仔",opts,Box::new(|cc|Ok(Box::new(Shell::new(cc)))));
+        let result=eframe::run_native("灵栖",opts,Box::new(|cc|Ok(Box::new(Shell::new(cc)))));
         #[cfg(all(windows, feature = "sdk-material"))]
-        if daozai::material::report_run_failure(&result) {
+        if lingqi::material::report_run_failure(&result) {
             #[cfg(feature = "sdk-js")]
-            if !daozai::material::debug_requested() {
-                use daozai::sdk_spike::LocalPlugins;
-                let mut plugins = LocalPlugins::open(daozai::model::config_dir().join("local-plugins"));
+            if !lingqi::material::debug_requested() {
+                use lingqi::sdk_spike::LocalPlugins;
+                let mut plugins = LocalPlugins::open(lingqi::model::config_dir().join("local-plugins"));
                 if let Err(error) = plugins.activate_material(None, false) {
-                    daozai::material::Runtime::report_failure(&format!("无法保存材质停用状态：{error}"));
+                    lingqi::material::Runtime::report_failure(&format!("无法保存材质停用状态：{error}"));
                 }
             }
             if replace_material_window(true) { return Ok(()); }

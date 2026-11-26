@@ -162,7 +162,7 @@ pub(super) fn run(tx:SyncSender<Vec<super::Device>>,stop:Arc<AtomicBool>) {
     let (jobs,requests)=mpsc::sync_channel::<Vec<Target>>(1);
     let (results,readings)=mpsc::sync_channel::<Sample>(128);
     let gatt_stop=stop.clone();
-    let worker=std::thread::Builder::new().name("daozai-bluetooth-gatt".into()).spawn(move||{
+    let worker=std::thread::Builder::new().name("lingqi-bluetooth-gatt".into()).spawn(move||{
         let Some(_apartment)=Apartment::new() else {return};
         while !gatt_stop.load(Ordering::Relaxed){
             let Ok(mut targets)=requests.recv_timeout(Duration::from_millis(200)) else {continue};

@@ -1,4 +1,4 @@
-//! 用岛仔画布绘制状态详情。
+//! 用灵栖画布绘制状态详情。
 #[path = "plugin_status_controls.rs"]
 mod controls;
 pub(crate) use controls::{extra_fields_height, ClickTarget, DEFAULT_FORM_HEIGHT, Interaction, InteractionResponse};

@@ -104,7 +104,7 @@ impl Pipeline {
                 push_constant_ranges: &[],
             });
             let constants = [(
-                "daozai_srgb_target".to_owned(),
+                "lingqi_srgb_target".to_owned(),
                 f64::from(u8::from(state.target_format.is_srgb())),
             )]
             .into_iter()
@@ -114,13 +114,13 @@ impl Pipeline {
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &module,
-                    entry_point: Some("daozai_vs"),
+                    entry_point: Some("lingqi_vs"),
                     buffers: &[],
                     compilation_options: Default::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &module,
-                    entry_point: Some("daozai_fs"),
+                    entry_point: Some("lingqi_fs"),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: state.target_format,
                         blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),

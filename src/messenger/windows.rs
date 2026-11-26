@@ -435,7 +435,7 @@ fn resolve_open_target(target:Target,paths:&[String])->Result<Target,OpenError>{
 
 #[derive(Clone,Copy)]
 pub struct OpenRequest {unread:Unread,target:Option<Target>,allow_tray:bool}
-static OPEN:crate::resources::Lane=crate::resources::Lane::new("daozai-messenger-open",1);
+static OPEN:crate::resources::Lane=crate::resources::Lane::new("lingqi-messenger-open",1);
 impl OpenRequest {
     pub fn start(self,ctx:eframe::egui::Context)->Result<mpsc::Receiver<Result<Target,OpenError>>,OpenError>{
         let lease=OPEN.acquire().ok_or(OpenError::Busy)?;
@@ -582,7 +582,7 @@ mod tests {
     fn office_registration_keeps_the_verified_process_when_the_original_window_is_destroyed(){unsafe{
         use windows::Win32::System::{LibraryLoader::GetModuleHandleW,Threading::GetCurrentProcess};
         unsafe extern "system" fn proc(h:HWND,m:u32,w:WPARAM,l:LPARAM)->LRESULT{DefWindowProcW(h,m,w,l)}
-        let class=w!("QtDaozaiRebuildQWindowIcon");
+        let class=w!("QtLingqiRebuildQWindowIcon");
         let instance=GetModuleHandleW(None).unwrap().into();
         RegisterClassW(&WNDCLASSW{lpfnWndProc:Some(proc),hInstance:instance,lpszClassName:class,..Default::default()});
         let create=||CreateWindowExW(WINDOW_EX_STYLE(0x100),class,w!(""),WINDOW_STYLE(0x860f0000),-10000,-10000,800,600,None,None,instance,None).unwrap();

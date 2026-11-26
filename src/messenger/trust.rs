@@ -134,13 +134,13 @@ pub(super) fn launch_feishu(path: &Path, pid: u32) -> Result<(), &'static str> {
         if !trusted_file(PCWSTR(wide_path.as_ptr()), HANDLE(file.as_raw_handle()), |signer| expected_publisher(filename, signer)) {
             return Err("客户端签名或签名发布者无法验证");
         }
-        let current = process_token(GetCurrentProcess(), TOKEN_QUERY).map_err(|_| "无法确认岛仔运行权限")?;
-        if !elevated(*current).map_err(|_| "无法确认岛仔运行权限")? {
+        let current = process_token(GetCurrentProcess(), TOKEN_QUERY).map_err(|_| "无法确认灵栖运行权限")?;
+        if !elevated(*current).map_err(|_| "无法确认灵栖运行权限")? {
             return Command::new(&path).current_dir(dirname)
                 .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
                 .spawn().map(|_| ()).map_err(|_| "启动客户端程序失败");
         }
-        // 使用已匹配的客户端令牌，管理员运行的岛仔也不以自身权限启动飞书。
+        // 使用已匹配的客户端令牌，管理员运行的灵栖也不以自身权限启动飞书。
         let process = Owned::new(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
             .map_err(|_| "无法获取客户端运行权限")?);
         let token = process_token(*process, TOKEN_QUERY | TOKEN_DUPLICATE)

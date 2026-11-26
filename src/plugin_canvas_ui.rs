@@ -1009,7 +1009,7 @@ mod tests {
         .unwrap();
         let texture = ctx.load_texture("插件演示图", badge, egui::TextureOptions::LINEAR);
         let destination =
-            std::env::var_os("DAOZAI_CANVAS_SCREENSHOTS").map(std::path::PathBuf::from);
+            std::env::var_os("LINGQI_CANVAS_SCREENSHOTS").map(std::path::PathBuf::from);
         let mut screenshot = crate::preview_raster::Raster::new(419, 230);
         for (name, palette) in [
             ("classic", None),

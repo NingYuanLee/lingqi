@@ -268,7 +268,7 @@ fn plugin_status_layout_renders_author_ring_and_bar_from_the_same_snapshot() {
     assert_eq!(first, second);
 
     let cursor = H::local(225.0, 85.0);
-    let dir = std::env::var_os("DAOZAI_PLUGIN_STATUS_LAYOUT_PREVIEW").map(std::path::PathBuf::from);
+    let dir = std::env::var_os("LINGQI_PLUGIN_STATUS_LAYOUT_PREVIEW").map(std::path::PathBuf::from);
     if let Some(dir) = &dir {
         fs::create_dir_all(dir).unwrap();
     }
@@ -342,7 +342,7 @@ fn plugin_canvas_demo_renders_with_mixed_layout() {
     assert_eq!(h.app.plugins.status_height(id), 42.0 + 172.0 + 26.0 + 16.0 + 6.0 + 16.0);
     h.app.show_status_page(id);
     let cursor = H::local(225.0, 85.0);
-    if let Some(dir) = std::env::var_os("DAOZAI_CANVAS_SCREENSHOT_DIR") {
+    if let Some(dir) = std::env::var_os("LINGQI_CANVAS_SCREENSHOT_DIR") {
         let dir = std::path::PathBuf::from(dir);
         fs::create_dir_all(&dir).unwrap();
         shoot_feature(&mut h, &mut feature_raster(), &dir, "A-画布图元", 30, Some(cursor), "2026-11-24");
@@ -429,7 +429,7 @@ fn plugin_status_pages_render_from_authorized_data_and_keep_the_native_carousel(
     assert!(has_text(&h, "48"));
     assert!(has_text(&h, "220 °C"));
     assert!(has_text(&h, "耗材余量偏低"));
-    if let Some(path) = std::env::var_os("DAOZAI_PLUGIN_STATUS_PREVIEW") {
+    if let Some(path) = std::env::var_os("LINGQI_PLUGIN_STATUS_PREVIEW") {
         let path = std::path::PathBuf::from(path);
         fs::create_dir_all(&path).unwrap();
         shoot_feature(

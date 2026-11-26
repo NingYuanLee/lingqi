@@ -1,4 +1,4 @@
-//! 画布岛仔沿用宿主的眼睛、表情图集与配色。
+//! 画布灵栖沿用宿主的眼睛、表情图集与配色。
 
 use super::{geometry::Clip, CanvasTheme};
 use crate::{

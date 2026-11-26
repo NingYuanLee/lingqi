@@ -397,7 +397,7 @@ mod tests {
     #[test]
     fn only_builds_older_than_the_table_ask_users_to_update(){
         assert!(older_than_table(&KUGOU,0x6ac9ec86-1));
-        assert!(!older_than_table(&KUGOU,0x6ac9ec86+1),"比已适配的新：是岛仔还没适配，不让用户更新");
+        assert!(!older_than_table(&KUGOU,0x6ac9ec86+1),"比已适配的新：是灵栖还没适配，不让用户更新");
         assert!(!older_than_table(&NETEASE,0x6ae94a6a),"#202 里网易云 3.1.43 比适配表新");
     }
 

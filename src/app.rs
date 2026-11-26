@@ -1,5 +1,5 @@
 //! 灵动岛主体：状态、悬停形变、切页、顶栏与公共层。与平台无关——
-//! Windows 外壳（`main.rs`）和无窗口录制器（`daozai-record`）共用同一份代码。
+//! Windows 外壳（`main.rs`）和无窗口录制器（`lingqi-record`）共用同一份代码。
 //!
 //! 时间一律来自 `Env::t`（秒），不直接读系统时钟，所以录屏可逐帧复现。
 
@@ -143,11 +143,11 @@ pub struct Env {
     pub idle_seconds: Option<f64>,
     /// 当前会话是否处于锁屏（Win + L、自动锁屏、唤醒后的登录界面）。
     pub screen_locked: bool,
-    /// 正在生成岛仔演示录屏。
+    /// 正在生成灵栖演示录屏。
     pub recording: bool,
     /// 因「全屏时隐藏」而隐藏岛体，沿用外壳对设置和所在屏幕的判断。
     pub fullscreen_hidden: bool,
-    /// 前台浏览器的顶部是否与岛重叠；岛仔自身窗口或暂不可读时为 None。
+    /// 前台浏览器的顶部是否与岛重叠；灵栖自身窗口或暂不可读时为 None。
     pub browser_at_top: Option<bool>,
     pub media: NowPlaying,
     /// 系统主音量（0..100, 是否静音）；v0.5.4 音量条与系统双向同步。
@@ -236,7 +236,7 @@ pub enum Cmd {
     CalendarForget,
     /// 选择 .ics 文件导入本机日程。
     CalendarImport,
-    /// 重启岛仔（切换渲染方式后生效）。
+    /// 重启灵栖（切换渲染方式后生效）。
     RestartApp,
 }
 
@@ -1002,7 +1002,6 @@ pub struct App {
     pub(crate) weather: crate::weather::State,
     pub(crate) weather_source: crate::weather_source_ui::State,
     pub(crate) updates: crate::updates::State,
-    pub(crate) supporters: crate::supporters::State,
     pub(crate) resident: bar::Motion,
     pub(crate) performance: crate::performance::Monitor,
     pub(crate) resident_power: (Option<u8>,bool),
@@ -1172,7 +1171,6 @@ impl App {
             weather,
             weather_source,
             updates: crate::updates::State::load(model::config_dir().join("update-check.json")),
-            supporters: crate::supporters::State::new(model::config_dir().join("supporters")),
             performance: Default::default(), resident: Default::default(), resident_power:(None,false),
         }
     }
@@ -1550,12 +1548,12 @@ impl App {
 
     /// 录制/截图用的邮件样例（只在 `record` feature 下编译）。
     ///
-    /// `DAOZAI_MAIL_DEMO=1|code` 面板带验证码，`=list` 只列邮件，`=fail` 用假授权码走一次
+    /// `LINGQI_MAIL_DEMO=1|code` 面板带验证码，`=list` 只列邮件，`=fail` 用假授权码走一次
     /// 「测试连接失败」，方便在没有真实邮箱时验收失败路径。
     #[cfg(feature = "record")]
     pub fn mail_demo(&mut self) {
         use mail::{Account, Item, Provider, Status};
-        let mode = std::env::var("DAOZAI_MAIL_DEMO").unwrap_or_default();
+        let mode = std::env::var("LINGQI_MAIL_DEMO").unwrap_or_default();
         self.settings_tab = 7;
         if mode == "fail" {
             self.mail.form.provider = Provider::Qq;
@@ -1639,11 +1637,11 @@ impl App {
 
     /// 录制/截图用的日程样例（只在 `record` feature 下编译）。
     ///
-    /// `DAOZAI_CAL_DEMO=paste|fail|connected|alert`。
+    /// `LINGQI_CAL_DEMO=paste|fail|connected|alert`。
     #[cfg(feature = "record")]
     pub fn calendar_demo(&mut self) {
         use calendar::Provider;
-        let mode = std::env::var("DAOZAI_CAL_DEMO").unwrap_or_default();
+        let mode = std::env::var("LINGQI_CAL_DEMO").unwrap_or_default();
         self.calendar.form.provider = Provider::Feishu;
         self.calendar.form.username = "demo***@feishu.example".into();
         self.settings_tab = 8;
@@ -4023,7 +4021,7 @@ impl App {
             // 详情页的标题带返回箭头，由页面自己画。
             BLUETOOTH_PAGE if self.wireless_focus.is_some() && self.wireless_devices.len()>1 => return,
             BLUETOOTH_PAGE => ("无线", "设备", theme::CYAN),
-            _ => ("岛仔", "设置", theme::WHITE),
+            _ => ("灵栖", "设置", theme::WHITE),
         };
         let wa = c.text(15.0, base, a, size::TITLE, W::Bold, theme::WHITE, H::Left);
         if !b.is_empty() {

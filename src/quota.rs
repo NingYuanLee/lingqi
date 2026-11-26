@@ -457,7 +457,7 @@ impl Service {
             {let Ok(mut next)=pending.lock()else{return false;};next.accounts=Some(accounts);next.running=true;}
             let next=pending.clone();let results=self.results.clone();let run=run.clone();
             let(wake,requests)=mpsc::sync_channel::<()>(1);
-            let spawned=std::thread::Builder::new().name("daozai-quota".into()).spawn(move||{
+            let spawned=std::thread::Builder::new().name("lingqi-quota".into()).spawn(move||{
                 while requests.recv().is_ok(){
                     let accounts={
                         let Ok(mut state)=next.lock()else{break;};
@@ -538,7 +538,7 @@ fn fetch_subscription_at(agent:&ureq::Agent,account:&Account,url:&str)->Result<S
     if auth.expires_at.is_some_and(|at|at<=chrono::Utc::now().timestamp_millis() as f64/1000.0){
         return Err((KIMI_RELOGIN.into(),0));
     }
-    let user_agent=if account.provider==Provider::Kimi{concat!("Daozai/",env!("CARGO_PKG_VERSION"))}else{"codex-cli/Daozai"};
+    let user_agent=if account.provider==Provider::Kimi{concat!("Lingqi/",env!("CARGO_PKG_VERSION"))}else{"codex-cli/Lingqi"};
     let mut req=agent.get(url).set("Authorization",&format!("Bearer {}",auth.token)).set("Accept","application/json").set("User-Agent",user_agent);
     if account.provider==Provider::Codex{if let Some(id)=&auth.account_id{req=req.set("ChatGPT-Account-Id",id);}}
     let response=req.call().map_err(|e|match e{
@@ -583,7 +583,7 @@ fn fetch_subscription_at(agent:&ureq::Agent,account:&Account,url:&str)->Result<S
         use std::io::{BufRead, BufReader, Write};
         use std::net::TcpListener;
 
-        let path=std::env::temp_dir().join(format!("daozai-kimi-expiry-{}.json",std::process::id()));
+        let path=std::env::temp_dir().join(format!("lingqi-kimi-expiry-{}.json",std::process::id()));
         let expired=json!({"access_token":"old-fixture","expires_at":1234.75}).to_string();
         fs::write(&path,&expired).unwrap();
         let mut config=Config::default();
@@ -609,7 +609,7 @@ fn fetch_subscription_at(agent:&ureq::Agent,account:&Account,url:&str)->Result<S
                 write!(stream,"HTTP/1.1 {status}\r\nRetry-After: 77\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();
                 if status=="200 OK"{
                     assert!(headers.iter().any(|h|h=="authorization: bearer renewed-fixture"));
-                    assert!(headers.iter().any(|h|h==concat!("user-agent: daozai/",env!("CARGO_PKG_VERSION"))));
+                    assert!(headers.iter().any(|h|h==concat!("user-agent: lingqi/",env!("CARGO_PKG_VERSION"))));
                 }
             }
         });
@@ -730,7 +730,7 @@ fn fetch_subscription_at(agent:&ureq::Agent,account:&Account,url:&str)->Result<S
     }
     #[test]
     fn native_discovery_keeps_distinct_accounts_and_does_not_change_their_files(){
-        let dir=std::env::temp_dir().join(format!("daozai-discovery-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let dir=std::env::temp_dir().join(format!("lingqi-discovery-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         fs::create_dir_all(&dir).unwrap();
         let personal=dir.join("personal.json");let work=dir.join("work.json");let duplicate=dir.join("duplicate.json");
         let a=r#"{"access_token":"synthetic-personal"}"#;let b=r#"{"access_token":"synthetic-work"}"#;
@@ -745,7 +745,7 @@ fn fetch_subscription_at(agent:&ureq::Agent,account:&Account,url:&str)->Result<S
     }
     #[test]
     fn migrated_credentials_do_not_duplicate_accounts_or_merge_different_workspace_members(){
-        let dir=std::env::temp_dir().join(format!("daozai-identity-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));fs::create_dir_all(&dir).unwrap();
+        let dir=std::env::temp_dir().join(format!("lingqi-identity-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));fs::create_dir_all(&dir).unwrap();
         let token=|claims:Value|format!("e30.{}.synthetic",base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(claims.to_string()));
         let old=dir.join("old.json");let new=dir.join("new.json");
         fs::write(&old,json!({"access_token":token(json!({"user_id":"same-user","jti":"old"}))}).to_string()).unwrap();

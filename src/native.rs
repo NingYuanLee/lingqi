@@ -141,7 +141,7 @@ fn watch_drag(hwnd:HWND,ctx:eframe::egui::Context,wake:Arc<Mutex<PointerWake>>){
     let mut was_down=false;
     let mut last_hover=None;
     let mut was_over_pill_edge=false;
-    let _=std::thread::Builder::new().name("daozai-drag-watch".into()).spawn(move||loop{
+    let _=std::thread::Builder::new().name("lingqi-drag-watch".into()).spawn(move||loop{
         std::thread::sleep(std::time::Duration::from_millis(80));
         unsafe {
             let hwnd=HWND(raw as *mut _);
@@ -508,7 +508,7 @@ enum Layering {
 /// 本机验证分层显示的开关：None 不启用；Some(false) 按需要分层的显卡处理；Some(true) 另外假装读回的画面没有透明通道。
 fn outline_test()->Option<bool> {
     static VALUE:std::sync::OnceLock<Option<bool>>=std::sync::OnceLock::new();
-    *VALUE.get_or_init(||match std::env::var("DAOZAI_OUTLINE_TEST").ok()?.trim().to_ascii_lowercase().as_str() {
+    *VALUE.get_or_init(||match std::env::var("LINGQI_OUTLINE_TEST").ok()?.trim().to_ascii_lowercase().as_str() {
         "alpha"=>Some(false),
         "opaque"=>Some(true),
         _=>None,
@@ -613,13 +613,13 @@ impl Window {
     fn capture_targets(&self) -> capture::Targets {
         use capture::Target;
         [
-            Some(Target { hwnd: self.hwnd, name: "岛仔主窗口" }),
+            Some(Target { hwnd: self.hwnd, name: "灵栖主窗口" }),
             match &self.layering {
-                Layering::Active(layered) => Some(Target { hwnd: layered.display(), name: "岛仔分层显示窗口" }),
+                Layering::Active(layered) => Some(Target { hwnd: layered.display(), name: "灵栖分层显示窗口" }),
                 _ => None,
             },
-            self.crop.bridge.as_ref().map(|layer| Target { hwnd: layer.display(), name: "岛仔裁剪过渡窗口" }),
-            self.backdrop.as_ref().map(|backdrop| Target { hwnd: backdrop.hwnd(), name: "岛仔毛玻璃底板" }),
+            self.crop.bridge.as_ref().map(|layer| Target { hwnd: layer.display(), name: "灵栖裁剪过渡窗口" }),
+            self.backdrop.as_ref().map(|backdrop| Target { hwnd: backdrop.hwnd(), name: "灵栖毛玻璃底板" }),
         ]
     }
 
@@ -702,7 +702,7 @@ impl Window {
             use eframe::glow::HasContext;
             unsafe{(gl.get_parameter_string(eframe::glow::VENDOR),gl.get_parameter_string(eframe::glow::RENDERER))}
         }).unwrap_or_default();
-        // 本机验证用：DAOZAI_OUTLINE_TEST=alpha 按 AMD 等路径处理；=opaque 再假装读回的画面没有透明通道。
+        // 本机验证用：LINGQI_OUTLINE_TEST=alpha 按 AMD 等路径处理；=opaque 再假装读回的画面没有透明通道。
         let opaque_surface=!direct_composition && (surface_needs_outline_clip(backend,&vendor,&renderer) || outline_test().is_some());
         if opaque_surface{glass_diagnostic(&format!("渲染兼容：{vendor} {renderer} {backend:?}，不直接信任系统透明合成，首帧前先按轮廓裁剪"));}
         // 收紧外框只走 OpenGL 前缓冲读回；GPU 材质的透明交换链不收紧。
@@ -814,7 +814,7 @@ impl Window {
         }
         if self.crop.bridge.is_none() {
             if let Ok(layered) = crate::layered::Layered::new() {
-                self.apply_capture_to_new_window(layered.display(), "岛仔裁剪过渡窗口");
+                self.apply_capture_to_new_window(layered.display(), "灵栖裁剪过渡窗口");
                 self.crop.bridge = Some(layered);
             }
         }
@@ -912,7 +912,7 @@ impl Window {
             if real && !rgba.chunks_exact(4).any(|pixel|pixel[3]!=0) {return false;}
             match crate::layered::Layered::new() {
                 Ok(mut layered)=>{
-                    let target = capture::Target { hwnd: layered.display(), name: "岛仔分层显示窗口" };
+                    let target = capture::Target { hwnd: layered.display(), name: "灵栖分层显示窗口" };
                     self.apply_capture_to_new_window(target.hwnd, target.name);
                     let targets = self.capture_targets();
                     let hwnd = self.hwnd;
@@ -945,7 +945,7 @@ impl Window {
         let Layering::Active(layered)=&mut self.layering else {return false};
         let frame=if self.outline.active {self.outline.apply(size,rgba)} else {rgba};
         match self.capture_exclusion.render(targets, None, || layered.present(hwnd, size, frame)) {
-            // 切到分层窗口后，下一次 update 换回矩形区域（岛仔窗口本身已几乎不可见，只负责命中）。
+            // 切到分层窗口后，下一次 update 换回矩形区域（灵栖窗口本身已几乎不可见，只负责命中）。
             Ok(changed)=>changed,
             Err(error)=>{
                 glass_diagnostic(&format!("渲染兼容：分层窗口不可用，回到轮廓裁剪：{error:?}"));
@@ -1069,7 +1069,7 @@ impl Window {
         // 收起时主窗口和毛玻璃底板都按可见轮廓向下层进程让出鼠标。
         let resident_key=resident_clip.filter(|_|!capture && !hold_startup && r.0<r.2 && r.1<r.3)
             .map(|shapes|glass_key(shapes,ppp));
-        // 分层窗口显示的是带真实透明通道的画面时，系统模糊同样能透出来（模糊底板紧贴在岛仔窗口下方，
+        // 分层窗口显示的是带真实透明通道的画面时，系统模糊同样能透出来（模糊底板紧贴在灵栖窗口下方，
         // 分层显示窗口在上方）；只有轮廓裁剪或按轮廓补 alpha（内部不透明）时才关掉模糊。
         let layered_alpha=matches!(self.layering,Layering::Active(_)) && !self.outline.active;
         match glass.filter(|g|blur && !passive && !g.is_empty() && !self.blur_unavailable && self.crop.applied.is_none() && (!self.opaque_surface || layered_alpha) && compositor_blur_allowed()) {
@@ -1077,7 +1077,7 @@ impl Window {
                 if self.backdrop.is_none() {
                     match crate::composition::Backdrop::new() {
                         Ok(backdrop) => {
-                            self.apply_capture_to_new_window(backdrop.hwnd(), "岛仔毛玻璃底板");
+                            self.apply_capture_to_new_window(backdrop.hwnd(), "灵栖毛玻璃底板");
                             glass_diagnostic("合成引擎模糊底板已创建");
                             self.backdrop = Some(backdrop);
                         }
@@ -1300,7 +1300,7 @@ mod tests {
                 let soft=(0..h).flat_map(|y|(0..w).map(move|x|(x,y))).filter(|&(x,y)|(1..255).contains(&alpha(x,y))).count();
                 assert!(soft>=80,"圆角和肩部要有抗锯齿过渡像素，实际 {soft}");
                 assert!(frame.chunks_exact(4).all(|p|p[0]<=p[3]&&p[1]<=p[3]&&p[2]<=p[3]),"必须是合法的预乘颜色");
-                // 切到分层窗口后不再用轮廓裁剪岛仔窗口本身。
+                // 切到分层窗口后不再用轮廓裁剪灵栖窗口本身。
                 native.update((0.0,0.0,w as f32,h as f32),(80.0,0.0,240.0,60.0),None,None,Some(&shapes),true,1.0,false,false,None);
                 let region=CreateRectRgn(0,0,0,0);
                 if GetWindowRgn(hwnd,region).0!=0 {assert!(PtInRegion(region,10,150).as_bool(),"分层显示后窗口区域应回到矩形");}

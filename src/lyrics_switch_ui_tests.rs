@@ -167,7 +167,7 @@ fn song_with_system_position_keeps_lyrics_after_player_fallback_fails(){
 fn music_compat_gallery(){
     use crate::smtc::music_compat::{self as compat,Item,Support};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("DAOZAI_MUSIC_COMPAT_PREVIEW").expect("设置导出目录"));
+    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_MUSIC_COMPAT_PREVIEW").expect("设置导出目录"));
     std::fs::create_dir_all(&dest).unwrap();
     compat::set_version("QQMusic.exe","21.10.0.0");
     compat::set_version("bodian_pc.exe","1.2.0");compat::set("bodian_pc.exe",Item::Reader,Support::Unavailable("播放组件版本不在适配表里（已适配波点 1.1.7）".into()));
@@ -191,7 +191,7 @@ fn music_compat_gallery(){
             raster.update_textures(&root.textures_delta);
             let children=std::mem::take(&mut *children.lock().unwrap());
             for (_,out) in &children{raster.update_textures(&out.textures_delta);}
-            let out=&children.iter().find(|(id,_)|*id==egui::ViewportId::from_hash_of("daozai-settings")).unwrap().1;
+            let out=&children.iter().find(|(id,_)|*id==egui::ViewportId::from_hash_of("lingqi-settings")).unwrap().1;
             if frame==3 {
                 raster.buf.fill([0.10,0.10,0.11,1.0]);raster.draw(&h.ctx.tessellate(out.shapes.clone(),out.pixels_per_point),out.pixels_per_point);
                 let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);

@@ -284,7 +284,7 @@ fn battery_events_notify_once_and_respect_setting(){
 
 #[test]
 fn wireless_native_preview(){
-    let Some(dest)=std::env::var_os("DAOZAI_BLUETOOTH_PREVIEW_DIR") else{return;};
+    let Some(dest)=std::env::var_os("LINGQI_BLUETOOTH_PREVIEW_DIR") else{return;};
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let dest=std::path::PathBuf::from(dest);std::fs::create_dir_all(&dest).unwrap();
     for (name,skin) in [("native-dark.png",crate::model::Skin::Classic),("native-cream.png",crate::model::Skin::Cream),("native-resident.png",crate::model::Skin::Classic),("native-detail.png",crate::model::Skin::Classic),("native-detail-unknown.png",crate::model::Skin::Classic),
             ("native-receiver-overview.png",crate::model::Skin::Classic),("native-receiver-detail.png",crate::model::Skin::Classic)]{
@@ -423,7 +423,7 @@ fn wireless_settings_controls_are_in_their_own_page() {
         let labels=texts(&h);
         for label in visible {assert!(labels.iter().any(|s|s==label),"缺少 {label}");}
         for label in hidden {assert!(!labels.iter().any(|s|s==label),"意外显示 {label}");}
-        if let Some(dest)=std::env::var_os("DAOZAI_BLUETOOTH_PREVIEW_DIR") {
+        if let Some(dest)=std::env::var_os("LINGQI_BLUETOOTH_PREVIEW_DIR") {
             let dest=std::path::PathBuf::from(dest);
             std::fs::create_dir_all(&dest).unwrap();
             raster.buf.fill([0.10,0.10,0.11,1.0]);
@@ -447,7 +447,7 @@ fn wireless_compat_settings_follow_install_and_switch() {
     let capture=output.clone();
     let events=std::sync::Arc::new(Mutex::new(Vec::new()));
     let input=events.clone();
-    let switch_id=egui::Id::new(("settings-plugin-switch","daozai.wireless-receivers"));
+    let switch_id=egui::Id::new(("settings-plugin-switch","lingqi.wireless-receivers"));
     egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{
         let id=viewport.ids.this;
         let raw=egui::RawInput{

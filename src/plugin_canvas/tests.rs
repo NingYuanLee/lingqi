@@ -19,7 +19,7 @@ fn sdk_spike_canvas_pet_validates_mood_bindings_and_budget() {
         at, mood, motion, ..
     } = &evaluated.nodes[0].kind
     else {
-        panic!("缺少岛仔节点")
+        panic!("缺少灵栖节点")
     };
     assert_eq!(at[0].initial(), 120.0);
     assert_eq!(

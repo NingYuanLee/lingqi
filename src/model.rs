@@ -1,13 +1,13 @@
-﻿//! 持久化与状态模型。
+//! 持久化与状态模型。
 //!
 //! 文件布局与原工具同名同结构（原工具字符串中可见的路径与键名），但默认目录
-//! 用独立的 `%APPDATA%\Daozai`，避免与原工具的 `%APPDATA%\Nusa` 互相覆盖：
-//!   %APPDATA%\Daozai\settings.txt   -> pet=0/1, minimal=0/1
-//!   %APPDATA%\Daozai\todo.txt
-//!   %APPDATA%\Daozai\water.txt      -> bottle=<ml> / goal=<ml> / start=YYYY-MM-DD
-//!   %APPDATA%\Daozai\shelf.txt      -> 置物清单（每行一个绝对路径）
+//! 用独立的 `%APPDATA%\Lingqi`，避免与原工具的 `%APPDATA%\Nusa` 互相覆盖：
+//!   %APPDATA%\Lingqi\settings.txt   -> pet=0/1, minimal=0/1
+//!   %APPDATA%\Lingqi\todo.txt
+//!   %APPDATA%\Lingqi\water.txt      -> bottle=<ml> / goal=<ml> / start=YYYY-MM-DD
+//!   %APPDATA%\Lingqi\shelf.txt      -> 置物清单（每行一个绝对路径）
 //!
-//! 设置环境变量 `DAOZAI_DATA_DIR` 可把以上目录整体改到别处（用于与已安装的
+//! 设置环境变量 `LINGQI_DATA_DIR` 可把以上目录整体改到别处（用于与已安装的
 //! 原工具并存、或跑测试时不碰真实数据）。
 
 use std::fs;
@@ -18,10 +18,10 @@ fn env_dir(key: &str) -> PathBuf {
 }
 
 pub fn config_dir() -> PathBuf {
-    if let Ok(root) = std::env::var("DAOZAI_DATA_DIR") {
+    if let Ok(root) = std::env::var("LINGQI_DATA_DIR") {
         return PathBuf::from(root);
     }
-    env_dir("APPDATA").join("Daozai")
+    env_dir("APPDATA").join("Lingqi")
 }
 
 fn read_kv(path: &Path) -> Vec<(String, String)> {
@@ -952,13 +952,13 @@ mod tests {
     fn capture_exclusion_defaults_to_disabled_and_round_trips() {
         let _guard = crate::ui_tests::ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let dir = std::env::temp_dir().join(format!("daozai-capture-settings-{}-{nonce}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("lingqi-capture-settings-{}-{nonce}", std::process::id()));
         fs::create_dir(&dir).unwrap();
         let path = dir.join("settings.txt");
         fs::write(&path, b"hide_fullscreen=0\n").unwrap();
 
-        let previous = std::env::var_os("DAOZAI_DATA_DIR");
-        std::env::set_var("DAOZAI_DATA_DIR", &dir);
+        let previous = std::env::var_os("LINGQI_DATA_DIR");
+        std::env::set_var("LINGQI_DATA_DIR", &dir);
         let mut settings = Settings::load();
         let legacy_disabled = !settings.exclude_from_capture && !settings.hide_fullscreen;
         settings.exclude_from_capture = true;
@@ -968,8 +968,8 @@ mod tests {
         settings.save();
         let disabled = Settings::load();
         match previous {
-            Some(previous) => std::env::set_var("DAOZAI_DATA_DIR", previous),
-            None => std::env::remove_var("DAOZAI_DATA_DIR"),
+            Some(previous) => std::env::set_var("LINGQI_DATA_DIR", previous),
+            None => std::env::remove_var("LINGQI_DATA_DIR"),
         }
         fs::remove_file(path).unwrap();
         fs::remove_dir(dir).unwrap();
@@ -1000,7 +1000,7 @@ mod tests {
 
     #[test]
     fn quality_save_preserves_neighbor_and_cleans_failed_writes() {
-        let dir=std::env::temp_dir().join(format!("daozai-quality-save-{}",std::process::id()));
+        let dir=std::env::temp_dir().join(format!("lingqi-quality-save-{}",std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path=dir.join("settings.txt");let neighbor=dir.join("settings.tmp");
         fs::write(&neighbor,b"other data").unwrap();
@@ -1018,7 +1018,7 @@ mod tests {
 
     #[test]
     fn atomic_write_replaces_existing_settings() {
-        let dir=std::env::temp_dir().join(format!("daozai-save-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let dir=std::env::temp_dir().join(format!("lingqi-save-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         fs::create_dir_all(&dir).unwrap();
         let path=dir.join("settings.txt");
         atomic_write(&path,b"focus_minutes=25\n").unwrap();
@@ -1031,7 +1031,7 @@ mod tests {
 
     #[test]
     fn quality_concurrent_saves_publish_one_complete_value() {
-        let dir=std::env::temp_dir().join(format!("daozai-quality-concurrent-{}",std::process::id()));fs::create_dir_all(&dir).unwrap();
+        let dir=std::env::temp_dir().join(format!("lingqi-quality-concurrent-{}",std::process::id()));fs::create_dir_all(&dir).unwrap();
         let path=dir.join("cache.lrc");let gate=std::sync::Arc::new(std::sync::Barrier::new(4));
         let workers:Vec<_>=(0..4u8).map(|byte|{let path=path.clone();let gate=gate.clone();std::thread::spawn(move||{gate.wait();atomic_write(&path,&vec![byte;128*1024])})}).collect();
         for worker in workers{worker.join().unwrap().unwrap();}

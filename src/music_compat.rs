@@ -81,7 +81,7 @@ static NOTICES:Mutex<(Vec<&'static str>,Option<std::collections::HashSet<String>
 
 fn notices_path()->std::path::PathBuf {crate::model::config_dir().join("music-update-notices.txt")}
 
-/// 播放器版本比已适配的还旧，导致歌词无法同步：排一条更新提醒。比已适配的新则是岛仔还没适配，不打扰用户。
+/// 播放器版本比已适配的还旧，导致歌词无法同步：排一条更新提醒。比已适配的新则是灵栖还没适配，不打扰用户。
 pub fn outdated(exe:&'static str) {
     let version=get(exe).and_then(|p|p.version).unwrap_or_default();
     let key=format!("{exe}/{version}");

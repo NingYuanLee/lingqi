@@ -117,7 +117,7 @@ fn process_details(info: &mut Map<String, Value>) {
             // 核对快照中的 PID 仍属于目标应用，仅查询文件版本与进程计数。
             let path = || player_process::image_path(pid)
                 .filter(|path| path.rsplit(['\\', '/']).next().is_some_and(|file| file.eq_ignore_ascii_case(&exe)));
-            if name == "daozai" {
+            if name == "lingqi" {
                 if let Some(path) = path() {
                     island.push(island_process(pid, entry.cntThreads, &path));
                 }
@@ -209,7 +209,7 @@ impl Drop for EventHandle {
 }
 
 fn recent_events(info: &mut Map<String, Value>) {
-    let faults = events(w!("Application"), w!("*[System[(EventID=1000 or EventID=1001 or EventID=1002) and TimeCreated[timediff(@SystemTime) <= 604800000]] and EventData[Data[@Name='AppName']='daozai.exe' or Data[@Name='P1']='daozai.exe']]"), 30);
+    let faults = events(w!("Application"), w!("*[System[(EventID=1000 or EventID=1001 or EventID=1002) and TimeCreated[timediff(@SystemTime) <= 604800000]] and EventData[Data[@Name='AppName']='lingqi.exe' or Data[@Name='P1']='lingqi.exe']]"), 30);
     let resets = events(w!("System"), w!("*[System[EventID=4101 and TimeCreated[timediff(@SystemTime) <= 604800000]]]"), 20);
     if faults.is_none() || resets.is_none() {
         info.insert("EventQuery".into(), json!("无法读取部分 Windows 事件记录"));

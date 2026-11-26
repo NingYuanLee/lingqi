@@ -13,13 +13,13 @@ fn compatible(mut options:eframe::NativeOptions,backends:eframe::wgpu::Backends)
         setup.instance_descriptor.backends=backends;
         setup.power_preference=eframe::wgpu::PowerPreference::LowPower;
         // 默认的 Performance 让 DX12 分配器按 256MB 显存块 + 64MB 上传块预留。核显没有独立显存，
-        // 这些都算进岛仔进程内存（实测 60MB → 530MB）。岛仔的纹理只有几 MB，按小块分配即可。
+        // 这些都算进灵栖进程内存（实测 60MB → 530MB）。灵栖的纹理只有几 MB，按小块分配即可。
         let base=setup.device_descriptor.clone();
         setup.device_descriptor=std::sync::Arc::new(move|adapter|small_memory_blocks(base(adapter)));
     }
     options
 }
-/// 岛仔同时存在的纹理只有几十张。DX12 会按绑定上限预建整张描述符表：
+/// 灵栖同时存在的纹理只有几十张。DX12 会按绑定上限预建整张描述符表：
 /// 默认 100 万项约 61MB，65536 项约 4MB，仍有上千倍余量。
 const MAX_BINDINGS:u32=65_536;
 fn small_memory_blocks(descriptor:eframe::wgpu::DeviceDescriptor<'static>)->eframe::wgpu::DeviceDescriptor<'static>{
@@ -46,31 +46,31 @@ fn launch_compatible(options:eframe::NativeOptions,launch:&mut impl FnMut(eframe
     }
 }
 
-/// 验收与排障：设置环境变量 `DAOZAI_RENDERER=wgpu` 直接使用兼容图形后端，
+/// 验收与排障：设置环境变量 `LINGQI_RENDERER=wgpu` 直接使用兼容图形后端，
 /// 在正常电脑上也能检查 OpenGL 失败后用户会看到的画面。
 fn forced_compatible()->bool {
-    std::env::var("DAOZAI_RENDERER").is_ok_and(|value|value.trim().eq_ignore_ascii_case("wgpu"))
+    std::env::var("LINGQI_RENDERER").is_ok_and(|value|value.trim().eq_ignore_ascii_case("wgpu"))
 }
 
 pub fn run(options:eframe::NativeOptions,launch:impl FnMut(eframe::NativeOptions)->eframe::Result<()>)->eframe::Result<()> {
     // 上次崩在显卡 OpenGL 驱动里时，崩溃处理留下的标记会在这里转成设置。
-    let _=daozai::renderer::apply_pending_fallback();
+    let _=lingqi::renderer::apply_pending_fallback();
     let forced=forced_compatible();
     #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
-    let compat_enabled=daozai::renderer::compat_requested();
+    let compat_enabled=lingqi::renderer::compat_requested();
     #[cfg(not(all(windows, feature = "sdk-js", feature = "sdk-material")))]
-    let compat_enabled=!forced && daozai::renderer::compat_requested();
+    let compat_enabled=!forced && lingqi::renderer::compat_requested();
     let compat_first=forced || compat_enabled;
     #[cfg(all(windows, feature = "sdk-material"))]
     let options={
         let mut options=options;
-        let debug=daozai::material::debug_requested();
+        let debug=lingqi::material::debug_requested();
         #[cfg(feature="sdk-js")]
-        let installed=compat_enabled && !daozai::material::falling_back() && !debug
-            && daozai::sdk_spike::LocalPlugins::startup_material(&daozai::model::config_dir().join("local-plugins"));
+        let installed=compat_enabled && !lingqi::material::falling_back() && !debug
+            && lingqi::sdk_spike::LocalPlugins::startup_material(&lingqi::model::config_dir().join("local-plugins"));
         #[cfg(not(feature="sdk-js"))]
         let installed=false;
-        daozai::material::configure_startup(&mut options,compat_first,debug || installed);
+        lingqi::material::configure_startup(&mut options,compat_first,debug || installed);
         options
     };
     run_with(compat_first,options,launch)
@@ -87,12 +87,12 @@ fn run_with(compat_first:bool,options:eframe::NativeOptions,mut launch:impl FnMu
     if compat_first {
         // 兼容渲染是被要求的（设置、崩溃标记或环境变量），但这台电脑可能根本没有 DX12 / Vulkan 设备
         // （远程桌面、虚拟机、只有基本显示适配器、老显卡）。这时退回 OpenGL，不让用户每次都打不开。
-        daozai::renderer::set_compat_active(true);
+        lingqi::renderer::set_compat_active(true);
         let error=match launch_compatible(options.clone(),&mut launch) {
             Err(error @ eframe::Error::Wgpu(_))=>error,
             result=>return result,
         };
-        daozai::renderer::set_compat_active(false);
+        lingqi::renderer::set_compat_active(false);
         return launch(opengl(options)).map_err(|fallback|eframe::Error::AppCreation(format!(
             "兼容图形后端无法启动：{error}\nOpenGL 也无法启动：{fallback}\n请安装电脑厂商提供的显卡驱动后重试。"
         ).into()));
@@ -104,7 +104,7 @@ fn run_with(compat_first:bool,options:eframe::NativeOptions,mut launch:impl FnMu
         Err(error @ (eframe::Error::OpenGL(_)|eframe::Error::Glutin(_)|eframe::Error::NoGlutinConfigs(..)))=>error,
         Err(error)=>return Err(error),
     };
-    daozai::renderer::set_compat_active(true);
+    lingqi::renderer::set_compat_active(true);
     launch_compatible(fallback_options,&mut launch).map_err(|fallback|eframe::Error::AppCreation(format!(
         "OpenGL 初始化失败：{error}\n兼容图形后端也无法启动：{fallback}\n请安装电脑厂商提供的显卡驱动后重试。"
     ).into()))
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn compatible_fallbacks_drop_the_transparent_swapchain() {
         let mut options=eframe::NativeOptions::default();
-        daozai::material::configure_startup(&mut options,true,true);
+        lingqi::material::configure_startup(&mut options,true,true);
         let mut attempts=Vec::new();
         run_with(true,options,|options|{
             attempts.push((options.renderer,options.wgpu_options.direct_composition));
@@ -164,7 +164,7 @@ mod tests {
     #[test]
     fn direct_composition_failure_retries_ordinary_dx12() {
         let mut options=eframe::NativeOptions::default();
-        daozai::material::configure_startup(&mut options,true,true);
+        lingqi::material::configure_startup(&mut options,true,true);
         let mut attempts=Vec::new();
         launch_compatible(options,&mut |options|{
             let eframe::egui_wgpu::WgpuSetup::CreateNew(setup)=options.wgpu_options.wgpu_setup else{panic!("应创建兼容图形设备")};

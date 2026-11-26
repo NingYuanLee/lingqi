@@ -464,7 +464,7 @@ impl<'de> Deserialize<'de> for PetMood {
                 .into_iter()
                 .find(|expression| expression.key() == name)
                 .map(Self::Expression)
-                .ok_or_else(|| D::Error::custom("无效的岛仔表情")),
+                .ok_or_else(|| D::Error::custom("无效的灵栖表情")),
         }
     }
 }
@@ -772,10 +772,10 @@ impl Budget<'_> {
         if let Some(pet) = raw.pet.take() {
             self.pets += 1;
             if self.pets > 1 {
-                return Err("每个画布最多放一只岛仔".into());
+                return Err("每个画布最多放一只灵栖".into());
             }
             if raw.looping.is_some() {
-                return Err("岛仔动画通过 pet.motion 声明".into());
+                return Err("灵栖动画通过 pet.motion 声明".into());
             }
             if pet.motion != PetMotion::None
                 || matches!(pet.mood, PetMood::Expressions | PetMood::Expression(_))
@@ -787,12 +787,12 @@ impl Budget<'_> {
             }
             if let Some(id) = pet.id {
                 if raw.id.as_ref().is_some_and(|other| *other != id) {
-                    return Err("岛仔节点的 id 不一致".into());
+                    return Err("灵栖节点的 id 不一致".into());
                 }
                 raw.id = Some(id);
             }
             self.coords(&pet.at)?;
-            self.number(&pet.size, 12.0, 96.0, "岛仔大小")?;
+            self.number(&pet.size, 12.0, 96.0, "灵栖大小")?;
             return Ok(Kind::Pet {
                 at: pet.at,
                 size: pet.size,

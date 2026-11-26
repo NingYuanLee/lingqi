@@ -21,18 +21,18 @@ impl Lease {
 }
 impl Drop for Lease {fn drop(&mut self){self.0.active.fetch_sub(1,Ordering::Release);}}
 
-pub static POLLER:Lane=Lane::new("daozai-media",1);
+pub static POLLER:Lane=Lane::new("lingqi-media",1);
 // 允许旧实例正在退出与新实例短暂交接；阻塞任务跨缓存重建仍受此上限约束。
-pub static ARTWORK:Lane=Lane::new("daozai-artwork",2);
-pub static COVER:Lane=Lane::new("daozai-cover",2);
-pub static LYRICS:Lane=Lane::new("daozai-lyrics",1);
-pub static NATIVE_LYRICS:Lane=Lane::new("daozai-native-lyrics",2);
-pub static CONTROL:Lane=Lane::new("daozai-control",1);
+pub static ARTWORK:Lane=Lane::new("lingqi-artwork",2);
+pub static COVER:Lane=Lane::new("lingqi-cover",2);
+pub static LYRICS:Lane=Lane::new("lingqi-lyrics",1);
+pub static NATIVE_LYRICS:Lane=Lane::new("lingqi-native-lyrics",2);
+pub static CONTROL:Lane=Lane::new("lingqi-control",1);
 /// 音量混合器读写；驱动卡住时最多占住这一个线程。
-pub static VOLUME:Lane=Lane::new("daozai-volume",1);
+pub static VOLUME:Lane=Lane::new("lingqi-volume",1);
 pub static ASYNC:Lane=Lane::new("winrt-request",4);
 pub static ASYNC_ARTWORK:Lane=Lane::new("winrt-artwork",2);
-static MONITOR:Lane=Lane::new("daozai-diagnostics",1);
+static MONITOR:Lane=Lane::new("lingqi-diagnostics",1);
 pub static TIMEOUTS:AtomicUsize=AtomicUsize::new(0);
 pub static REJECTED_DATA:AtomicUsize=AtomicUsize::new(0);
 pub static CONTROL_DROPPED:AtomicUsize=AtomicUsize::new(0);
@@ -64,7 +64,7 @@ impl Snapshot {
 }
 
 /// 资源保护：连续两次采样都严重超标时「熔断」，由界面暂停音乐读取与歌词等后台任务。
-/// 只能触发一次，重启岛仔后恢复；单次尖峰不会触发。
+/// 只能触发一次，重启灵栖后恢复；单次尖峰不会触发。
 pub struct Guard {strikes:AtomicUsize,tripped:std::sync::atomic::AtomicBool}
 impl Guard {
     pub const fn new()->Self{Self{strikes:AtomicUsize::new(0),tripped:std::sync::atomic::AtomicBool::new(false)}}
@@ -136,7 +136,7 @@ fn record(value:Snapshot)->String {
     use std::fmt::Write;
     let now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
     let mut line=format!("time={now} build={} pid={} private={} working={} handles={} threads={} abnormal={} timeouts={} rejected_data={} control_dropped={} textures={} texture_bytes={} galleys={}",
-        option_env!("DAOZAI_BUILD_LABEL").or(option_env!("CARGO_PKG_VERSION")).unwrap_or("test"),std::process::id(),value.private_bytes,value.working_bytes,value.handles,value.threads,value.abnormal(),
+        option_env!("LINGQI_BUILD_LABEL").or(option_env!("CARGO_PKG_VERSION")).unwrap_or("test"),std::process::id(),value.private_bytes,value.working_bytes,value.handles,value.threads,value.abnormal(),
         TIMEOUTS.load(Ordering::Relaxed),REJECTED_DATA.load(Ordering::Relaxed),CONTROL_DROPPED.load(Ordering::Relaxed),TEXTURES.load(Ordering::Relaxed),TEXTURE_BYTES.load(Ordering::Relaxed),GALLEYS.load(Ordering::Relaxed));
     // 距上次采样的平均帧率（采样间隔 5～30 秒不等，按实际间隔换算）。
     static LAST:Mutex<Option<Instant>>=Mutex::new(None);
@@ -194,13 +194,13 @@ mod tests {
     }
     #[test]
     fn diagnostic_history_rotates_and_rejects_oversized_records(){
-        let root=std::env::temp_dir().join(format!("daozai-resource-log-{}",std::process::id()));
+        let root=std::env::temp_dir().join(format!("lingqi-resource-log-{}",std::process::id()));
         let line="x".repeat(LOG_LIMIT as usize/3);
         for _ in 0..12{append(&root,&line).unwrap();}
         assert!(append(&root,&"x".repeat(LOG_LIMIT as usize+1)).is_err());
         for name in ["resources.log","resources.previous.log"] {let path=root.join(name);assert!(std::fs::metadata(&path).unwrap().len()<=LOG_LIMIT);std::fs::remove_file(path).unwrap();}
         std::fs::remove_dir(root).unwrap();
-        let line=record(Snapshot::default());assert!(line.len()<4096);assert!(line.contains("daozai-cover="));
+        let line=record(Snapshot::default());assert!(line.len()<4096);assert!(line.contains("lingqi-cover="));
     }
     #[test]
     fn guard_trips_once_after_two_consecutive_severe_samples(){
@@ -216,7 +216,7 @@ mod tests {
     }
     #[test]
     fn feature_logs_rotate_and_cap_each_line(){
-        let root=std::env::temp_dir().join(format!("daozai-feature-log-{}",std::process::id()));
+        let root=std::env::temp_dir().join(format!("lingqi-feature-log-{}",std::process::id()));
         for _ in 0..400 {append_log(&root,"lyrics.log",&"字".repeat(5000));}
         for name in ["lyrics.log","lyrics.previous.log"] {
             let path=root.join(name);let text=std::fs::read_to_string(&path).unwrap();

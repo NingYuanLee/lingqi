@@ -1,4 +1,4 @@
-//! 岛仔：Windows 顶部「灵动岛」。
+//! 灵栖：Windows 顶部「灵动岛」。
 //!
 //! - `app` / `pages`：与平台无关的界面与动效（外壳与录制器共用）
 //! - `anim` / `paint` / `shape` / `theme`：弹簧、矢量绘制、面板轮廓、配色字体
@@ -96,7 +96,6 @@ pub mod music_volume;
 pub mod theme;
 pub mod settings_theme;
 mod updates;
-mod supporters;
 #[cfg(windows)]
 pub use updates::record_install_size;
 
@@ -114,5 +113,5 @@ pub mod tray;
 #[cfg(test)]
 mod ui_tests;
 #[cfg(test)]
-#[path = "bin/daozai-record/raster.rs"]
+#[path = "bin/lingqi-record/raster.rs"]
 mod preview_raster;

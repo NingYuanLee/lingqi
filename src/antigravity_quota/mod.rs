@@ -1,4 +1,4 @@
-//! 通过已连接的官方 CLI 获取额度，复用岛仔的 AI 额度面板。
+//! 通过已连接的官方 CLI 获取额度，复用灵栖的 AI 额度面板。
 use std::path::{Path, PathBuf};
 
 #[cfg(windows)]

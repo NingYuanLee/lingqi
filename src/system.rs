@@ -41,7 +41,7 @@ pub struct Observation {
 /// 跨进程输入法查询和 COM 状态采样留在后台，只在状态改变时唤醒界面。
 pub fn observe(ctx:eframe::egui::Context,initial:Snapshot,input:Option<crate::input::State>)->Receiver<Observation> {
     let(tx,rx)=mpsc::sync_channel(1);
-    std::thread::Builder::new().name("daozai-system".into()).spawn(move||{
+    std::thread::Builder::new().name("lingqi-system".into()).spawn(move||{
         let mut current=Observation{system:initial,input,fullscreen:None};
         let mut delivered=None;
         let mut sampled=crate::poll_clock::PollClock::default();
@@ -219,11 +219,11 @@ struct Foreground {
     app_window: bool,
 }
 
-/// 前台从全屏窗口切到别的窗口时，是否仍按原来的全屏处理（岛仔保持隐藏）。
+/// 前台从全屏窗口切到别的窗口时，是否仍按原来的全屏处理（灵栖保持隐藏）。
 ///
 /// 3ds Max、Photoshop 这类软件全屏时，插件面板、浮动工具条、
 /// 属性对话框都是同一个程序的附属窗口；每点一下前台就在它们和主窗口之间来回切，
-/// 过去岛仔会跟着「出现 → 消失」闪一次。只要原来的全屏窗口还盖着屏幕，
+/// 过去灵栖会跟着「出现 → 消失」闪一次。只要原来的全屏窗口还盖着屏幕，
 /// 而新的前台是它的附属窗口（被它拥有，或同一程序里不单独占任务栏的窗口），就继续隐藏。
 /// 切到另一个程序、或同一程序里另开的普通窗口（如浏览器的新窗口）时照常显示。
 fn keeps_fullscreen(last: Foreground, still_covers: bool, now: Option<Foreground>) -> bool {
@@ -288,7 +288,7 @@ unsafe fn client_covers(hwnd: HWND, monitor: &RECT) -> bool {
     tl.x <= monitor.left && tl.y <= monitor.top && br.x >= monitor.right && br.y >= monitor.bottom
 }
 
-/// 诊断：盖满屏幕却按普通最大化处理（不隐藏岛仔）的窗口，每个窗口只记一次，便于核对用户反馈。
+/// 诊断：盖满屏幕却按普通最大化处理（不隐藏灵栖）的窗口，每个窗口只记一次，便于核对用户反馈。
 #[cfg(not(test))]
 unsafe fn log_maximized_exclusion(hwnd: HWND, window: RECT, monitor: RECT) {
     use std::sync::Mutex;
@@ -317,7 +317,7 @@ pub fn fullscreen() -> Option<crate::display_layout::Bounds> {
         let hwnd = GetForegroundWindow();
         let now = (!hwnd.0.is_null()).then(|| foreground_info(hwnd));
         if let Some(info) = now {
-            // 岛仔自己的窗口（设置窗口等）不算全屏，也不沿用。
+            // 灵栖自己的窗口（设置窗口等）不算全屏，也不沿用。
             if info.pid == windows::Win32::System::Threading::GetCurrentProcessId() {
                 *last = None;
                 return None;
@@ -371,8 +371,8 @@ mod fullscreen_follow_tests {
             cover();
             let fullscreen = covering_monitor(hwnd);
             DestroyWindow(hwnd).unwrap();
-            assert!(fullscreen.is_some(), "无边框全屏仍应隐藏岛仔");
-            assert!(maximized.is_none(), "普通最大化即使盖满屏幕也应显示岛仔");
+            assert!(fullscreen.is_some(), "无边框全屏仍应隐藏灵栖");
+            assert!(maximized.is_none(), "普通最大化即使盖满屏幕也应显示灵栖");
         }
     }
 
@@ -385,7 +385,7 @@ mod fullscreen_follow_tests {
             DefWindowProcW(h, m, w, l)
         }
         unsafe {
-            let class = windows::core::w!("DaozaiCaptionlessGame");
+            let class = windows::core::w!("LingqiCaptionlessGame");
             let wc = WNDCLASSW { lpfnWndProc: Some(proc), lpszClassName: class, ..Default::default() };
             RegisterClassW(&wc);
             let hwnd = CreateWindowExW(WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW, class, windows::core::w!(""),
@@ -400,7 +400,7 @@ mod fullscreen_follow_tests {
             let result = covering_monitor(hwnd);
             DestroyWindow(hwnd).unwrap();
             assert!(zoomed && captioned, "复现条件：最大化且保留标题栏样式");
-            assert!(result.is_some(), "客户区盖满整屏的全屏游戏应隐藏岛仔");
+            assert!(result.is_some(), "客户区盖满整屏的全屏游戏应隐藏灵栖");
         }
     }
 
@@ -498,7 +498,7 @@ unsafe fn process_image_path(pid:u32)->Option<String> {
     Some(String::from_utf16_lossy(&path[..length as usize]))
 }
 
-// 无所有者的工具窗可能在岛仔启动时就已打开。只有同进程的主窗口唯一时才补认宿主。
+// 无所有者的工具窗可能在灵栖启动时就已打开。只有同进程的主窗口唯一时才补认宿主。
 unsafe fn unique_main_window(pid:u32)->Option<HWND> {
     use windows::Win32::Foundation::{BOOL,LPARAM};
     struct Search { pid:u32, main:Option<HWND> }
@@ -697,7 +697,7 @@ fn connect_inner(ctx:eframe::egui::Context,filter:crate::messenger::Notification
     let (tx, rx) = mpsc::sync_channel(32);
     let (stop, stopped)=mpsc::channel();
     let taskbar_mask=std::sync::Arc::new(std::sync::atomic::AtomicU8::new(mask));let worker_mask=taskbar_mask.clone();
-    std::thread::Builder::new().name("daozai-notifications".into()).spawn(move || {
+    std::thread::Builder::new().name("lingqi-notifications".into()).spawn(move || {
         let send=|event|{
             let result=tx.send(event);
             if result.is_ok(){ctx.request_repaint();}
@@ -1005,7 +1005,7 @@ mod tests {
             use windows::Win32::System::Ole::{OleInitialize, OleUninitialize, CF_HDROP};
             let initialized = OleInitialize(None).is_ok();
             let path =
-                std::env::temp_dir().join(format!("daozai-drag-test-{}.txt", std::process::id()));
+                std::env::temp_dir().join(format!("lingqi-drag-test-{}.txt", std::process::id()));
             std::fs::write(&path, "test").unwrap();
             {
                 let data = file_data_object(&path).unwrap();

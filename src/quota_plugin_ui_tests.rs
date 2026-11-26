@@ -93,7 +93,7 @@ fn plugin_quota_uses_the_existing_panel_without_changing_builtin_accounts() {
     assert!(shows(&h, "680 / 1000 积分"));
     assert_eq!(h.app.quota.config, original);
     assert_eq!(h.app.quota.rows.len(), 1);
-    if let Some(path) = std::env::var_os("DAOZAI_PLUGIN_QUOTA_PREVIEW") {
+    if let Some(path) = std::env::var_os("LINGQI_PLUGIN_QUOTA_PREVIEW") {
         let path = std::path::PathBuf::from(path);
         fs::create_dir_all(&path).unwrap();
         let mut raster = feature_raster();

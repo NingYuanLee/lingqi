@@ -178,7 +178,7 @@ fn plugin_canvas_live_demo_shows_rolling_digits_and_scrolls_inside_the_group() {
     );
     assert!(output.shapes.iter().any(|shape| matches!(&shape.shape, egui::Shape::Text(text) if text.galley.text() == "记录 7" && text.pos.y < 260.0)));
     raster.update_textures(&output.textures_delta);
-    if let Some(path) = std::env::var_os("DAOZAI_CANVAS_SCREENSHOTS").map(std::path::PathBuf::from)
+    if let Some(path) = std::env::var_os("LINGQI_CANVAS_SCREENSHOTS").map(std::path::PathBuf::from)
     {
         std::fs::create_dir_all(&path).unwrap();
         let points = ctx.tessellate(output.shapes, output.pixels_per_point);

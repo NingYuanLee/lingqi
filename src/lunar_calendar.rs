@@ -5,7 +5,7 @@
 //
 // MIT License
 //
-// Copyright (c) 2026 小唐的Token and Daozai contributors
+// Copyright (c) 2026 小唐的Token and Lingqi contributors
 // Copyright (c) 2018 6tail
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy

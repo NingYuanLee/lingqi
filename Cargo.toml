@@ -1,24 +1,25 @@
 [package]
-name = "daozai"
-version = "0.6.70"
+name = "lingqi"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "岛仔：Windows 顶部的桌面伙伴与信息岛"
-repository = "https://github.com/Renly1994/xiaotang-daozai"
-default-run = "daozai"
+description = "灵栖：会呼吸的桌面灵动岛与 AI 伙伴"
+# TODO(发布前替换)：改成你自己的仓库地址，更新检查与安装包链接都依赖它
+repository = "https://github.com/your-org/lingqi"
+default-run = "lingqi"
 
 [lib]
-name = "daozai"
+name = "lingqi"
 path = "src/lib.rs"
 
 [[bin]]
-name = "daozai"
+name = "lingqi"
 path = "src/main.rs"
 
 # 无窗口演示录制器：脚本驱动 + 软件光栅化，输出 RGBA 帧流给 ffmpeg。
 [[bin]]
-name = "daozai-record"
-path = "src/bin/daozai-record/main.rs"
+name = "lingqi-record"
+path = "src/bin/lingqi-record/main.rs"
 required-features = ["record"]
 
 [features]

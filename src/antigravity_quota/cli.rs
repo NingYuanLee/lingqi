@@ -479,9 +479,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "需要通过 DAOZAI_TEST_OFFICIAL_AGY 指定官方签名的 CLI，仅执行版本查询"]
+    #[ignore = "需要通过 LINGQI_TEST_OFFICIAL_AGY 指定官方签名的 CLI，仅执行版本查询"]
     fn official_google_cli_passes_the_native_version_probe() {
-        let exe = PathBuf::from(env::var_os("DAOZAI_TEST_OFFICIAL_AGY").unwrap())
+        let exe = PathBuf::from(env::var_os("LINGQI_TEST_OFFICIAL_AGY").unwrap())
             .canonicalize()
             .unwrap();
         let _verified = super::super::lock_official_cli(&exe).expect("官方 CLI 应通过签名校验");

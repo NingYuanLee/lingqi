@@ -24,7 +24,7 @@ pub fn falling_back() -> bool {
 }
 
 pub fn debug_requested() -> bool {
-    std::env::var_os("DAOZAI_MATERIAL_DEBUG").is_some_and(|value| value == "1") && !falling_back()
+    std::env::var_os("LINGQI_MATERIAL_DEBUG").is_some_and(|value| value == "1") && !falling_back()
 }
 
 pub fn configure_startup(

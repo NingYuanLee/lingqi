@@ -263,7 +263,7 @@ fn finish_open(show_queued:Option<bool>,focus:impl FnOnce()->bool)->Result<(),Op
 
 #[derive(Debug,PartialEq,Eq)]
 enum WakeRoute {Focus,Restore,Show,Relaunch}
-/// 怎样把主窗口带到前台。飞书关到托盘后窗口被隐藏，若由岛仔直接 `ShowWindow`，飞书不会恢复渲染，
+/// 怎样把主窗口带到前台。飞书关到托盘后窗口被隐藏，若由灵栖直接 `ShowWindow`，飞书不会恢复渲染，
 /// 页面停在加载骨架、点击无响应（#181，本机飞书 8.6 复现）；改为再启动一次飞书主程序，由飞书自己显示原窗口。
 /// 最小化的窗口照常还原（实测正常）；其他客户端未验证，保持原做法。
 fn wake_route(source:Messenger,visible:bool,iconic:bool)->WakeRoute {
@@ -335,7 +335,7 @@ mod tests{
     }
     #[test]
     fn feishu_in_tray_is_shown_by_feishu_itself(){
-        assert_eq!(wake_route(Messenger::Feishu,false,false),WakeRoute::Relaunch,"关到托盘的飞书不能由岛仔直接显示（#181 卡死）");
+        assert_eq!(wake_route(Messenger::Feishu,false,false),WakeRoute::Relaunch,"关到托盘的飞书不能由灵栖直接显示（#181 卡死）");
         assert_eq!(wake_route(Messenger::Feishu,false,true),WakeRoute::Relaunch,"隐藏优先于残留的最小化标志");
         assert_eq!(wake_route(Messenger::Feishu,true,true),WakeRoute::Restore,"最小化的飞书照常还原");
         assert_eq!(wake_route(Messenger::Feishu,true,false),WakeRoute::Focus);
@@ -373,7 +373,7 @@ mod tests{
         DestroyWindow(replacement).unwrap();
         assert_eq!(shown,Some(Target{unread:Unread{window:replacement.0 as isize,..original.unread},..original}));
     }}
-    /// 本机实测：先把飞书关到托盘，再运行 `cargo test live_feishu -- --ignored`，走岛仔点提醒时的同一条唤起路径。
+    /// 本机实测：先把飞书关到托盘，再运行 `cargo test live_feishu -- --ignored`，走灵栖点提醒时的同一条唤起路径。
     #[test]
     #[ignore="需要本机飞书已登录并关到托盘"]
     fn live_feishu_tray_window_is_shown_by_feishu(){unsafe{
@@ -424,7 +424,7 @@ mod tests{
         let started=process_started(GetCurrentProcess()).unwrap();
         for (client,class) in [(Messenger::WeCom,w!("WeWorkWindow")),(Messenger::Feishu,w!("Chrome_WidgetWin_1")),(Messenger::DingTalk,w!("Qt51511QWindowIcon")),(Messenger::DingTalk,w!("StandardFrame_DingTalk"))]{
             RegisterClassW(&WNDCLASSW{lpfnWndProc:Some(proc),hInstance:instance,lpszClassName:class,..Default::default()});
-            let create=||CreateWindowExW(WINDOW_EX_STYLE(0),class,w!("Daozai synthetic client"),WS_OVERLAPPEDWINDOW,-10000,-10000,400,500,None,None,instance,None).unwrap();
+            let create=||CreateWindowExW(WINDOW_EX_STYLE(0),class,w!("Lingqi synthetic client"),WS_OVERLAPPEDWINDOW,-10000,-10000,400,500,None,None,instance,None).unwrap();
             let first=create();let original=Target{unread:Unread{source:client,pid,window:first.0 as isize},started};
             assert!(ready_with_paths(original,&paths),"唯一原窗口必须可识别");
             assert_eq!(flash_target(client,first,&paths),Some(original.unread));
@@ -465,7 +465,7 @@ mod tests{
         // 用户诊断包里钉钉 9.0.5 的窗口组合：一个 StandardFrame_DingTalk 主窗口和三个隐藏的 Qt 对话框。
         // 主窗口最小化到任务栏和隐藏到托盘时，都必须对应到原进程。
         for (state,frame_style) in [("最小化",0x260f0000u32),("隐藏到托盘",0x060f0000)]{
-            let frame=CreateWindowExW(WINDOW_EX_STYLE(0x100),w!("StandardFrame_DingTalk"),w!("Daozai synthetic client"),WINDOW_STYLE(frame_style),-10000,-10000,1200,800,None,None,instance,None).unwrap();
+            let frame=CreateWindowExW(WINDOW_EX_STYLE(0x100),w!("StandardFrame_DingTalk"),w!("Lingqi synthetic client"),WINDOW_STYLE(frame_style),-10000,-10000,1200,800,None,None,instance,None).unwrap();
             let dialogs=[0;3].map(|_|CreateWindowExW(WINDOW_EX_STYLE(0x100),w!("Qt51511QWindowIcon"),w!(""),WINDOW_STYLE(0x86cf0000),-10000,-10000,655,517,None,None,instance,None).unwrap());
             let original=Target{unread:Unread{source:Messenger::DingTalk,pid,window:frame.0 as isize},started};
             assert!(dialogs.iter().all(|dialog|!main_window(*dialog,Messenger::DingTalk)),"{state}：隐藏的 Qt 对话框不能算主窗口");
@@ -478,14 +478,14 @@ mod tests{
         }
         // 钉钉 9.0.5 的 Qt 主窗口最小化时样式是 0xB60F0000。收进托盘后，此处模拟它清除可见和最小化标志。
         for (state,main_style) in [("显示",0x960f0000u32),("最小化",0xb60f0000),("关到托盘",0x860f0000)]{
-            let main=CreateWindowExW(WINDOW_EX_STYLE(0x100),w!("Qt51511QWindowIcon"),w!("Daozai synthetic client"),WINDOW_STYLE(main_style),-10000,-10000,1200,800,None,None,instance,None).unwrap();
+            let main=CreateWindowExW(WINDOW_EX_STYLE(0x100),w!("Qt51511QWindowIcon"),w!("Lingqi synthetic client"),WINDOW_STYLE(main_style),-10000,-10000,1200,800,None,None,instance,None).unwrap();
             let dialogs=[0;3].map(|_|CreateWindowExW(WINDOW_EX_STYLE(0x100),w!("Qt51511QWindowIcon"),w!(""),WINDOW_STYLE(0x86cf0000),-10000,-10000,655,517,None,None,instance,None).unwrap());
             let original=Target{unread:Unread{source:Messenger::DingTalk,pid,window:main.0 as isize},started};
             assert_eq!(flash_target(Messenger::DingTalk,main,&paths),Some(original.unread),"{state}：闪动必须对应到原主窗口");
             assert!(ready_with_paths(original,&paths),"{state}：点击时仍能确认原主窗口");
             assert_eq!(flash_target(Messenger::DingTalk,dialogs[0],&paths),Some(Unread::of(Messenger::DingTalk)),"{state}：无归属关系的对话框不能代替主窗口");
             let log=describe_process_windows(Messenger::DingTalk,pid);
-            assert!(log.contains("Qt51511QWindowIcon") && log.contains("655×517") && !log.contains("Daozai"),"{state}：诊断只记类名和尺寸，不记标题：{log}");
+            assert!(log.contains("Qt51511QWindowIcon") && log.contains("655×517") && !log.contains("Lingqi"),"{state}：诊断只记类名和尺寸，不记标题：{log}");
             DestroyWindow(main).unwrap();for dialog in dialogs{DestroyWindow(dialog).unwrap();}
         }
         // 两个同样式的 Qt 主窗口无论显示还是隐藏，都不能凭闪动猜账号。

@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-const PACKAGE_ID: &str = "daozai.wireless-receivers";
+const PACKAGE_ID: &str = "lingqi.wireless-receivers";
 const API_VERSION: u32 = 1;
 #[cfg(windows)]
 const BUILTIN: &[u8] = include_bytes!("../../assets/builtin-usb-receivers.json");
@@ -36,10 +36,10 @@ impl Package {
     pub(crate) fn parse(raw: &[u8]) -> Result<Self, &'static str> {
         let manifest: Manifest = serde_json::from_slice(raw).map_err(|_| "兼容包格式无效")?;
         if manifest.id != PACKAGE_ID {
-            return Err("此文件不是岛仔无线设备兼容包");
+            return Err("此文件不是灵栖无线设备兼容包");
         }
         if manifest.api_version != API_VERSION {
-            return Err("当前岛仔版本不支持此兼容包接口");
+            return Err("当前灵栖版本不支持此兼容包接口");
         }
         if !valid_text(&manifest.version, 32) {
             return Err("兼容包版本无效");
