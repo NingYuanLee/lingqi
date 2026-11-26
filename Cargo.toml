@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT"
 description = "灵栖：会呼吸的桌面灵动岛与 AI 伙伴"
 # TODO(发布前替换)：改成你自己的仓库地址，更新检查与安装包链接都依赖它
-repository = "https://github.com/your-org/lingqi"
+repository = "https://github.com/NingYuanLee/lingqi"
 default-run = "lingqi"
 
 [lib]

@@ -3,9 +3,9 @@ use eframe::egui;
 use std::{io::{Read, Write}, path::PathBuf, sync::{mpsc::{self, Receiver}, Arc, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
 
 // TODO(发布前替换)：改成你自己的仓库，更新检查与下载地址都依赖这三项
-const REPOSITORY: &str = "https://github.com/your-org/lingqi";
-const API: &str = "https://api.github.com/repos/your-org/lingqi/releases/latest";
-const RELEASES: &str = "https://github.com/your-org/lingqi/releases/latest";
+const REPOSITORY: &str = "https://github.com/NingYuanLee/lingqi";
+const API: &str = "https://api.github.com/repos/NingYuanLee/lingqi/releases/latest";
+const RELEASES: &str = "https://github.com/NingYuanLee/lingqi/releases/latest";
 const STARTUP_WINDOW: Duration = Duration::from_secs(10);
 const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 3600);
 const RETRY_INTERVAL: Duration = Duration::from_secs(3600);
