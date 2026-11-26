@@ -449,6 +449,8 @@ mod blur_piece_tests {
     }
 }
 
+/// 精灵安静下来前允许的无交互时长（秒）。
+pub const SPRITE_REST_SECONDS: f64 = 8.0;
 pub struct FrameOut {
     /// 原生窗口应保留的可见区域（相对 `win` 左上角）。
     pub region: Rect,
@@ -950,6 +952,18 @@ pub struct App {
     pub(crate) todo_first: usize,
     pub(crate) todo_choosing: bool,
     pub(crate) pet: crate::pet::Pet,
+    /// 程序生成的精灵状态（与图集吉祥物二选一）。
+    pub(crate) sprite: crate::sprite::SpriteState,
+    /// 程序生成的精灵当前是否还在动。静止时岛体可以少刷新几帧。
+    pub(crate) sprite_moving: bool,
+    /// AI 助手状态。
+    pub(crate) ai: crate::ai::State,
+    /// 设置页里正在输入的 API Key（掩码显示，写盘后立刻清空）。
+    pub(crate) ai_key: String,
+    /// 正在验证 API Key。
+    pub(crate) ai_saving: Option<crate::ai::credentials::Verify>,
+    /// 设置页里的提示文案。
+    pub(crate) ai_note: String,
     pub(crate) last_drink: Option<(u32, usize)>,
     // 其它
     toast: Option<(String, f64)>,
@@ -1142,7 +1156,7 @@ impl App {
             plugin_notice_ui: Default::default(),
             #[cfg(windows)]
             plugin_notice_host: Default::default(),
-            todo_first: 0, todo_choosing: false, pet: Default::default(), last_drink: None,
+            todo_first: 0, todo_choosing: false, pet: Default::default(), sprite: Default::default(), sprite_moving: true, ai: Default::default(), ai_key: String::new(), ai_saving: None, ai_note: String::new(), last_drink: None,
             toast: None, toast_below: false,
             last_input: 0.0, system_idle: None,
             last_cursor: None,
@@ -2127,6 +2141,53 @@ impl App {
     }
 
     pub(crate) fn effective_minimal(&self)->bool {self.settings.minimal || self.browser_minimal_active}
+    /// 打开 AI 抽屉：把岛体展开并切到抽屉。
+    pub fn open_ai(&mut self){
+        self.ai.open=true;
+        self.ai.error=None;
+        self.forced_open_until=self.t+6.0;
+    }
+    /// AI 助手是否可用：总开关打开且已经配置了 Key。
+    pub(crate) fn ai_active(&self)->bool {
+        self.settings.ai_enabled && crate::ai::credentials::present(crate::ai::credentials::SLOT_DEEPSEEK)
+    }
+    /// 抽屉是否展开。
+    pub(crate) fn ai_open(&self)->bool {
+        self.settings.ai_enabled && self.ai.open
+    }
+    /// 采集本机状态给 AI。只在真正要发请求时调用一次，不进每帧路径。
+    pub(crate) fn ai_sources(&self)->crate::ai::context::Sources {
+        use crate::ai::context::{Media,Performance,Sources,Weather};
+        Sources{
+            power:self.resident_power.0.map(|percent|(percent,self.resident_power.1)),
+            weather:self.weather.snapshot.as_ref().map(|snapshot|Weather{
+                place:snapshot.place.clone(),
+                condition:snapshot.description().to_string(),
+                temp:snapshot.temp,
+                feels:snapshot.feels,
+                humidity:snapshot.humidity,
+                high:snapshot.high,
+                low:snapshot.low,
+            }),
+            performance:{
+                let reading=&self.performance.latest;
+                if reading.cpu.is_none()&&reading.gpu.is_none(){None}else{Some(Performance{
+                    cpu:reading.cpu,ram:reading.ram(),gpu:reading.gpu,
+                })}
+            },
+            clipboard:if self.settings.ai_context_clipboard{
+                self.clipboard.lock().items.first().map(|item|item.text.clone())
+            }else{None},
+            media:(!self.media.title.trim().is_empty()).then(||Media{
+                title:self.media.title.clone(),artist:self.media.artist.clone(),
+                source:self.media.source.clone(),playing:self.media.playing,
+            }),
+            city:(!self.settings.weather_city.trim().is_empty())
+                .then(||self.settings.weather_city.clone())
+                .or_else(||self.settings.weather_saved.first().map(|position|position.label.clone())),
+        }
+    }
+
     pub(crate) fn pet_enabled(&self)->bool {self.settings.pet && !self.effective_minimal() && !self.side()}
     pub(crate) fn pet_space(&self)->f32 {if self.pet_enabled(){44.0}else{0.0}}
     fn lyric_focus_space(&self)->f32 {if self.pomo.running{crate::focus_bar::LYRIC_WIDTH+10.0}else{0.0}}
@@ -2216,6 +2277,7 @@ impl App {
     }
 
     pub(crate) fn expanded_height(&self)->f32 {
+        if self.ai_open() { return crate::ai::ui::AI_HEIGHT; }
         #[cfg(windows)]
         if self.plugin_notice_detail_open() { return crate::plugin_notice_ui::DETAIL_HEIGHT; }
         self.page_content_height() + if self.page_shortcuts_enabled() { PAGE_SHORTCUT_ROW_H } else { 0.0 }
@@ -2245,6 +2307,8 @@ impl App {
     // ---------------------------------------------------------------
     pub fn frame(&mut self, ui: &mut egui::Ui, win: Rect, env: &Env) -> FrameOut {
         let ctx = ui.ctx().clone();
+        // 流式输出：把后台线程收到的增量取回来。
+        if self.ai.poll(){ctx.request_repaint();}
         #[cfg(feature="sdk-js")]
         {
             self.pet.expressions.set_sheets(self.plugins.appearance_pet());
@@ -2731,7 +2795,15 @@ impl App {
             let y=(h.min(self.base_size().1)-BAR_H).max(0.0)/2.0;
             // 吉祥物跟随皮肤换色：浅色底上变成深色版本，保持清晰。
             let fit=if self.notice.is_some(){1.0}else{self.resident_fit()};
-            self.pet.draw(&base.scaled(cx-origin.x,15.0,fit).shifted(0.0,y).faded(pet_alpha),cx-origin.x+self.resident.position(bar::PET),self.t,palette);
+            let pet_x=cx-origin.x+self.resident.position(bar::PET);
+            let pet_card=base.scaled(cx-origin.x,15.0,fit).shifted(0.0,y).faded(pet_alpha);
+            if self.settings.pet_style==model::PetStyle::Generated {
+                // 程序生成的精灵：形状由时间轴算好，直接注进画布，不依赖美术素材。
+                let params=crate::sprite::SpriteParams{body_radius:8.0,..Default::default()};
+                for shape in self.sprite.shapes(Pos2::new(pet_x,15.0),1.0,&params){pet_card.add_shape(shape);}
+            } else {
+                self.pet.draw(&pet_card,pet_x,self.t,palette);
+            }
         }
         let previous_scroll=self.content_scroll.take();
         let mut page_transition=false;
@@ -2874,9 +2946,12 @@ impl App {
         );
         #[cfg(not(feature="sdk-js"))]
         let (canvas_animating, canvas_scroll, canvas_repaint) = (false,None,None);
-        let animating=transitioning || ambient || canvas_animating || pet_visible && self.pet.state!=PetState::Sleeping;
-        // 交互形变保持 60 帧，媒体 30 帧；小表情 20 帧，睡眠 10 帧，静态界面每秒核对提醒。
-        let repaint_after=std::time::Duration::from_secs_f64(if transitioning{1.0/60.0}else if ambient{1.0/30.0}else if pet_visible{if self.pet.state==PetState::Sleeping{0.1}else{0.05}}else{1.0})
+        // 程序生成的精灵静止时（长时间无交互）不再算作连续动画。
+        let sprite_resting=self.settings.pet_style==model::PetStyle::Generated&&!self.sprite_moving;
+        let animating=transitioning || ambient || canvas_animating || pet_visible && !sprite_resting && self.pet.state!=PetState::Sleeping;
+        // 交互形变保持 60 帧，媒体 30 帧；小表情 20 帧，睡眠 10 帧；
+        // 程序生成的精灵安静下来后降到 2 帧，静态界面每秒核对提醒。
+        let repaint_after=std::time::Duration::from_secs_f64(if transitioning{1.0/60.0}else if ambient{1.0/30.0}else if pet_visible{if sprite_resting{0.5}else if self.pet.state==PetState::Sleeping{0.1}else{0.05}}else{1.0})
             .min(canvas_repaint.unwrap_or(std::time::Duration::MAX));
         cmds.append(&mut self.pending);
         let next_hit=if side {self.side_hit_rect(win,self.progress(),self.page_height.pos).translate(offset)} else {orient(self.hit_rect(cx,top,self.progress()))};
@@ -3895,6 +3970,12 @@ impl App {
         let gaze = env.cursor.map(|p| [((p.x-cx)/28.0).clamp(-3.0,3.0), ((p.y-top-15.0)/40.0).clamp(-1.0,1.5)])
             .unwrap_or([(self.t as f32 * 0.35).sin()*0.8, 0.0]);
         self.pet.step(state, self.t, self.dt, gaze, visible);
+        if self.settings.pet_style==model::PetStyle::Generated {
+            // 休眠时精灵安静下来（呼吸与浮沉收敛），醒来再动。
+            let calm=matches!(state,PetState::Dozing|PetState::Sleeping)||idle>SPRITE_REST_SECONDS;
+            self.sprite.gaze=[gaze[0].clamp(-1.0,1.0),gaze[1].clamp(-1.0,1.0)];
+            self.sprite_moving=self.sprite.advance(self.dt,&crate::sprite::SpriteParams::default(),calm);
+        }
     }
 
     // ---------------------------------------------------------------
@@ -4162,6 +4243,8 @@ impl App {
     }
 
     fn render_page(&mut self, page: usize, c: &Card, header: &Card, env: &Env, cmds: &mut Vec<Cmd>) {
+        // AI 抽屉展开时接管面板内容。
+        if self.ai_open() { crate::ai::ui::draw(self, c); return; }
         #[cfg(feature="sdk-js")]
         if let Some((id,_))=page.checked_sub(PAGE_NAMES.len()).and_then(|index|self.status_pages.get(index)) {
             let backdrop=crate::plugin_status_ui::StatusBackdrop{

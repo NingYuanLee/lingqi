@@ -1529,6 +1529,7 @@ pub(crate) const SETTINGS_TAB_APPEARANCE: usize = 13;
 pub(crate) const SETTINGS_TAB_POSITION: usize = 14;
 pub(crate) const SETTINGS_TAB_PAGES: usize = 10;
 pub(crate) const SETTINGS_TAB_WIRELESS: usize = 16;
+pub(crate) const SETTINGS_TAB_AI: usize = 19;
 #[cfg_attr(not(feature="sdk-js"),allow(dead_code))]
 pub(crate) const SETTINGS_TAB_PLUGINS: usize = 17;
 #[cfg(feature="sdk-js")]
@@ -1536,10 +1537,11 @@ pub(crate) const SETTINGS_TAB_PLUGIN_DETAIL: usize = 18;
 /// 侧栏：一项就是一页，不再有页内子标签。专注与健康（2、3）、待办与置物（4、5）各合成一页；
 /// 插件和关于固定在左下角，上方一条细线和功能页分开。
 /// 第四列是这一项之前的分组标题。
-const SETTINGS_GROUPS: [(&str,usize,usize,&str);15 + cfg!(feature="sdk-js") as usize] = [
+const SETTINGS_GROUPS: [(&str,usize,usize,&str);16 + cfg!(feature="sdk-js") as usize] = [
     ("通用",0,0,"灵栖"), ("外观",SETTINGS_TAB_APPEARANCE,SETTINGS_TAB_APPEARANCE,""), ("位置",SETTINGS_TAB_POSITION,SETTINGS_TAB_POSITION,""), ("页面管理",SETTINGS_TAB_PAGES,SETTINGS_TAB_PAGES,""),
     ("音乐",1,1,"功能"), ("专注与健康",2,3,""), ("待办与置物",4,5,""), ("消息提醒",6,6,""), ("邮箱",7,7,""), ("日程",8,8,""), ("AI 额度",11,11,""), ("天气",12,12,""), ("系统性能",15,15,""), ("无线设备",SETTINGS_TAB_WIRELESS,SETTINGS_TAB_WIRELESS,""),
     #[cfg(feature="sdk-js")] ("插件",SETTINGS_TAB_PLUGINS,SETTINGS_TAB_PLUGINS,""),
+    ("AI 助手",SETTINGS_TAB_AI,SETTINGS_TAB_AI,""),
     ("关于",9,9,""),
 ];
 const SETTINGS_BOTTOM_ROWS: usize = if cfg!(feature="sdk-js") { 2 } else { 1 };
@@ -1696,6 +1698,8 @@ impl App {
         if !self.module_on(crate::app::CALENDAR_PAGE) {self.calendar.form.open=false;}
         if !self.module_on(crate::app::QUOTA_PAGE)&&self.quota.connect_open {self.quota_close_connection();}
         if !self.settings_open{
+            // 关闭时记账：下次打开要重新恢复子视口的位置与大小。
+            self.window_layout().close();
             self.weather_source.close();
         }
         self.updates.poll(ctx);
@@ -1891,6 +1895,55 @@ impl App {
                             self.quota_settings(ui);
                             #[cfg(feature="sdk-js")]
                             self.plugins.settings(ui,"quota",on);
+                        });
+                    }
+                    SETTINGS_TAB_AI=>{
+                        ui.label(egui::RichText::new("在灵动岛里用一句话办事：记待办、问天气、总结剪贴板。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
+                        ui.add_space(4.0);
+                        let mut enabled=self.settings.ai_enabled;
+                        setting_row(ui,"启用 AI 助手","关闭时不联网、不读凭据，也不占用任何资源",&mut enabled);
+                        if enabled!=self.settings.ai_enabled {self.settings.ai_enabled=enabled;self.settings.save();}
+                        ui.separator();
+                        settings_label(ui,"DeepSeek API Key");
+                        settings_card(ui,|ui|{
+                            match crate::ai::credentials::fingerprint(crate::ai::credentials::SLOT_DEEPSEEK){
+                                Some(tip)=>{ui.label(egui::RichText::new(format!("已保存 {tip}")).size(12.0));}
+                                None=>{ui.label(egui::RichText::new("未配置").size(12.0).color(ui.visuals().weak_text_color()));}
+                            }
+                            ui.add_space(4.0);
+                            ui.add_sized([ui.available_width(),27.0],egui::TextEdit::singleline(&mut self.ai_key).password(true).hint_text("粘贴 API Key"));
+                            ui.horizontal(|ui|{
+                                let busy=self.ai_saving.is_some();
+                                if ui.add_enabled(!busy&&!self.ai_key.trim().is_empty(),egui::Button::new("验证并保存")).clicked(){
+                                    self.ai_note.clear();
+                                    let key=std::mem::take(&mut self.ai_key);
+                                    self.ai_saving=Some(crate::ai::credentials::Verify::start(key));
+                                }
+                                if ui.add_enabled(!busy&&crate::ai::credentials::present(crate::ai::credentials::SLOT_DEEPSEEK),egui::Button::new("删除")).clicked(){
+                                    self.ai_note=match crate::ai::credentials::forget(crate::ai::credentials::SLOT_DEEPSEEK){Ok(())=>"已删除 API Key".into(),Err(error)=>error};
+                                }
+                            });
+                            if self.ai_saving.is_some(){
+                                ui.spinner();
+                                ui.label("正在验证 API Key…");
+                                ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+                            }
+                            if let Some(result)=self.ai_saving.as_ref().and_then(|verify|verify.poll()){
+                                self.ai_saving=None;
+                                self.ai_note=match result{Ok(())=>"API Key 已保存".into(),Err(error)=>error};
+                            }
+                            if !self.ai_note.is_empty(){settings_hint(ui,&self.ai_note);}
+                            settings_hint(ui,"API Key 存在 Windows 凭据管理器里，不写进配置文件、不进日志。");
+                        });
+                        ui.separator();
+                        settings_label(ui,"行为");
+                        settings_card(ui,|ui|{
+                            let mut allow=self.settings.ai_allow_actions;
+                            setting_row(ui,"允许 AI 改动本机数据","关掉后 AI 只能回答问题，不能加待办或设定提醒",&mut allow);
+                            if allow!=self.settings.ai_allow_actions {self.settings.ai_allow_actions=allow;self.settings.save();}
+                            let mut clip=self.settings.ai_context_clipboard;
+                            setting_row(ui,"把剪贴板交给 AI","关掉后不会把剪贴板内容发给模型",&mut clip);
+                            if clip!=self.settings.ai_context_clipboard {self.settings.ai_context_clipboard=clip;self.settings.save();}
                         });
                     }
                     SETTINGS_TAB_PAGES=>{
@@ -2114,6 +2167,14 @@ impl App {
                             let mut pet=self.settings.pet;
                             setting_row(ui,"灵栖吉祥物","收起时常驻，播放音乐时一起唱歌",&mut pet);
                             if pet!=self.settings.pet {self.set_pet(pet);}
+                            // 形象来源：切图，或代码现场画出来的精灵（不依赖美术素材）。
+                            let mut pet_style=self.settings.pet_style;
+                            let options:Vec<(crate::model::PetStyle,&str)>=crate::model::PetStyle::ALL.into_iter().map(|style|(style,style.label())).collect();
+                            if settings_segmented(ui,&mut pet_style,&options,120.0){
+                                self.settings.pet_style=pet_style;
+                                self.settings.save();
+                            }
+                            settings_hint(ui,self.settings.pet_style.description());
                             #[cfg(feature="sdk-js")]
                             self.plugins.appearance_picker(ui,crate::sdk_spike::local::appearance_assets::Kind::Pet,None);
                             settings_advanced(ui,"settings-appearance-advanced",|ui|{
@@ -2750,6 +2811,7 @@ impl App {
             if before!=format!("{:?}",self.settings){self.settings.save();}
             ctx.set_style(original_style);
         });
+        if !self.settings_open {self.window_layout().close();}
         if self.settings_open&&self.module_on(crate::app::WEATHER_PAGE) {self.weather_tutorial_ui(ctx);}
         else {self.weather_source.close();}
     }

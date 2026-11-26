@@ -8,6 +8,7 @@ pub mod credentials;
 pub mod intents;
 pub mod prompt;
 pub mod provider;
+pub mod ui;
 
 #[cfg(test)]
 mod tests;

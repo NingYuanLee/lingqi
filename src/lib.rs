@@ -22,6 +22,8 @@ pub mod poll_clock;
 pub mod resources;
 pub mod ai;
 pub mod anim;
+#[cfg(windows)]
+pub mod dcomp;
 pub mod net;
 pub mod sprite;
 pub mod oled_shift;

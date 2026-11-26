@@ -61,6 +61,35 @@ pub fn fingerprint(slot: &str) -> Option<String> {
     Some(format!("••••{tail}"))
 }
 
+/// 验证并保存 Key 的后台任务：先发一个最小请求确认可用，通过后才落盘。
+pub struct Verify {
+    rx: std::sync::mpsc::Receiver<Result<(), String>>,
+}
+
+impl Verify {
+    /// 启动一次验证。Key 只在后台线程的栈上短暂存在。
+    pub fn start(key: String) -> Self {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::Builder::new()
+            .name("lingqi-ai-verify".into())
+            .spawn(move || {
+                let result = (|| {
+                    validate_key(&key)?;
+                    super::provider::verify_key(&key).map_err(|error| error.message())?;
+                    save(SLOT_DEEPSEEK, &key)
+                })();
+                let _ = tx.send(result);
+            })
+            .ok();
+        Self { rx }
+    }
+
+    /// 取回结果；还没完成时返回 None。
+    pub fn poll(&self) -> Option<Result<(), String>> {
+        self.rx.try_recv().ok()
+    }
+}
+
 /// 是否已经配置了 Key。
 pub fn present(slot: &str) -> bool {
     load(slot).is_ok()

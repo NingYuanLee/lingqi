@@ -161,6 +161,35 @@ impl IslandShape {
     }
 }
 
+/// 吉祥物形象：图集切片，或代码现场画出来的精灵。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PetStyle {
+    /// 切图（沿用原项目的表情图集）。
+    #[default]
+    Atlas,
+    /// 程序生成：纯几何绘制，不依赖任何美术素材。
+    Generated,
+}
+
+impl PetStyle {
+    pub const ALL: [PetStyle; 2] = [PetStyle::Atlas, PetStyle::Generated];
+    pub fn key(self) -> &'static str {
+        match self { Self::Atlas => "atlas", Self::Generated => "generated" }
+    }
+    pub fn parse(value: &str) -> Self {
+        match value { "generated" => Self::Generated, _ => Self::Atlas }
+    }
+    pub fn label(self) -> &'static str {
+        match self { Self::Atlas => "图集", Self::Generated => "程序生成" }
+    }
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Atlas => "切图形象，表情逐帧播放。",
+            Self::Generated => "代码画出来的小光球，会呼吸、眨眼、跟着光标看。",
+        }
+    }
+}
+
 /// 岛体停靠的屏幕边缘：上下为横向刘海 / 胶囊，左右两侧为竖向排列。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Dock {
@@ -242,6 +271,15 @@ pub struct Settings {
     pub dock: Dock,
     pub settings_theme: crate::settings_theme::SettingsTheme,
     pub pet: bool,
+    pub pet_style: PetStyle,
+    /// AI 助手总开关。关掉时不联网、不读凭据、零开销。
+    pub ai_enabled: bool,
+    /// 允许 AI 改动本机数据（加待办、设定提醒）。
+    pub ai_allow_actions: bool,
+    /// 是否把剪贴板内容交给模型。默认关闭。
+    pub ai_context_clipboard: bool,
+    /// 使用的模型名。
+    pub ai_model: String,
     pub minimal: bool,
     pub browser_minimal: bool,
     pub avoid_browsers: bool,
@@ -337,7 +375,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true,true,true,true,true,true,true,true,true,false,true], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_page_shortcuts: true, show_clock: true, resident_date: ResidentDate::Off, show_battery: true, show_weather: true, show_performance: true, performance_bar: Default::default(), performance_metrics: 7, performance_view: Default::default(), clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, show_bluetooth:true, bluetooth_pinned:Vec::new(), bluetooth_resident_style:0, bluetooth_resident_custom:false, bluetooth_battery_notifications:true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, system_notify: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, exclude_from_capture: false, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_sync_operations:false, mail_code_only_notifications: false, mail_code: true, mail_code_popup: false, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
+        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, pet_style: PetStyle::Atlas, ai_enabled: false, ai_allow_actions: false, ai_context_clipboard: false, ai_model: String::new(), minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true,true,true,true,true,true,true,true,true,false,true], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_page_shortcuts: true, show_clock: true, resident_date: ResidentDate::Off, show_battery: true, show_weather: true, show_performance: true, performance_bar: Default::default(), performance_metrics: 7, performance_view: Default::default(), clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, show_bluetooth:true, bluetooth_pinned:Vec::new(), bluetooth_resident_style:0, bluetooth_resident_custom:false, bluetooth_battery_notifications:true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, system_notify: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, exclude_from_capture: false, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_sync_operations:false, mail_code_only_notifications: false, mail_code: true, mail_code_popup: false, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
     }
 }
 
@@ -387,6 +425,11 @@ impl Settings {
                 "island_offset" => s.island_offset = v.parse::<i32>().unwrap_or(0).clamp(-ISLAND_OFFSET_MAX, ISLAND_OFFSET_MAX),
                 "oled_shift" => s.oled_shift = v != "0",
                 "pet" => s.pet = v == "1" || v.eq_ignore_ascii_case("true"),
+                "pet_style" => s.pet_style = PetStyle::parse(&v),
+                "ai_enabled" => s.ai_enabled = v == "1" || v.eq_ignore_ascii_case("true"),
+                "ai_allow_actions" => s.ai_allow_actions = v == "1" || v.eq_ignore_ascii_case("true"),
+                "ai_context_clipboard" => s.ai_context_clipboard = v == "1" || v.eq_ignore_ascii_case("true"),
+                "ai_model" => s.ai_model = v.to_string(),
                 "minimal" => s.minimal = v == "1" || v.eq_ignore_ascii_case("true"),
                 "browser_minimal" => s.browser_minimal = v == "1",
                 "avoid_browsers" => s.avoid_browsers = v != "0",
@@ -505,6 +548,11 @@ impl Settings {
                 ("oled_shift".into(),(self.oled_shift as u8).to_string()),
                 ("settings_theme".into(),self.settings_theme.key().into()),
                 ("pet".into(), if self.pet { "1".to_string() } else { "0".to_string() }),
+                ("pet_style".into(), self.pet_style.key().into()),
+                ("ai_enabled".into(), if self.ai_enabled { "1".to_string() } else { "0".to_string() }),
+                ("ai_allow_actions".into(), if self.ai_allow_actions { "1".to_string() } else { "0".to_string() }),
+                ("ai_context_clipboard".into(), if self.ai_context_clipboard { "1".to_string() } else { "0".to_string() }),
+                ("ai_model".into(), self.ai_model.clone()),
                 ("minimal".into(), if self.minimal { "1".to_string() } else { "0".to_string() }),
                 ("browser_minimal".into(), (self.browser_minimal as u8).to_string()),
                 ("avoid_browsers".into(), (self.avoid_browsers as u8).to_string()),

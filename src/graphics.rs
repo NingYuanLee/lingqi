@@ -7,7 +7,7 @@
 /// 兼容图形后端（低功耗显卡优先）：指定 Direct3D 12 或 Vulkan。
 fn compatible(mut options:eframe::NativeOptions,backends:eframe::wgpu::Backends)->eframe::NativeOptions {
     options.renderer=eframe::Renderer::Wgpu;
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(windows)]
     if backends!=eframe::wgpu::Backends::DX12 {options.wgpu_options.direct_composition=false;}
     if let eframe::egui_wgpu::WgpuSetup::CreateNew(setup)=&mut options.wgpu_options.wgpu_setup {
         setup.instance_descriptor.backends=backends;
@@ -31,7 +31,7 @@ fn small_memory_blocks(descriptor:eframe::wgpu::DeviceDescriptor<'static>)->efra
 /// 设备不支持时再退到 Vulkan。两者都不经过显卡的 OpenGL 驱动。
 fn launch_compatible(options:eframe::NativeOptions,launch:&mut impl FnMut(eframe::NativeOptions)->eframe::Result<()>)->eframe::Result<()> {
     let first=launch(compatible(options.clone(),eframe::wgpu::Backends::DX12));
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(windows)]
     let first=match first {
         Err(eframe::Error::Wgpu(eframe::egui_wgpu::WgpuError::DirectComposition(_))) if options.wgpu_options.direct_composition=>{
             let mut fallback=options.clone();
@@ -61,16 +61,13 @@ pub fn run(options:eframe::NativeOptions,launch:impl FnMut(eframe::NativeOptions
     #[cfg(not(all(windows, feature = "sdk-js", feature = "sdk-material")))]
     let compat_enabled=!forced && lingqi::renderer::compat_requested();
     let compat_first=forced || compat_enabled;
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(windows)]
     let options={
         let mut options=options;
-        let debug=lingqi::material::debug_requested();
-        #[cfg(feature="sdk-js")]
-        let installed=compat_enabled && !lingqi::material::falling_back() && !debug
-            && lingqi::sdk_spike::LocalPlugins::startup_material(&lingqi::model::config_dir().join("local-plugins"));
-        #[cfg(not(feature="sdk-js"))]
-        let installed=false;
-        lingqi::material::configure_startup(&mut options,compat_first,debug || installed);
+        // 兼容后端（DX12）默认走透明交换链：岛体直接进桌面合成器，
+        // 不用每帧读回画面再交给分层窗口。失败时上面会自动退回普通 DX12。
+        #[cfg(windows)]
+        lingqi::dcomp::configure(&mut options,compat_first);
         options
     };
     run_with(compat_first,options,launch)
@@ -78,7 +75,7 @@ pub fn run(options:eframe::NativeOptions,launch:impl FnMut(eframe::NativeOptions
 
 fn opengl(mut options:eframe::NativeOptions)->eframe::NativeOptions {
     options.renderer=eframe::Renderer::Glow;
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(windows)]
     {options.wgpu_options.direct_composition=false;}
     options
 }

@@ -429,6 +429,7 @@ impl Shell {
         for e in events {
             match e {
                 Event::OpenSettings=>self.app.open_settings(),
+                Event::OpenAi=>self.app.open_ai(),
                 Event::OpenCalendar=>self.app.open_calendar(None),
                 Event::TogglePet => {
                     self.app.set_pet(!self.app.settings.pet);

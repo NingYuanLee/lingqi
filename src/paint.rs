@@ -84,6 +84,37 @@ impl<'a> Card<'a> {
         Some(if alpha < 0.8 { control.ghost() } else { control })
     }
 
+    /// 把一个 epaint 形状按当前画布的变换画上去（局部坐标 → 屏幕坐标）。
+    ///
+    /// 参数化精灵直接产出 epaint 形状，这样它既能画进现在的 egui 渲染器，
+    /// 也能原样喂给后续的自研 wgpu 渲染器。
+    pub fn add_shape(&self, shape: epaint::Shape) {
+        let scale = self.s;
+        let origin = self.origin;
+        let map = |point: Pos2| origin + Vec2::new(point.x, point.y) * scale;
+        match shape {
+            epaint::Shape::Circle(circle) => {
+                let mut circle = circle;
+                circle.center = map(circle.center);
+                circle.radius = circle.radius * scale;
+                self.painter.add(epaint::Shape::Circle(circle));
+            }
+            epaint::Shape::Path(path) => {
+                let mut path = path;
+                for point in path.points.iter_mut() {
+                    *point = map(*point);
+                }
+                self.painter.add(epaint::Shape::Path(path));
+            }
+            epaint::Shape::Rect(rect) => {
+                let mut rect = rect;
+                rect.rect = Rect::from_min_size(map(rect.rect.min), rect.rect.size() * scale);
+                self.painter.add(epaint::Shape::Rect(rect));
+            }
+            _ => {}
+        }
+    }
+
     // ---------- 文字（y 一律是基线，跨字体对齐稳定） ----------
     pub fn font(&self, size: f32, w: W) -> FontId {
         font(size * self.s, w)

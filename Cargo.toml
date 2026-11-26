@@ -47,7 +47,7 @@ ureq = { path = "vendor/ureq" }
 
 [dependencies]
 ab_glyph = { version = "0.2", optional = true }
-eframe = { version = "0.31", default-features = false, features = ["glow", "wgpu", "default_fonts"] }
+eframe = { version = "0.31", default-features = false, features = ["glow", "wgpu", "default_fonts", "direct-composition"] }
 egui_extras = { version = "0.31", default-features = false, features = ["svg", "image"] }
 # 绘制内核：精灵与后续自研渲染器直接用它，不经过 egui 的 UI 框架。
 # 版本必须与 egui 0.31 依赖的 epaint 一致，否则类型对不上。
