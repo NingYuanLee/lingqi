@@ -68,8 +68,9 @@ pub fn run(options:eframe::NativeOptions,launch:impl FnMut(eframe::NativeOptions
     // 灵栖在 Windows 上默认走 Direct3D 12 + DirectComposition：
     // 透明直绘不用每帧读回画面，空闲时事件循环也能真正睡下去。
     // 设备不支持时下面会依次退回 Vulkan、OpenGL。
-    let prefer_dx12=cfg!(windows)&&!forced_opengl();
-    let compat_first=prefer_dx12||forced || compat_enabled;
+    // 默认仍走 OpenGL：在这台 Intel 核显上实测比 DX12 更省（见 docs/LINGQI-STATUS.md）。
+    // 想用 DirectComposition 透明直绘：LINGQI_RENDERER=wgpu。
+    let compat_first=forced || compat_enabled;
     #[cfg(windows)]
     let options={
         let mut options=options;
