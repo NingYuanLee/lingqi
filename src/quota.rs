@@ -499,26 +499,8 @@ impl Service {
         None
     }
 }
-pub(crate) fn http_agent()->ureq::Agent{
-    http_agent_with_connect_timeout(Duration::from_secs(30))
-}
-fn http_agent_with_connect_timeout(timeout:Duration)->ureq::Agent{
-    let mut builder=ureq::AgentBuilder::new().timeout(Duration::from_secs(15)).timeout_connect(timeout).redirects(0);
-    let proxy=["HTTPS_PROXY","https_proxy","ALL_PROXY","all_proxy","HTTP_PROXY","http_proxy"].iter().find_map(|key|std::env::var(key).ok().filter(|s|!s.is_empty())).or_else(system_proxy);
-    if let Some(proxy)=proxy.and_then(|s|ureq::Proxy::new(s).ok()){builder=builder.proxy(proxy);}
-    builder.build()
-}
-#[cfg(not(windows))] pub(crate) fn system_proxy()->Option<String>{None}
-#[cfg(windows)] pub(crate) fn system_proxy()->Option<String>{
-    use windows::{core::w,Win32::System::Registry::{RegGetValueW,HKEY_CURRENT_USER,RRF_RT_REG_DWORD,RRF_RT_REG_SZ}};
-    let key=w!("Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings");let mut enabled=0u32;let mut size=4u32;
-    unsafe{if RegGetValueW(HKEY_CURRENT_USER,key,w!("ProxyEnable"),RRF_RT_REG_DWORD,None,Some((&mut enabled as *mut u32).cast()),Some(&mut size)).is_err() || enabled==0{return None;}}
-    let mut buffer=[0u16;1024];size=(buffer.len()*2) as u32;
-    unsafe{if RegGetValueW(HKEY_CURRENT_USER,key,w!("ProxyServer"),RRF_RT_REG_SZ,None,Some(buffer.as_mut_ptr().cast()),Some(&mut size)).is_err(){return None;}}
-    let text=String::from_utf16_lossy(&buffer[..buffer.iter().position(|v|*v==0).unwrap_or(buffer.len())]);
-    let server=if text.contains('='){text.split(';').find_map(|s|s.trim().strip_prefix("https=")).or_else(||text.split(';').find_map(|s|s.trim().strip_prefix("http=")))?}else{text.trim()};
-    if server.is_empty(){None}else if server.contains("://"){Some(server.into())}else{Some(format!("http://{server}"))}
-}
+// 网络出口已抽到 `crate::net`：天气、更新、AI 都要用，额度模块下线后它们还得留着。
+pub(crate) use crate::net::{http_agent, http_agent_with_connect_timeout};
 fn fetch(agent:&ureq::Agent,account:&Account)->Result<Snapshot,(String,u64)>{
     if account.provider.api_key(){return api::fetch(agent,account);}
     if account.provider==Provider::Claude{return claude::fetch(account).map_err(|e|(e,0));}

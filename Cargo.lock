@@ -1565,6 +1565,7 @@ dependencies = [
  "clipboard-win",
  "eframe",
  "egui_extras",
+ "epaint",
  "flate2",
  "iana-time-zone",
  "image",
@@ -3348,6 +3349,8 @@ dependencies = [
  "once_cell",
  "rustls",
  "rustls-pki-types",
+ "serde",
+ "serde_json",
  "url",
  "webpki-roots 0.26.11",
 ]

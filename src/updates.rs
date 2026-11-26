@@ -361,7 +361,7 @@ fn update_agent(proxy: Option<&str>, timeout: Duration) -> Result<ureq::Agent, S
 fn http_agent() -> Result<ureq::Agent, String> {
     let proxy = ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy"]
         .iter().find_map(|key| std::env::var(key).ok().filter(|value| !value.trim().is_empty()))
-        .or_else(crate::quota::system_proxy);
+        .or_else(crate::net::system_proxy);
     update_agent(proxy.as_deref(), Duration::from_secs(15))
 }
 

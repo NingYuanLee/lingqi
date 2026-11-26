@@ -220,7 +220,7 @@ fn request(agent: &ureq::Agent, url: &url::Url, service: &str, route: &str) -> R
 
 fn network_proxy() -> Option<String> {
     ["HTTPS_PROXY","https_proxy","ALL_PROXY","all_proxy","HTTP_PROXY","http_proxy"].iter()
-        .find_map(|key|std::env::var(key).ok().filter(|value|!value.is_empty())).or_else(crate::quota::system_proxy)
+        .find_map(|key|std::env::var(key).ok().filter(|value|!value.is_empty())).or_else(crate::net::system_proxy)
 }
 
 fn http_agent_for(proxy: Option<&str>) -> ureq::Agent {

@@ -49,8 +49,11 @@ ureq = { path = "vendor/ureq" }
 ab_glyph = { version = "0.2", optional = true }
 eframe = { version = "0.31", default-features = false, features = ["glow", "wgpu", "default_fonts"] }
 egui_extras = { version = "0.31", default-features = false, features = ["svg", "image"] }
+# 绘制内核：精灵与后续自研渲染器直接用它，不经过 egui 的 UI 框架。
+# 版本必须与 egui 0.31 依赖的 epaint 一致，否则类型对不上。
+epaint = "=0.31.1"
 svgtypes = "0.13"
-ureq = { version = "2.12", default-features = false, features = ["tls", "gzip"] }
+ureq = { version = "2.12", default-features = false, features = ["tls", "gzip", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"

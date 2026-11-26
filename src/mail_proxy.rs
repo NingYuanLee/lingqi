@@ -19,7 +19,7 @@ fn windows_proxy() -> Option<String> {
     if let Some(proxy) = super::proxy_routing_tests::test_proxy() {
         return Some(proxy);
     }
-    crate::quota::system_proxy()
+    crate::net::system_proxy()
 }
 
 fn connect_tcp(endpoint: impl ToSocketAddrs) -> io::Result<TcpStream> {
