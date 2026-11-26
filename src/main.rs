@@ -17,6 +17,8 @@ struct Shell {
     t0: Instant,
     #[cfg(windows)]
     frame_at: Instant,
+    /// 下一帧之前大约需要等多久（由上一帧的重绘节奏决定）。
+    repaint_hint: std::time::Duration,
     /// 兼容渲染上一次请求读回画面的时刻（无输入的持续动画按约 30 帧/秒读回）。
     #[cfg(windows)]
     readback_at: Option<Instant>,
@@ -352,6 +354,7 @@ impl Shell {
             t0: Instant::now(),
             #[cfg(windows)]
             frame_at: Instant::now(),
+            repaint_hint: std::time::Duration::from_secs_f64(1.0/60.0),
             #[cfg(windows)]
             readback_at: None,
             #[cfg(windows)]
@@ -632,7 +635,9 @@ impl eframe::App for Shell {
             self.frame_at=Instant::now();
         } else {
             // 用帧间隔限制刷新，绕过部分 Intel 驱动在垂直同步中的忙等待。
-            let delay=Duration::from_secs_f64(1.0/60.0).saturating_sub(self.frame_at.elapsed());
+            // 岛体安静下来时按实际需要等待（上限 50ms，保证指针响应跟手）。
+            let step=self.repaint_hint.min(Duration::from_millis(50)).max(Duration::from_millis(4));
+            let delay=step.saturating_sub(self.frame_at.elapsed());
             if !delay.is_zero(){std::thread::sleep(delay);}
             self.frame_at=Instant::now();
         }
@@ -1208,6 +1213,7 @@ impl eframe::App for Shell {
             else if interactive_transition {out.repaint_after.saturating_sub(self.frame_at.elapsed())}
             else {out.repaint_after};
         #[cfg(not(windows))] let repaint_after=out.repaint_after;
+        self.repaint_hint=repaint_after;
         schedule_repaint(ctx,repaint_after);
         // 只记慢帧：卡顿反馈时能直接看出是渲染慢还是输入被吞（页面/展开状态一并记下）。
         let elapsed=frame_start.elapsed();

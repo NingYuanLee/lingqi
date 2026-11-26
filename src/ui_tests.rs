@@ -11597,3 +11597,37 @@ fn performance_morph_film() {
 #[cfg(all(windows, feature = "sdk-js"))]
 #[path = "plugin_status_ui_tests.rs"]
 mod plugin_status_ui_tests;
+
+#[test]
+#[ignore="按需导出灵栖岛体预览：LINGQI_PREVIEW=目录"]
+fn lingqi_island_gallery(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_PREVIEW").expect("需指定预览目录"));
+    std::fs::create_dir_all(&dest).unwrap();
+    for (name,style,open) in [
+        ("island-atlas",crate::model::PetStyle::Atlas,false),
+        ("island-generated",crate::model::PetStyle::Generated,false),
+        ("island-generated-open",crate::model::PetStyle::Generated,true),
+    ] {
+        let mut h=H::new();
+        h.ctx.set_pixels_per_point(2.0);
+        h.app.settings.pet_style=style;
+        if open {h.app.open=true;}
+        // 先跑几帧，让精灵长出呼吸与视线。
+        for _ in 0..40 {h.frame(vec![]);}
+        let ppp=h.ctx.pixels_per_point();
+        let mut raster=crate::preview_raster::Raster::new((crate::app::CANVAS_W*ppp) as usize,(WIN_H*ppp) as usize);
+        raster.update_textures(&egui::TexturesDelta{set:vec![(egui::TextureId::default(),
+            egui::epaint::ImageDelta::full(h.ctx.fonts(|f|f.image()),egui::TextureOptions::LINEAR))],..Default::default()});
+        raster.buf.fill([0.10,0.12,0.16,1.0]);
+        raster.draw(&h.ctx.tessellate(h.shapes.clone(),ppp),ppp);
+        let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
+        let image=image::RgbaImage::from_raw(raster.w as u32,raster.h as u32,rgba).unwrap();
+        let height=if open {h.app.expanded_height()} else {crate::app::PH};
+        image::imageops::crop_imm(&image,
+            ((WIN_W-crate::app::PW)/2.0*ppp-12.0) as u32,0,
+            ((crate::app::PW+12.0)*ppp+12.0) as u32,
+            ((height+12.0)*ppp) as u32,
+        ).to_image().save(dest.join(format!("{name}.png"))).unwrap();
+    }
+}

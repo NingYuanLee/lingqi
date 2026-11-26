@@ -48,6 +48,11 @@ fn launch_compatible(options:eframe::NativeOptions,launch:&mut impl FnMut(eframe
 
 /// 验收与排障：设置环境变量 `LINGQI_RENDERER=wgpu` 直接使用兼容图形后端，
 /// 在正常电脑上也能检查 OpenGL 失败后用户会看到的画面。
+/// 显式要求回到 OpenGL。灵栖在 Windows 上默认用 Direct3D 12，
+/// 万一某台机器的 DX12 有问题，用这个环境变量可以退回去。
+fn forced_opengl()->bool {
+    std::env::var("LINGQI_RENDERER").is_ok_and(|value|value.trim().eq_ignore_ascii_case("opengl"))
+}
 fn forced_compatible()->bool {
     std::env::var("LINGQI_RENDERER").is_ok_and(|value|value.trim().eq_ignore_ascii_case("wgpu"))
 }
@@ -60,7 +65,11 @@ pub fn run(options:eframe::NativeOptions,launch:impl FnMut(eframe::NativeOptions
     let compat_enabled=lingqi::renderer::compat_requested();
     #[cfg(not(all(windows, feature = "sdk-js", feature = "sdk-material")))]
     let compat_enabled=!forced && lingqi::renderer::compat_requested();
-    let compat_first=forced || compat_enabled;
+    // 灵栖在 Windows 上默认走 Direct3D 12 + DirectComposition：
+    // 透明直绘不用每帧读回画面，空闲时事件循环也能真正睡下去。
+    // 设备不支持时下面会依次退回 Vulkan、OpenGL。
+    let prefer_dx12=cfg!(windows)&&!forced_opengl();
+    let compat_first=prefer_dx12||forced || compat_enabled;
     #[cfg(windows)]
     let options={
         let mut options=options;
