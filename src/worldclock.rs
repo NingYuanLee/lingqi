@@ -3,7 +3,7 @@
 //! 时区用 IANA 名（`Asia/Shanghai`、`Europe/London`），由 `chrono-tz` 解析，
 //! 不依赖系统时区数据库。
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Offset as _, Utc};
 use chrono_tz::Tz;
 
 /// 最多显示几个时区。
@@ -37,8 +37,8 @@ pub fn local_offset_seconds() -> i32 {
 pub fn view(zone: &str, now: DateTime<Utc>, local_offset_seconds: i32) -> Option<ZoneView> {
     let tz: Tz = zone.trim().parse().ok()?;
     let local = now.with_timezone(&tz);
-    // 同一瞬间的本地时间戳与 UTC 时间戳之差，就是该时区相对 UTC 的偏移（夏令时自动生效）。
-    let delta = (local.timestamp() - now.timestamp()) as i32;
+    // 该时区相对 UTC 的偏移秒数（夏令时自动生效）。TzOffset 需要先 fix 成 FixedOffset 才能取偏移。
+    let delta = local.offset().fix().local_minus_utc() - local_offset_seconds;
     Some(ZoneView {
         label: short_label(zone.trim()),
         time: local.format("%H:%M").to_string(),

@@ -371,8 +371,11 @@ mod tests {
     fn replacing_battery_moves_continuously_and_supports_an_instant_state(){
         let before=Layout::new(true,true,false,false,true,false);let after=Layout::new(false,true,false,false,true,false);
         let mut motion=Motion::default();motion.step(before.clone(),0.0,true,true);
-        motion.step(after.clone(),1.0/60.0,true,true);let mid=motion.current().x[CLOCK].unwrap();
-        assert!(mid<before.x[CLOCK].unwrap()&&mid>after.x[CLOCK].unwrap());
+        let start=motion.current().x[CLOCK].unwrap();
+        // 换电池时时钟应连续滑向新位置：走几帧后仍在起点与终点之间。
+        for _ in 0..10 {motion.step(after.clone(),1.0/60.0,true,true);}
+        let mid=motion.current().x[CLOCK].unwrap();
+        assert!(mid<start&&mid>after.x[CLOCK].unwrap(),"时钟应在起点与终点之间连续移动：{start} → {mid} → {}",after.x[CLOCK].unwrap());
         for _ in 0..120 {motion.step(after.clone(),1.0/60.0,true,true);}
         assert!((motion.current().x[CLOCK].unwrap()-after.x[CLOCK].unwrap()).abs()<0.01);
         motion.step(before.clone(),1.0/60.0,false,true);assert_eq!(motion.current().x,before.x);
