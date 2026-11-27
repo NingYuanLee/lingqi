@@ -2061,6 +2061,45 @@ impl App {
                                 settings_control_row_right(ui,"日期常驻",date_modes);
                             }
                         });
+                        settings_label(ui,"多时区");
+                        settings_card(ui,|ui|{
+                            ui.label(egui::RichText::new("在常驻条上并排显示多个城市的当前时间。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
+                            ui.add_space(4.0);
+                            let zones=self.settings.world_zones.clone();
+                            if zones.is_empty(){
+                                ui.label(egui::RichText::new("还没有添加时区。").size(12.0).color(ui.visuals().weak_text_color()));
+                            }else{
+                                for zone in &zones{
+                                    ui.horizontal(|ui|{
+                                        ui.label(egui::RichText::new(format!("{} · {}",crate::worldclock::short_label(zone),zone)).size(12.0));
+                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
+                                            if ui.small_button("移除").clicked(){
+                                                self.settings.world_zones.retain(|item|item!=zone);
+                                                self.settings.save();
+                                            }
+                                        });
+                                    });
+                                }
+                            }
+                            ui.add_space(4.0);
+                            ui.horizontal(|ui|{
+                                ui.add_sized([(ui.available_width()-56.0).max(120.0),27.0],egui::TextEdit::singleline(&mut self.world_zone_input).hint_text("时区名，如 Asia/Shanghai"));
+                                if ui.add_sized([48.0,27.0],egui::Button::new("添加")).clicked(){
+                                    let input=self.world_zone_input.trim().to_string();
+                                    self.world_zone_input.clear();
+                                    if crate::worldclock::valid(&input){
+                                        let mut next=self.settings.world_zones.clone();
+                                        next.push(input);
+                                        self.settings.world_zones=crate::worldclock::normalize(&next);
+                                        self.settings.save();
+                                    }else{
+                                        self.world_zone_note="时区名无效，请用 IANA 名称，如 Asia/Shanghai".into();
+                                    }
+                                }
+                            });
+                            if !self.world_zone_note.is_empty(){settings_hint(ui,&self.world_zone_note);}
+                            settings_hint(ui,"最多 4 个时区；填 IANA 名称，日期按夏令时自动调整。");
+                        });
                         settings_label(ui,"启动");
                         settings_card(ui,|ui|{
                             let mut a=autostart;

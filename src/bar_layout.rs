@@ -17,7 +17,9 @@ pub(crate) const PET: usize = 9;
 pub(crate) const WEATHER_WIDTH: f32 = 38.0;
 pub(crate) const PERFORMANCE: usize = 10;
 pub(crate) const BLUETOOTH:usize=11;
-const WIDTHS: [f32; 12] = [44.0,20.0,27.0,27.0,27.0,WEATHER_WIDTH,14.0,crate::focus_bar::WIDTH,20.0,32.0,0.0,0.0];
+/// 多时区时钟（追加在常驻条末尾）。
+pub(crate) const WORLDCLOCK:usize=12;
+const WIDTHS: [f32; 13] = [44.0,20.0,27.0,27.0,27.0,WEATHER_WIDTH,14.0,crate::focus_bar::WIDTH,20.0,32.0,0.0,0.0,0.0];
 
 pub(crate) const DEFAULT_ORDER: [usize;8]=[BATTERY,PET,CLOCK,WEATHER,QUOTA,MUSIC,FOCUS,PERFORMANCE];
 pub(crate) fn valid_order(order:&[usize])->bool {
@@ -84,6 +86,10 @@ impl Layout {
     }
     pub fn append_bluetooth(&mut self,width:f32){
         self.append_slot(BLUETOOTH,width);
+    }
+    /// 追加多时区时钟。
+    pub fn append_worldclock(&mut self,width:f32){
+        self.append_slot(WORLDCLOCK,width);
     }
     fn append_slot(&mut self,slot:usize,width:f32){
         let extra=width+12.0;for x in self.x.iter_mut().flatten(){*x-=extra/2.0;}

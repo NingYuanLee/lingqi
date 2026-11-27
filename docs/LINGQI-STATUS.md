@@ -25,6 +25,7 @@
 | AI 设置与入口 | `src/extras.rs` `src/tray.rs` `src/main.rs` | 设置页「AI 助手」分页、托盘菜单入口 |
 | 参数化精灵 | `src/sprite.rs` `src/app.rs` `src/paint.rs` | 纯 epaint 形状 + 时间轴；新增 `Card::add_shape` 注入接口 |
 | 吉祥物形象设置 | `src/model.rs` `src/extras.rs` | 「图集 / 程序生成」可切换 |
+| 多时区 | `src/worldclock.rs` `src/bar_layout.rs` `src/app.rs` `src/extras.rs` | 常驻条并排显示多个城市时间，IANA 时区名，最多 4 个；8 个单元测试 |
 | 网络出口独立 | `src/net.rs` | `http_agent` / `system_proxy` 从 AI 额度模块抽出，天气与更新不再反向依赖将被砍掉的模块 |
 | DirectComposition | `src/dcomp.rs` `src/graphics.rs` `Cargo.toml` | 上游把透明直绘锁在 `sdk-material` 实验特性后；灵栖把它变成正式能力并设为 Windows 默认后端 |
 | 低占用重绘 | `src/app.rs` `src/main.rs` | 精灵静止后岛体降到 2 帧；帧间等待按实际需要自适应 |
@@ -109,6 +110,20 @@
 | 剪贴板上下文默认关闭 | 打开后仍会过滤疑似密钥的内容，但默认不送 |
 | 瘦身未完成 | 41k 行业务代码仍在树里，只是暂时不接线 |
 | 测试基线 | 全量 cargo test --lib：**1503 通过 / 11 失败 / 144 忽略**。其中 9 条在**原版仓库同机对跑同样失败**（需要真实 QQ 客户端、任务栏、凭据管理器、真实窗口命中），与灵栖无关；另 2 条（quota::api 的全局标志、smtc::netease 的联网查询）单独跑通过，属并行执行时的相互污染/网络抖动 |
+
+## 5.1 首个公开版本（已发布）
+
+- 仓库：https://github.com/NingYuanLee/lingqi （MIT，保留原作者版权声明）
+- Release：https://github.com/NingYuanLee/lingqi/releases/tag/v0.1.0
+  - 资产 `Lingqi-v0.1.0-windows-x64.zip`（11.26 MB），带 `sha256:` 摘要
+  - `/releases/latest` 校验通过 —— **应用内更新通道可用**（应用侧已验证：启动后
+    `update-check.json` 正确记录「无新版本」）
+- 发布流程：`D:\lingqi\tools\build-publish.ps1` → `package-lingqi.ps1` → `publish-release.ps1`
+- 发布卫生：二进制经 `scripts/check-runtime.ps1` 校验（静态链接、无外部 C++ 运行库依赖），
+  并扫描确认**不含本机构建路径**。C 依赖（QuickJS/zstd/ring）的 `__FILE__` 路径用
+  MSVC 的 `/d1trimfile:` 去掉。
+- 图形安装包（NSIS）暂缺：构建机拿不到 NSIS（choco/winget 都需要管理员权限），
+  先以 ZIP + `安装灵栖.cmd` 便携安装脚本代替。
 
 ## 6. 下一步
 
