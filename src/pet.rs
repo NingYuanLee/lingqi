@@ -2,7 +2,6 @@
 use crate::anim::{approach, lerp, smoothstep};
 use crate::paint::{Card, H};
 use crate::theme::{self, W};
-use crate::pet_expressions::Expression;
 use eframe::egui::Color32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

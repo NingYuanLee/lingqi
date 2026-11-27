@@ -5,9 +5,9 @@ use super::context::{
     CONTEXT_MAX,
 };
 use super::credentials::validate_key;
-use super::intents::{arg_str, extract_json, parse_plan, Intent, Plan};
+use super::intents::{arg_str, extract_json, parse_plan, Intent};
 use super::prompt::{action_arguments, system_prompt};
-use super::provider::{build_body, parse_sse_line, ChatRequest, Error, Event, Message, Role};
+use super::provider::{build_body, parse_sse_line, ChatRequest, Error, Event, Message};
 
 #[test]
 fn sse_delta_is_parsed() {
