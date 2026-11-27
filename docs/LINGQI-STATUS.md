@@ -157,9 +157,9 @@
 | 音乐/歌词 | ✅ 已删 | ~7.3k 行 | 媒体会话轮询、歌词抓取同步、播放器适配、封面歌单、演唱姿态、岛上歌词条 |
 | 邮件 + 日历 | ✅ 已删 | ~7.7k 行 + 20.5k 行（含 vendor） | IMAP 收信、授权码登录、验证码提取、会议邀请、.ics 导入、CalDAV；依赖 imap / imap-proto / mailparse / roxmltree / rrule / base64 一并移除 |
 | 蓝牙 + 消息 | ✅ 已删 | ~8.0k 行 | 蓝牙设备枚举/连接/电量监听/24 种设备图标/侧边电量页；系统通知监听、五家消息客户端未读角标、账号窗口唤起、任务栏闪动 |
-| 插件市集 / SDK | ⏳ 待做 | ~20k 行 | 原本就被 sdk-js 特性挡在默认构建外；依赖已改为可选 |
+| 插件市集 / SDK | ✅ 已删 | ~30k 行 | `spike/` 里的插件运行时与市集（19.8k）+ plugin_canvas / plugin_status / plugin_notice（~10k）；sdk-js、sdk-wasm 特性与 rquickjs、wasmi、svgtypes 依赖一并移除 |
 
-合计已删约 **32k 行**（不含被删测试与 vendor 目录）。插件 SDK 的依赖（rquickjs / svgtypes / iana-time-zone）
+合计已删约 **62k 行**（不含被删测试与 vendor 目录）。插件 SDK 的依赖（rquickjs / svgtypes / iana-time-zone）
 已改为可选，发布构建不再启用 sdk-js，QuickJS 不再进包。
 
 发布二进制从 22.7 MB 降到 **16.3 MB（-28%）**。

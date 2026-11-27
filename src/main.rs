@@ -51,15 +51,15 @@ struct Shell {
     input_state:lingqi::input::Monitor,
     #[cfg(windows)]
     input_keys:Option<lingqi::input::Shortcuts>,
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material"))]
     material: Option<lingqi::material::Runtime>,
-    #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material", feature = "material"))]
     material_debug: bool,
-    #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material", feature = "material"))]
     material_requested_id: Option<String>,
-    #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material", feature = "material"))]
     material_source: Option<String>,
-    #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material", feature = "material"))]
     material_failed: bool,
     #[cfg(windows)]
     tray: Option<lingqi::tray::Tray>,
@@ -92,7 +92,7 @@ impl Shell {
 
     #[cfg(windows)]
     fn sync_capture_exclusion(app: &mut App, window: Option<&mut lingqi::native::Window>) -> bool {
-        #[cfg(feature = "sdk-material")]
+        #[cfg(feature = "material")]
         if app.material_capture_forced {
             app.capture_exclusion_request = None;
             return false;
@@ -124,7 +124,7 @@ impl Shell {
         requested.is_some() || failed
     }
 
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material"))]
     fn restore_capture_preference(app: &mut App, window: Option<&mut lingqi::native::Window>) {
         app.material_capture_forced = false;
         if let Some(window) = window {
@@ -133,7 +133,7 @@ impl Shell {
         }
     }
 
-    #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material", feature = "material"))]
     fn reconcile_material(&mut self, ctx: &egui::Context, state: Option<&eframe::egui_wgpu::RenderState>) {
         use lingqi::material::{Options, Runtime};
 
@@ -194,7 +194,7 @@ impl Shell {
         let running_compat=cc.wgpu_render_state.is_some();
         diagnostics::startup("加载本地配置");
         let mut app = App::new(&cc.egui_ctx, Options::default());
-        #[cfg(all(windows, feature = "sdk-material"))]
+        #[cfg(all(windows, feature = "material"))]
         let material_debug = lingqi::material::debug_requested();
         app.render_compat_running=running_compat;
         diagnostics::startup("迁移配置");
@@ -212,7 +212,6 @@ impl Shell {
         })};
         diagnostics::startup("初始化通知监听");
         #[cfg(windows)]
-        app.start_plugin_notices(&cc.egui_ctx);
         #[cfg(windows)]
         // 音频、网络与输入法查询由后台完成，避免首帧等待系统服务。
         diagnostics::startup("创建后台采样与窗口");
@@ -224,9 +223,9 @@ impl Shell {
         #[cfg(windows)]
         let native = {
             let mut window = lingqi::native::Window::new(cc);
-            #[cfg(feature = "sdk-material")]
+            #[cfg(feature = "material")]
             let material_window = window.as_ref().and_then(lingqi::native::Window::material_window).is_some();
-            #[cfg(not(feature = "sdk-material"))]
+            #[cfg(not(feature = "material"))]
             let material_window = false;
             if !material_window {
                 if app.settings.exclude_from_capture {
@@ -236,9 +235,9 @@ impl Shell {
             }
             window
         };
-        #[cfg(all(windows, feature = "sdk-material"))]
+        #[cfg(all(windows, feature = "material"))]
         if let Some(error) = lingqi::material::take_startup_failure() {
-            #[cfg(feature = "sdk-js")]
+            #[cfg(feature = "material")]
             if !material_debug {
                 persist_material_failure(&mut app);
             }
@@ -246,7 +245,7 @@ impl Shell {
         } else if lingqi::material::falling_back() {
             app.say("材质加载失败，已恢复普通绘制");
         } else {
-            #[cfg(feature = "sdk-js")]
+            #[cfg(feature = "material")]
             if !material_debug
                 && app.settings.render_compat
                 && app.material_spec().is_some()
@@ -258,7 +257,7 @@ impl Shell {
                 app.alert("材质加载失败", error, 0, false);
             }
         }
-        #[cfg(all(windows, feature = "sdk-material"))]
+        #[cfg(all(windows, feature = "material"))]
         let material = native.as_ref()
             .filter(|window| material_debug && window.material_window().is_some())
             .zip(cc.wgpu_render_state.as_ref())
@@ -271,7 +270,7 @@ impl Shell {
                     }
                 }
             });
-        #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+        #[cfg(all(windows, feature = "material", feature = "material"))]
         let material_requested_id = app.material_spec().map(|spec| spec.id.to_owned());
         Self {
             app,
@@ -308,15 +307,15 @@ impl Shell {
             #[cfg(windows)] backdrop:None,
             #[cfg(windows)]
             native,
-            #[cfg(all(windows, feature = "sdk-material"))]
+            #[cfg(all(windows, feature = "material"))]
             material,
-            #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+            #[cfg(all(windows, feature = "material", feature = "material"))]
             material_debug,
-            #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+            #[cfg(all(windows, feature = "material", feature = "material"))]
             material_requested_id,
-            #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+            #[cfg(all(windows, feature = "material", feature = "material"))]
             material_source: None,
-            #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+            #[cfg(all(windows, feature = "material", feature = "material"))]
             material_failed: false,
             #[cfg(windows)]
             tray,
@@ -450,9 +449,9 @@ impl Shell {
                 #[cfg(windows)] {self.native.as_ref().is_some_and(|w|w.opaque_surface())}
                 #[cfg(not(windows))] {false}
             },
-            #[cfg(all(windows, feature = "sdk-material"))]
+            #[cfg(all(windows, feature = "material"))]
             material_active: self.material.is_some() && self.placed && !self.hidden && !screen_locked,
-            #[cfg(all(windows, feature = "sdk-material"))]
+            #[cfg(all(windows, feature = "material"))]
             material_appearance: self.material.as_ref().map_or_else(Default::default, lingqi::material::Runtime::appearance),
         }
     }
@@ -481,10 +480,9 @@ impl eframe::App for Shell {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let update_start=Instant::now();
-        #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+        #[cfg(all(windows, feature = "material", feature = "material"))]
         self.reconcile_material(ctx, _frame.wgpu_render_state());
         #[cfg(windows)]
-        self.app.poll_plugin_notices();
         lingqi::resources::FRAMES.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
         let frame_start=Instant::now();
         let mut marks:Vec<(&str,Duration)>=Vec::with_capacity(10);
@@ -630,7 +628,7 @@ impl eframe::App for Shell {
         let mut out = None;
         let pre_cost=frame_start.elapsed();
         let pre_parts={let mut last=Duration::ZERO;marks.iter().filter_map(|(name,at)|{let part=at.saturating_sub(last);last=*at;(part>=Duration::from_micros(500)).then(||format!("{name} {:.1}",part.as_secs_f64()*1000.0))}).collect::<Vec<_>>().join("、")};
-        #[cfg(all(windows, feature = "sdk-material"))]
+        #[cfg(all(windows, feature = "material"))]
         if !env.material_active {
             if let Some(material) = &mut self.material { material.suspend(); }
         }
@@ -645,7 +643,7 @@ impl eframe::App for Shell {
                 let size=if self.app.settings.dock.is_side() {egui::vec2(lingqi::side_dock::SIDE_W,lingqi::side_dock::SIDE_H)} else {egui::vec2(width,app::WIN_H)};
                 let win = egui::Rect::from_min_size(ui.max_rect().min,size);
                 let mut draw = || self.app.frame(ui, win, &env);
-                #[cfg(all(windows, feature = "sdk-material"))]
+                #[cfg(all(windows, feature = "material"))]
                 if let Some(material) = self.material.as_mut().filter(|_| env.material_active) {
                     out = Some(material.draw(draw));
                     return;
@@ -660,7 +658,7 @@ impl eframe::App for Shell {
         let draw_cost=frame_start.elapsed()-pre_cost;
         #[allow(unused_mut)]
         let mut native_cost=Duration::ZERO;
-        #[cfg(all(windows, feature = "sdk-material"))]
+        #[cfg(all(windows, feature = "material"))]
         let mut out = out;
         #[cfg(windows)]
         // 页面自己驱动的动画（天气日出日落、性能详情、翻页后的页面缓动）靠 egui 立即重绘推进，
@@ -733,7 +731,7 @@ Some(wait)=>ctx.request_repaint_after(wait),
             let hit=if self.hidden || out.click_through && out.notice_hit.is_none() {(0.0,0.0,0.0,0.0)} else {r(out.hit)};
             let ppp=ctx.pixels_per_point();
             let glass=if self.hidden {None}else{out.glass.as_deref()};
-            #[cfg(all(windows, feature = "sdk-material"))]
+            #[cfg(all(windows, feature = "material"))]
             let glass=glass.filter(|_| self.material.is_none());
             // 系统模糊要铺满整块轮廓，开着时不收紧窗口外框。
             let tight=(!self.hidden && native.supports_compact_bounds() && !out.blur
@@ -764,7 +762,7 @@ Some(wait)=>ctx.request_repaint_after(wait),
                 }
             }
         }
-        #[cfg(all(windows, feature = "sdk-material"))]
+        #[cfg(all(windows, feature = "material"))]
         if let Some((material, window)) = self.material.as_mut().zip(self.native.as_mut()) {
             // 原生定位、裁剪及样式更新完毕后，再确认截图排除和采样位置。
             match material.finish(ctx, window, &mut out, env.t, env.desktop_cursor) {
@@ -775,7 +773,7 @@ Some(wait)=>ctx.request_repaint_after(wait),
                 Err(error) => {
                     self.material = None;
                     let installed = self.app.material_active_id.take().is_some();
-                    #[cfg(feature = "sdk-js")]
+                    #[cfg(feature = "material")]
                     if installed {
                         self.material_source = None;
                         self.material_failed = true;
@@ -789,7 +787,6 @@ Some(wait)=>ctx.request_repaint_after(wait),
             match cmd {
                 #[cfg(windows)]
                 Cmd::OpenPluginNotice{source,id,session}=>{
-                    self.app.request_plugin_notice_open(&source,&id,&session);
                 }
                 Cmd::RestartApp=>{
                     // 先拉起新进程（它会等本进程退出），再像托盘「退出」一样摘图标后结束。
@@ -1081,7 +1078,7 @@ fn profiling_island()->bool {
     cfg!(feature="sdk-js") && std::env::var_os("LINGQI_DATA_DIR").is_some() && std::env::args().any(|a|a=="--sdk-profile-island")
 }
 
-#[cfg(all(windows, feature = "sdk-material"))]
+#[cfg(all(windows, feature = "material"))]
 fn replace_material_window(fallback: bool) -> bool {
     let args: &[&str] = match (fallback, profiling_island()) {
         (true, true) => &[lingqi::material::FALLBACK_ARG, "--sdk-profile-island"],
@@ -1092,7 +1089,7 @@ fn replace_material_window(fallback: bool) -> bool {
     diagnostics::spawn_replacement_with_args(args)
 }
 
-#[cfg(all(windows, feature = "sdk-material"))]
+#[cfg(all(windows, feature = "material"))]
 fn request_material_restart(app: &mut App, ctx: &egui::Context, fallback: bool) -> bool {
     if replace_material_window(fallback) {
         app.save_window_before_exit();
@@ -1105,17 +1102,17 @@ fn request_material_restart(app: &mut App, ctx: &egui::Context, fallback: bool) 
     }
 }
 
-#[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+#[cfg(all(windows, feature = "material", feature = "material"))]
 fn persist_material_failure(app: &mut App) {
     if let Err(error) = app.deactivate_material() {
         lingqi::material::Runtime::report_failure(&format!("无法保存材质停用状态：{error}"));
     }
 }
 
-#[cfg(all(windows, feature = "sdk-material"))]
+#[cfg(all(windows, feature = "material"))]
 fn disable_material(app: &mut App, ctx: &egui::Context, error: String, _installed: bool) {
     lingqi::material::Runtime::report_failure(&error);
-    #[cfg(feature = "sdk-js")]
+    #[cfg(feature = "material")]
     if _installed {
         persist_material_failure(app);
     }
@@ -1151,9 +1148,9 @@ fn run() -> eframe::Result<()> {
     let opts = eframe::NativeOptions { viewport, vsync: !cfg!(windows), ..Default::default() };
     graphics::run(opts,|opts|{
         let result=eframe::run_native("灵栖",opts,Box::new(|cc|Ok(Box::new(Shell::new(cc)))));
-        #[cfg(all(windows, feature = "sdk-material"))]
+        #[cfg(all(windows, feature = "material"))]
         if lingqi::material::report_run_failure(&result) {
-            #[cfg(feature = "sdk-js")]
+            #[cfg(feature = "material")]
             if !lingqi::material::debug_requested() {
                 use lingqi::sdk_spike::LocalPlugins;
                 let mut plugins = LocalPlugins::open(lingqi::model::config_dir().join("local-plugins"));

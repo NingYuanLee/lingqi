@@ -683,9 +683,7 @@ pub struct App {
     notice_width: Spring,
     notice_details: bool,
     #[cfg(windows)]
-    pub(crate) plugin_notice_ui: crate::plugin_notice_ui::NoticeUi,
     #[cfg(windows)]
-    pub(crate) plugin_notice_host: crate::plugin_notice_settings::NoticeHost,
     messenger_scroll: f32,
     pub(crate) alerts: std::collections::VecDeque<Alert>,
     pub(crate) history: std::collections::VecDeque<Alert>,
@@ -873,9 +871,7 @@ impl App {
             settings_plugin:None,
             listener_status: "尚未连接".into(),
             #[cfg(windows)]
-            plugin_notice_ui: Default::default(),
             #[cfg(windows)]
-            plugin_notice_host: Default::default(),
             todo_first: 0, todo_choosing: false, pet: Default::default(), sprite: Default::default(), sprite_moving: true, ai: Default::default(), ai_key: String::new(), ai_saving: None, ai_note: String::new(), world_zone_input: String::new(), world_zone_note: String::new(), last_drink: None,
             toast: None, toast_below: false,
             last_input: 0.0, system_idle: None,
@@ -1389,8 +1385,6 @@ impl App {
 
     pub(crate) fn expanded_height(&self)->f32 {
         if self.ai_open() { return crate::ai::ui::AI_HEIGHT; }
-        #[cfg(windows)]
-        if self.plugin_notice_detail_open() { return crate::plugin_notice_ui::DETAIL_HEIGHT; }
         self.page_content_height() + if self.page_shortcuts_enabled() { PAGE_SHORTCUT_ROW_H } else { 0.0 }
     }
 
@@ -1471,12 +1465,6 @@ impl App {
         #[cfg(feature="sdk-js")]
         if self.plugins.watch_files_enabled() { ctx.request_repaint_after(std::time::Duration::from_millis(200)); }
         self.tick_alerts();
-        #[cfg(windows)]
-        self.tick_plugin_notices(&ctx, env);
-        #[cfg(windows)]
-        let plugin_notice_detail = self.plugin_notice_detail_open();
-        #[cfg(not(windows))]
-        let plugin_notice_detail = false;
         let hud_active=self.notice.clone();
         if hud_active.as_ref().map(|a|&a.title)!=self.hud_notice.as_ref().map(|a|&a.title)||hud_active.is_none(){self.notice_details=false;}
         if let Some(a)=&hud_active {self.hud_notice=Some(a.clone());}
@@ -1521,7 +1509,7 @@ impl App {
         #[cfg(feature="sdk-js")]
         {
             let suppress = self.effective_minimal() || self.notice.is_some() || self.hud_alpha > 0.003
-                || plugin_notice_detail || env.fullscreen_hidden || env.screen_locked;
+                || env.fullscreen_hidden || env.screen_locked;
             let (mut displays, repaint) = self.plugins.pinned_displays(self.open || suppress);
             if let Some(delay) = repaint { ctx.request_repaint_after(delay); }
             for display in &mut displays { display.measure_width(ui); }
@@ -1632,7 +1620,7 @@ impl App {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.is_editing() {
             self.cancel_edit();
         }
-        if !plugin_notice_detail && (!self.is_editing() || self.todo_choosing) && page_hover && self.open && self.reveal > 0.95 {
+        if (!self.is_editing() || self.todo_choosing) && page_hover && self.open && self.reveal > 0.95 {
             let (scroll, left, right, esc) = ctx.input(|i| (i.raw_scroll_delta.y, i.key_pressed(egui::Key::ArrowLeft), i.key_pressed(egui::Key::ArrowRight), i.key_pressed(egui::Key::Escape)));
             if esc { self.hover_lock = true; }
             if (left || right) && !self.todo_choosing {
@@ -1694,7 +1682,7 @@ impl App {
             }
         } else {self.wheel_delta=0.0;}
         let volume_dragging=self.music_volume_open && ctx.is_being_dragged(egui::Id::new(("card-drag",true,"m-volume-track")));
-        let want = plugin_notice_detail || self.hold_open || (page_hover && !self.hover_lock && (self.compact_notices()||self.notice.is_none()||self.open)) || self.open && on_notice || (self.open && self.t<self.forced_open_until) || self.drag_hot || volume_dragging || (self.is_editing() && self.open);
+        let want = self.hold_open || (page_hover && !self.hover_lock && (self.compact_notices()||self.notice.is_none()||self.open)) || self.open && on_notice || (self.open && self.t<self.forced_open_until) || self.drag_hot || volume_dragging || (self.is_editing() && self.open);
         self.morph(want, inside, env.t, dt);
         let staying_open = self.open && want;
         if !self.drag_departing || staying_open {
@@ -1825,7 +1813,7 @@ impl App {
                 top_bar_notice=Some(clip);
                 self.draw_notice(&Card::new(ui,panel.min+Vec2::new(self.pet_space(),0.0),clip),panel,&a,&mut cmds);
             }
-        }else if !plugin_notice_detail && (!minimal_pill || pc > 0.0) {
+        }else if (!minimal_pill || pc > 0.0) {
             self.resident_header(&base, panel, cx, if restoring_lyrics{0.0}else{pc}, reveal, env, resident_day.as_ref());
         }
         if let Some(rect)=notice_rect {
@@ -1883,12 +1871,7 @@ impl App {
         let mut page_transition=false;
         #[cfg(feature="sdk-js")]
         {self.plugin_form_focused=false;self.plugin_canvas_frame=None;}
-        if plugin_notice_detail {
-            #[cfg(windows)]
-            if self.open && reveal > 0.6 {
-                self.draw_plugin_notice_detail(&base, &mut cmds);
-            }
-        } else if reveal > 0.004 && !banner && !restoring_lyrics {
+        if reveal > 0.004 && !banner && !restoring_lyrics {
             let c = base.shifted(0.0, (1.0 - reveal) * -5.0).faded(reveal);
             let c = if reveal < 0.6 { c.ghost() } else { c };
             if self.drag_departing {
@@ -1906,11 +1889,11 @@ impl App {
             } else {origin};
             self.toast_layer(&Card::new(ui,toast_origin,win),if bottom {-36.0}else{h+8.0})
         }else{None};
-        if !plugin_notice_detail && (self.adding||self.editing.is_some()) && reveal > 0.9 && self.page == 4 && self.page_e() > 0.25 {
+        if (self.adding||self.editing.is_some()) && reveal > 0.9 && self.page == 4 && self.page_e() > 0.25 {
             self.input_field(ui, origin, &mut cmds);
         }
 
-        if !plugin_notice_detail && self.task_dialog.is_some() && reveal>0.9 {self.task_editor_inputs(ui,origin,&mut cmds);}
+        if self.task_dialog.is_some() && reveal>0.9 {self.task_editor_inputs(ui,origin,&mut cmds);}
 
         // ---------- 输出 ----------
         let rel = |r: Rect| r.translate(-win.min.to_vec2());
@@ -2104,14 +2087,12 @@ impl App {
     fn unread_count(&self)->usize {
         let count=self.health_badges().len();
         #[cfg(windows)]
-        let count=count+self.plugin_notice_ui.item_count();
         count
     }
     /// 收起时叠放区沿胶囊方向的长度。
     fn unread_stack_len(&self,horizontal:bool)->f32 {
         let icons=self.health_badges().len();
         #[cfg(windows)]
-        let icons=icons+self.plugin_notice_ui.collapsed_count();
         let icons=icons as f32;
         if icons==0.0 {0.0}else{32.0+unread_step(horizontal)*(icons-1.0)}
     }

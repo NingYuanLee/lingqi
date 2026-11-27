@@ -5,19 +5,13 @@
 //! - `model` / `lyrics` / `smtc` / `icons`：数据、歌词、系统媒体、文件图标
 //! - `native` / `tray`：仅 Windows 的窗口区域、命中穿透与托盘
 
-#[cfg(any(feature="sdk-js",feature="sdk-wasm"))]
-#[path="../spike/mod.rs"]
-pub mod sdk_spike;
 pub mod display_layout;
 pub mod exe_info;
 pub mod diagnostics_tool;
 pub mod rtl_text;
 #[cfg(windows)]
-mod plugin_notice;
 #[cfg(windows)]
-mod plugin_notice_settings;
 #[cfg(windows)]
-mod plugin_notice_ui;
 pub mod poll_clock;
 pub mod resources;
 pub mod ai;
@@ -42,19 +36,8 @@ pub mod side_dock;
 mod task_picker;
 pub mod model;
 pub mod renderer;
-#[cfg(all(windows, feature = "sdk-material"))]
+#[cfg(all(windows, feature = "material"))]
 pub mod material;
-#[cfg(feature = "sdk-js")]
-#[cfg(feature = "sdk-js")]
-mod plugin_canvas;
-#[cfg(feature = "sdk-js")]
-mod plugin_canvas_ui;
-#[cfg(feature = "sdk-js")]
-mod plugin_setting_catalog;
-#[cfg(feature = "sdk-js")]
-mod plugin_status;
-#[cfg(feature = "sdk-js")]
-mod plugin_status_ui;
 pub mod lunar_calendar;
 mod weather;
 mod weather_ui;

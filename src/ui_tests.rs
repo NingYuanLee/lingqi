@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 pub(crate) static ENV_LOCK: Mutex<()> = Mutex::new(());
 
-#[cfg(feature = "sdk-js")]
+#[cfg(feature = "material")]
 #[test]
 fn appearance_skin_plugin_preserves_the_builtin_skin_shape_and_dock() {
     use crate::{model::{Dock, IslandShape, Skin}, sdk_spike::local::appearance_assets::Kind};
@@ -38,7 +38,7 @@ fn appearance_skin_plugin_preserves_the_builtin_skin_shape_and_dock() {
     assert_eq!(h.app.settings.dock, Dock::Bottom);
 }
 
-#[cfg(all(windows, feature = "sdk-material"))]
+#[cfg(all(windows, feature = "material"))]
 #[test]
 fn material_foreground_and_shadow_return_to_the_base_skin_when_disabled() {
     use crate::{material::Appearance, model::{IslandShape, Skin}};
@@ -2897,10 +2897,10 @@ fn todo_notice_view_locates_the_reminded_task() {
 }
 
 
-#[cfg(feature = "sdk-js")]
+#[cfg(feature = "material")]
 const SHORTCUT_FIXTURE_ID: &str = "example.page-shortcuts";
 
-#[cfg(feature = "sdk-js")]
+#[cfg(feature = "material")]
 fn install_page_shortcuts_fixture(h: &mut H) {
     let source = crate::model::config_dir().join("shortcut-plugin-source");
     std::fs::create_dir_all(&source).unwrap();
@@ -2920,7 +2920,7 @@ fn install_page_shortcuts_fixture(h: &mut H) {
 }
 
 
-#[cfg(feature = "sdk-js")]
+#[cfg(feature = "material")]
 #[test]
 fn bottom_page_shortcuts_share_a_row_with_dots_on_every_dock() {
     use crate::app::{FOCUS_PAGE,MUSIC_PAGE,TODO_PAGE};
@@ -2999,7 +2999,7 @@ fn bottom_page_shortcuts_share_a_row_with_dots_on_every_dock() {
     }
 }
 
-#[cfg(feature = "sdk-js")]
+#[cfg(feature = "material")]
 #[test]
 fn bottom_page_shortcuts_fit_the_performance_panel_with_all_pages_enabled() {
     use crate::app::{PAGE_NAMES, PERFORMANCE_PAGE};
@@ -3437,7 +3437,7 @@ fn draw_page_management(h:&mut H,events:Vec<egui::Event>){
     h.shapes=output.lock().unwrap().take().unwrap().shapes;
 }
 
-#[cfg(feature = "sdk-js")]
+#[cfg(feature = "material")]
 #[test]
 fn page_management_page_shortcuts_use_plugin_controls() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -4704,7 +4704,7 @@ fn performance_gallery() {
 /// 设置页的 AI 额度账号默认收起成一行；需要检查明细的测试先把所有账号展开。
 
 
-#[cfg(all(windows, feature = "sdk-js"))]
+#[cfg(all(windows, feature = "material"))]
 #[path = "quota_plugin_ui_tests.rs"]
 
 #[path="module_settings_tests.rs"]
@@ -4824,7 +4824,7 @@ fn performance_morph_film() {
     }
 }
 
-#[cfg(all(windows, feature = "sdk-js"))]
+#[cfg(all(windows, feature = "material"))]
 #[path = "plugin_status_ui_tests.rs"]
 mod plugin_status_ui_tests;
 

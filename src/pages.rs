@@ -3,7 +3,7 @@
 
 use crate::anim::{self, lerp, smoothstep, Spring};
 use crate::app::{App, Cmd, Env, Phase};
-#[cfg(all(windows, feature = "sdk-material"))]
+#[cfg(all(windows, feature = "material"))]
 use crate::material::ControlRole;
 use crate::paint::{self, capsule, mix, Card, H};
 use crate::theme::{self, size, W};
@@ -101,7 +101,7 @@ impl App {
             let (response,button)=paint::material_capsule(c,x,94.0,width,25.0,id,background,
                 if selected{mix(theme::BTN_HOVER,accent,0.25)}else{theme::BTN_HOVER},
                 glassy.then_some((glass_gpu,if selected {0.55}else{0.10},if selected {0.20}else{0.45})),
-                #[cfg(all(windows, feature = "sdk-material"))] if phase==Phase::Focus {ControlRole::Focus}else{ControlRole::Rest});
+                #[cfg(all(windows, feature = "material"))] if phase==Phase::Focus {ControlRole::Focus}else{ControlRole::Rest});
             if glass_gpu && selected {
                 let from=paint::chrome_mark(c);
                 button.fill(x,94.0,width,25.0,12.5,paint::alpha(accent,0.28));

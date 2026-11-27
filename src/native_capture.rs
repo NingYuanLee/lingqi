@@ -70,12 +70,12 @@ impl Exclusion {
         self.set_with(desired, targets, supported, apply_system);
     }
 
-    #[cfg(feature = "sdk-material")]
+    #[cfg(feature = "material")]
     pub(super) fn restore(&mut self, desired: bool, targets: Targets) {
         self.apply_to_targets(desired, targets, supported, apply_system);
     }
 
-    #[cfg(feature = "sdk-material")]
+    #[cfg(feature = "material")]
     pub(super) fn ensure(&mut self, targets: Targets) -> Result<bool, String> {
         use windows::Win32::UI::WindowsAndMessaging::GetWindowDisplayAffinity;
 
@@ -87,7 +87,7 @@ impl Exclusion {
         }, apply_system)
     }
 
-    #[cfg(feature = "sdk-material")]
+    #[cfg(feature = "material")]
     fn ensure_with(
         &mut self,
         targets: Targets,
@@ -242,7 +242,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "sdk-material")]
+    #[cfg(feature = "material")]
     #[test]
     fn material_capture_repairs_and_restores_the_saved_preference() {
         use std::cell::Cell;

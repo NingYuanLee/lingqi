@@ -379,12 +379,12 @@ impl<'a> Card<'a> {
         (h, p)
     }
 
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material"))]
     pub(crate) fn material_circle_with_role(&self, response: &Response, x: f32, y: f32, radius: f32, role: crate::material::ControlRole) {
         self.material_control(response, self.rect(x - radius, y - radius, 2.0 * radius, 2.0 * radius), radius, role);
     }
 
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material"))]
     pub(crate) fn material_control(&self, response: &Response, rect: Rect, radius: f32, role: crate::material::ControlRole) {
         if self.live {
             crate::material::control(response.id, rect.intersect(self.painter.clip_rect()), radius * self.s, role);
@@ -520,16 +520,16 @@ pub(crate) fn material_capsule<'a>(
     base: Color32,
     hover: Color32,
     glass: Option<(bool, f32, f32)>,
-    #[cfg(all(windows, feature = "sdk-material"))] role: crate::material::ControlRole,
+    #[cfg(all(windows, feature = "material"))] role: crate::material::ControlRole,
 ) -> (Response, Card<'a>) {
     let glass = glass.map(|(gpu, level, boost)| (gpu && c.live, level, boost));
     let (response, inner) = match glass {
         Some((true, _, _)) => {
             let response = c.hit(x, y, w, h, id);
             let (hover, press) = c.hover_t(&response);
-            #[cfg(all(windows, feature = "sdk-material"))]
+            #[cfg(all(windows, feature = "material"))]
             let scale = crate::material::control_scale(c.ui.ctx(), response.id).unwrap_or(1.0 + 0.14 * press);
-            #[cfg(not(all(windows, feature = "sdk-material")))]
+            #[cfg(not(all(windows, feature = "material")))]
             let scale = 1.0 + 0.14 * press;
             let inner = c.scaled(x + w * 0.5, y + h * 0.5, scale);
             if hover > 0.01 {
@@ -542,7 +542,7 @@ pub(crate) fn material_capsule<'a>(
         Some((false, level, hover_boost)) => glass_capsule(c, x, y, w, h, id, level, hover_boost),
         None => capsule(c, x, y, w, h, id, base, hover),
     };
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material"))]
     match glass {
         Some((true, _, _)) => c.material_control(&response, c.rect(x, y, w, h), h * 0.5, role),
         None => inner.material_control(&response, inner.rect(x, y, w, h), h * 0.5, role),

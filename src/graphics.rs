@@ -61,9 +61,9 @@ pub fn run(options:eframe::NativeOptions,launch:impl FnMut(eframe::NativeOptions
     // 上次崩在显卡 OpenGL 驱动里时，崩溃处理留下的标记会在这里转成设置。
     let _=lingqi::renderer::apply_pending_fallback();
     let forced=forced_compatible();
-    #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material", feature = "material"))]
     let compat_enabled=lingqi::renderer::compat_requested();
-    #[cfg(not(all(windows, feature = "sdk-js", feature = "sdk-material")))]
+    #[cfg(not(all(windows, feature = "material", feature = "material")))]
     let compat_enabled=!forced && lingqi::renderer::compat_requested();
     // 灵栖在 Windows 上默认走 Direct3D 12 + DirectComposition：
     // 透明直绘不用每帧读回画面，空闲时事件循环也能真正睡下去。
@@ -150,7 +150,7 @@ mod tests {
         assert_eq!(backends,[eframe::wgpu::Backends::DX12,eframe::wgpu::Backends::VULKAN],"先 Direct3D 12，失败再 Vulkan");
     }
 
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material"))]
     #[test]
     fn compatible_fallbacks_drop_the_transparent_swapchain() {
         let mut options=eframe::NativeOptions::default();
@@ -167,7 +167,7 @@ mod tests {
         ]);
     }
 
-    #[cfg(all(windows, feature = "sdk-material"))]
+    #[cfg(all(windows, feature = "material"))]
     #[test]
     fn direct_composition_failure_retries_ordinary_dx12() {
         let mut options=eframe::NativeOptions::default();

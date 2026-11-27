@@ -178,7 +178,7 @@ fn watch_drag(hwnd:HWND,ctx:eframe::egui::Context,wake:Arc<Mutex<PointerWake>>){
 
 // 图形上下文和原生样式就绪后重新启用逐像素合成；不能只依赖创建 HWND 时的请求。
 fn enable_alpha_composition(hwnd:HWND)->windows::core::Result<()> {
-    #[cfg(feature = "sdk-material")]
+    #[cfg(feature = "material")]
     if eframe::egui_wgpu::winit::direct_composition_active(hwnd.0 as isize) {return Ok(());}
     use windows::Win32::Graphics::Dwm::{DwmEnableBlurBehindWindow,DWM_BLURBEHIND,DWM_BB_ENABLE,DWM_BB_BLURREGION};
     unsafe {
@@ -594,13 +594,13 @@ impl Window {
         self.capture_exclusion.set(desired, targets);
     }
 
-    #[cfg(feature = "sdk-material")]
+    #[cfg(feature = "material")]
     pub fn ensure_material_capture_exclusion(&mut self) -> Result<bool, String> {
         let targets = self.capture_targets();
         self.capture_exclusion.ensure(targets)
     }
 
-    #[cfg(feature = "sdk-material")]
+    #[cfg(feature = "material")]
     pub fn restore_capture_exclusion(&mut self, desired: bool) {
         let targets = self.capture_targets();
         self.capture_exclusion.restore(desired, targets);
@@ -676,9 +676,9 @@ impl Window {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Option<Self> {
         let RawWindowHandle::Win32(handle) = cc.window_handle().ok()?.as_raw() else { return None };
         let hwnd = HWND(handle.hwnd.get() as *mut _);
-        #[cfg(feature = "sdk-material")]
+        #[cfg(feature = "material")]
         let direct_composition=eframe::egui_wgpu::winit::direct_composition_active(handle.hwnd.get());
-        #[cfg(not(feature = "sdk-material"))]
+        #[cfg(not(feature = "material"))]
         let direct_composition=false;
         let hook = unsafe {
             apply_style(hwnd, false, false);
@@ -890,7 +890,7 @@ impl Window {
     pub fn blur_active(&self)->bool {self.blur}
     pub fn opaque_surface(&self)->bool {self.opaque_surface}
 
-    #[cfg(feature = "sdk-material")]
+    #[cfg(feature = "material")]
     pub fn material_window(&self) -> Option<HWND> {
         eframe::egui_wgpu::winit::direct_composition_active(self.hwnd.0 as isize).then_some(self.hwnd)
     }

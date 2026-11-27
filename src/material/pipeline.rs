@@ -1,4 +1,3 @@
-use bytemuck::{Pod, Zeroable};
 use eframe::{
     egui::{self, epaint::PaintCallbackInfo},
     egui_wgpu::{self, Callback, CallbackTrait},
@@ -37,7 +36,6 @@ impl Frame {
         self.notch[3] = 0.0;
         self.count[2..].fill(0);
         self.motion[3] = 0.0;
-        bytemuck::bytes_of(self)
     }
 }
 
@@ -322,7 +320,6 @@ fn with_error_scopes<T>(device: &wgpu::Device, op: impl FnOnce() -> T) -> Result
     let value = op();
     let mut error = None;
     for _ in filters {
-        let caught = pollster::block_on(device.pop_error_scope());
         error = error.or(caught);
     }
     match error {

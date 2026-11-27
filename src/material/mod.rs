@@ -343,18 +343,15 @@ impl Runtime {
         time: f64,
         screen_pointer: Option<(i32, i32)>,
     ) -> Result<Option<Duration>, String> {
-        let Some(layer) = out.material_layer.take() else {
             return Ok(None);
         };
         if ctx.will_discard() {
             return Ok(None);
         }
-        let hwnd = window.material_window().ok_or("透明交换链不可用")?;
         if !unsafe { windows::Win32::UI::WindowsAndMessaging::IsWindowVisible(hwnd) }.as_bool() {
             return Ok(Some(Duration::from_millis(20)));
         }
         let started = Instant::now();
-        if window.ensure_material_capture_exclusion()? {
             // 原生样式恢复后，旧的抓屏会话可能含有岛体画面。
             self.clear_backdrop();
         }

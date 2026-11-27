@@ -316,7 +316,6 @@ impl App {
         let nc=c.clipped(0.0,0.0,panel.width(),panel.height());
         #[cfg(windows)]
         if let AlertSource::Plugin { source, id } = &a.source {
-            self.draw_plugin_notice_banner(&nc, a, source, id, _cmds);
             return;
         }
         if a.source!=AlertSource::Internal {
@@ -986,7 +985,6 @@ fn settings_state_chip(ui:&mut egui::Ui,on:bool){
 pub(crate) fn settings_apply_style(ui:&mut egui::Ui){
     let ctx=&ui.ctx().clone();
     // 分割线：浅色模式用很淡的灰，深色模式略亮于卡片，不再是系统默认的粗灰线。
-    ui.visuals_mut().widgets.noninteractive.bg_stroke=egui::Stroke::new(1.0,settings_color(ctx,Color32::from_rgb(52,52,57),Color32::from_rgb(233,235,240)));
     ui.spacing_mut().item_spacing.y=ui.spacing().item_spacing.y.max(5.0);
     ui.spacing_mut().item_spacing=egui::vec2(8.0,5.0);
     ui.spacing_mut().button_padding=egui::vec2(10.0,6.0);
@@ -1504,7 +1502,7 @@ impl App {
                         let on=self.module_on(crate::app::TODO_PAGE);
                                         let quota_on=false;
                         if let Some(route)=self.plugins.manage(ui,on,calendar_on,quota_on,
-                            #[cfg(all(windows,feature="sdk-material"))] self.material_active_id.as_deref().filter(|_| self.material_capture_forced),
+                            #[cfg(all(windows,feature="material"))] self.material_active_id.as_deref().filter(|_| self.material_capture_forced),
                         ){self.apply_settings_navigation(route);}
                     }
                     12=>{
@@ -1583,7 +1581,7 @@ impl App {
                         });
                         settings_label(ui,"功能页面");
                         settings_card(ui,|ui|{
-                            #[cfg(feature = "sdk-js")]
+                            #[cfg(feature = "material")]
                             if self.plugins.page_shortcut_settings(ui,&mut self.settings.show_page_shortcuts) {
                                 ui.separator();
                             }
@@ -1723,9 +1721,9 @@ impl App {
                             let supported = crate::native::Window::capture_exclusion_supported();
                             #[cfg(not(windows))]
                             let supported = false;
-                            #[cfg(all(windows,feature="sdk-material"))]
+                            #[cfg(all(windows,feature="material"))]
                             let material_forced = self.material_capture_forced;
-                            #[cfg(not(all(windows,feature="sdk-material")))]
+                            #[cfg(not(all(windows,feature="material")))]
                             let material_forced = false;
                             let mut enabled = self.settings.exclude_from_capture || material_forced;
                             ui.add_enabled_ui(supported && !material_forced, |ui| {
@@ -1781,7 +1779,7 @@ impl App {
                                 setting_row(ui,"背景模糊","需开启系统“透明效果”；关闭后改为烟熏半透明",&mut blur);
                                 self.settings.glass_blur=blur;
                             }
-                            #[cfg(all(windows,feature="sdk-js",feature="sdk-material"))]
+                            #[cfg(all(windows,feature="sdk-js",feature="material"))]
                             {
                                 let active=self.material_active_id.as_deref().filter(|_| self.material_capture_forced);
                                 if self.plugins.material_settings(ui,active,self.settings.render_compat) {
@@ -2049,8 +2047,6 @@ impl App {
                             });
                             if close || modal.should_close() {ctx.data_mut(|d|d.remove::<bool>(connect_id));}
                         }
-                        #[cfg(windows)]
-                        self.plugin_notice_settings(ui);
                     }
                     _=>{
                         settings_label(ui,"灵栖 Lingqi");
