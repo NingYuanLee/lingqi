@@ -1419,7 +1419,6 @@ impl App {
         let body = egui::Rect::from_center_size(rect.center(), egui::vec2(body_w * scale, 30. * scale));
         ui.painter().rect_filled(body, 15. * scale, Color32::BLACK);
         if style == BarStyle::Custom && self.settings.performance_metrics == 0 {
-            ui.painter().circle_stroke(body.center(), 5., egui::Stroke::new(1.4, FAINT));
             return;
         }
         let mut card = Card::new(ui, Pos2::new(body.left(), body.top()), body);

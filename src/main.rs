@@ -4,7 +4,6 @@
 use eframe::egui::{self, Color32, Pos2};
 use lingqi::app::{self, App, Cmd, Env, Options};
 #[cfg(windows)]
-use lingqi::messenger::{self,OpenError,TaskbarEvent};
 use lingqi::poll_clock::PollClock;
 use std::time::{Duration, Instant};
 
@@ -52,24 +51,6 @@ struct Shell {
     input_state:lingqi::input::Monitor,
     #[cfg(windows)]
     input_keys:Option<lingqi::input::Shortcuts>,
-    #[cfg(windows)]
-    incoming: Option<lingqi::system::Notifications>,
-    #[cfg(windows)]
-    messengers:messenger::Runtime,
-    #[cfg(windows)]
-    unread_at:PollClock,
-    #[cfg(windows)]
-    opening_messenger:Option<(app::Unread,Instant)>,
-    /// 后台线程正在唤起消息客户端。
-    #[cfg(windows)]
-    tray_opening:Option<(app::Unread,std::sync::mpsc::Receiver<Result<messenger::Target,OpenError>>)>,
-    #[cfg(windows)]
-    hidden: bool,
-    /// 毛玻璃皮肤的背景亮度采样（仅毛玻璃皮肤运行）。
-    #[cfg(windows)]
-    backdrop: Option<lingqi::backdrop::Sampler>,
-    #[cfg(windows)]
-    native: Option<lingqi::native::Window>,
     #[cfg(all(windows, feature = "sdk-material"))]
     material: Option<lingqi::material::Runtime>,
     #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
@@ -84,14 +65,13 @@ struct Shell {
     tray: Option<lingqi::tray::Tray>,
     #[cfg(windows)]
     autostart: bool,
-    /// v0.5.4：蓝牙音频设备（后台线程推送）与音量回声的静默窗口。
     #[cfg(windows)]
-    bt_rx: Option<lingqi::bt::Service>,
-    bt: Vec<lingqi::bt::Device>,
-    bt_ready: bool,
+    hidden: bool,
+    /// 毛玻璃皮肤的背景亮度采样（仅毛玻璃皮肤运行）。
     #[cfg(windows)]
-    receiver_rx: Option<lingqi::bt::Service>,
-    receivers: Vec<lingqi::bt::Device>,
+    backdrop: Option<lingqi::backdrop::Sampler>,
+    #[cfg(windows)]
+    native: Option<lingqi::native::Window>,
     volume_quiet: PollClock,
     /// 置物架模块开启且记录剪贴板时才监听系统剪贴板。
     clipboard_watch: Option<lingqi::clipboard::Watcher>,
@@ -108,29 +88,7 @@ impl Shell {
         }
     }
 
-    #[cfg(windows)]
-    fn confirm_messenger_open(&mut self,unread:app::Unread)->bool{
-        if app::Messenger::OFFICE.contains(&unread.source)
-            && unsafe{windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow().0 as isize}!=unread.window{return false;}
-        let foreground=self.messengers.foreground(&[unread.source]);
-        if !self.app.confirm_messenger_open(unread,foreground){return false;}
-        messenger::windows::trace(format!("唤起 {} 账号 {}：已在前台",unread.source.name(),unread.pid));
-        self.messengers.viewed_client(unread.source,unread.pid);
-        true
-    }
 
-    #[cfg(windows)]
-    fn clear_exited_messengers(&mut self,ctx:&egui::Context){
-        for unread in self.messengers.exited(&self.app.pending_messengers){
-            messenger::windows::trace(format!("清除已退出的{}提醒 账号 {}",unread.source.name(),unread.pid));
-            if self.tray_opening.as_ref().is_some_and(|(target,_)|*target==unread) || self.opening_messenger.is_some_and(|(target,_)|target==unread){
-                self.app.messenger_unavailable(format!("{} 账号已退出",unread.source.name()));
-            }
-            self.app.discard_unread(unread);
-            ctx.request_repaint();
-        }
-        self.unread_at=PollClock::now();
-    }
 
     #[cfg(windows)]
     fn sync_capture_exclusion(app: &mut App, window: Option<&mut lingqi::native::Window>) -> bool {
@@ -256,7 +214,6 @@ impl Shell {
         #[cfg(windows)]
         app.start_plugin_notices(&cc.egui_ctx);
         #[cfg(windows)]
-        let incoming=if app.settings.read_notifications {match lingqi::system::connect_with_settings(cc.egui_ctx.clone(),&app.settings){Ok(rx)=>Some(rx),Err(e)=>{app.listener_status=format!("Windows 无法读取通知：{}",e.code());None}}}else{None};
         // 音频、网络与输入法查询由后台完成，避免首帧等待系统服务。
         diagnostics::startup("创建后台采样与窗口");
         let initial_input=None;
@@ -347,11 +304,6 @@ impl Shell {
             fullscreen:None,
             input_state:lingqi::input::Monitor::new(initial_input),
             #[cfg(windows)] input_keys:lingqi::input::Shortcuts::start(),
-            #[cfg(windows)] incoming,
-            #[cfg(windows)] messengers:Default::default(),
-            #[cfg(windows)] unread_at:PollClock::default(),
-            #[cfg(windows)] opening_messenger:None,
-            #[cfg(windows)] tray_opening:None,
             #[cfg(windows)] hidden:false,
             #[cfg(windows)] backdrop:None,
             #[cfg(windows)]
@@ -371,12 +323,6 @@ impl Shell {
             #[cfg(windows)]
             autostart,
             #[cfg(windows)]
-            bt_rx: None,
-            bt: Vec::new(),
-            bt_ready: false,
-            #[cfg(windows)]
-            receiver_rx: None,
-            receivers: Vec::new(),
             volume_quiet: PollClock::default(),
             clipboard_watch: None,
             }
@@ -497,9 +443,6 @@ impl Shell {
                 #[cfg(not(windows))] {None}
             },
                 volume: self.system_state.volume,
-            bt: self.bt.clone(),
-            bt_ready: self.bt_ready,
-            receivers: self.receivers.clone(),
             screen,
             backdrop,
             glass_blur,
@@ -668,109 +611,7 @@ impl eframe::App for Shell {
                 self.backdrop=None;
             }
             mark!("系统状态与取样");
-            let wireless_on=self.app.module_on(app::BLUETOOTH_PAGE);
-            if self.app.settings.bluetooth_notifications || wireless_on {
-                if self.bt_rx.is_none() {self.bt_rx=Some(lingqi::bt::spawn());}
-            } else {
-                self.bt_rx=None;
-                self.bt.clear();
-                self.bt_ready=false;
-            }
-            if let Some(service)=&self.bt_rx {
-                while let Ok(found)=service.rx.try_recv(){ self.bt=found; self.bt_ready=true; }
-            }
-            if wireless_on {
-                let service=self.receiver_rx.get_or_insert_with(||{
-                    let ctx=ctx.clone();
-                    lingqi::bt::spawn_receivers(self.app.wireless_compat_store(),move||ctx.request_repaint())
-                });
-                while let Ok(found)=service.rx.try_recv(){self.receivers=found;}
-            } else {
-                self.receiver_rx=None;
-                self.receivers.clear();
-            }
-            mark!("蓝牙与无线");
-            let previous_pending=self.app.pending_messengers.clone();
-            for event in self.messengers.poll_taskbar(ctx,&self.app.settings){match event{
-                TaskbarEvent::Status(client,status)=>self.app.set_messenger_status(client,status),
-                TaskbarEvent::Message(unread,target)=>{
-                    if let Some(unread)=self.messengers.register_taskbar(unread,target){self.app.receive_messenger_reminder(unread);}
-                }
-            }}
-            if let Some(rx)=&self.incoming {
-                rx.taskbar_settings(&self.app.settings);
-                while let Ok(event)=rx.try_recv(){match event {
-                    lingqi::system::Incoming::Revoked=>{self.app.settings.read_notifications=false;self.app.settings.save();},
-                    lingqi::system::Incoming::Status(s)=>self.app.listener_status=s,
-                    lingqi::system::Incoming::Message(a,id,b,target)=>{
-                        if target.is_some_and(|target|self.messengers.track(target)==Err(OpenError::Exited)){continue;}
-                        self.app.receive_notification_from(a,id,b,target.map(|target|target.unread));
-                    }
-                }}
-            }
-            let unread_changed=self.app.pending_messengers!=previous_pending;
-            let unread_poll_due=self.unread_at.ready(Duration::from_secs(1));
-            if unread_changed || unread_poll_due{
-                self.clear_exited_messengers(ctx);
-            }
-            if !self.app.pending_messengers.is_empty(){ctx.request_repaint_after(Duration::from_secs(1));}
-            let sources=messenger_foreground_sources(&self.app.pending_messengers,
-                foreground_changed || self.app.pending_messengers!=previous_pending,unread_poll_due);
-            if !sources.is_empty(){
-                match self.messengers.foreground(&sources){
-                    Some((source,pid))=>{
-                        if self.app.pending_messengers.iter().any(|u|u.viewed_by(source,pid)){
-                            messenger::windows::trace(format!("岛上清除 {} 账号 {pid}（前台切换={foreground_changed}）",source.name()));
-                            self.messengers.viewed_client(source,pid);
-                            self.app.viewed_client(source,pid);
-                        }
-                    }
-                    None=>if foreground_changed{messenger::windows::trace(format!("前台切换但不是消息客户端主窗口：{}；岛上未读 {:?}",messenger::windows::describe_foreground(),self.app.pending_messengers.iter().map(|u|(u.source.name(),u.pid)).collect::<Vec<_>>()));},
-                }
-            }
-            if self.tray_opening.as_ref().is_some_and(|(unread,_)|!self.app.pending_messengers.contains(unread)){
-                self.tray_opening=None;
-            }
-            if let Some((unread,rx))=&self.tray_opening {
-                let unread=*unread;
-                match rx.try_recv(){
-                    Ok(Ok(opened))=>{
-                        self.tray_opening=None;
-                        if opened.unread!=unread && self.messengers.replace_opened(unread,opened).is_err(){
-                            self.app.reveal_messenger_notice(unread);
-                            self.app.messenger_unavailable(OpenError::Unavailable.message(unread.source));
-                        }else{
-                            if opened.unread!=unread{self.app.receive_messenger_reminder(opened.unread);}
-                            if !self.confirm_messenger_open(opened.unread){
-                                self.opening_messenger=Some((opened.unread,Instant::now()));
-                                ctx.request_repaint_after(Duration::from_secs(4));
-                            }
-                        }
-                    }
-                    Ok(Err(error))=>{
-                        self.tray_opening=None;
-                        if error==OpenError::Exited{self.app.discard_unread(unread);}
-                        else if unread.source.adapter().dismiss_unread{self.app.reveal_messenger_notice(unread);}
-                        self.app.messenger_unavailable(error.message(unread.source));
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected)=>{
-                        messenger::windows::trace(format!("唤起 {} 账号 {}：唤起线程异常结束，未返回结果",unread.source.name(),unread.pid));
-                        self.tray_opening=None;self.app.messenger_unavailable(format!("{} 暂时无法响应，请重试",unread.source.name()));
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty)=>{}
-                }
-            }
-            if let Some((unread,started))=self.opening_messenger {
-                if !self.app.pending_messengers.contains(&unread){self.opening_messenger=None;}
-                else if started.elapsed()>=Duration::from_secs(4){
-                    self.opening_messenger=None;
-                    if !self.confirm_messenger_open(unread){
-                        messenger::windows::trace(format!("唤起 {} 账号 {}：等待原窗口到前台超时（前台是 {}）",unread.source.name(),unread.pid,messenger::windows::describe_foreground()));
-                        self.app.messenger_unavailable(format!("{}尚未切到前台，可点图标重试",unread.source.name()));
-                    }
-                }
-            }
-        }
+    }
         if let Some((message,rx))=&self.seek_rx {
             if let Some(success)=match rx.try_recv(){Ok(success)=>Some(success),Err(std::sync::mpsc::TryRecvError::Disconnected)=>Some(false),Err(_)=>None}{
                 let message=*message;
@@ -950,31 +791,6 @@ Some(wait)=>ctx.request_repaint_after(wait),
                 Cmd::OpenPluginNotice{source,id,session}=>{
                     self.app.request_plugin_notice_open(&source,&id,&session);
                 }
-                Cmd::ViewMessenger(unread)=>{
-                    #[cfg(windows)] {
-                        let was_pending=self.app.pending_messengers.contains(&unread);
-                        self.clear_exited_messengers(ctx);
-                        if !self.app.pending_messengers.contains(&unread){
-                            if was_pending{
-                                messenger::windows::trace(format!("唤起 {} 账号 {}：未开始，账号进程已退出",unread.source.name(),unread.pid));
-                                self.app.messenger_unavailable(OpenError::Exited.message(unread.source));
-                            }
-                            continue;
-                        }
-                        if self.tray_opening.is_some(){
-                            messenger::windows::trace(format!("唤起 {} 账号 {}：未开始，上一次唤起还没结束",unread.source.name(),unread.pid));
-                            self.app.messenger_unavailable(OpenError::Busy.message(unread.source));ctx.request_repaint();continue;
-                        }
-                        match self.messengers.request(unread,&self.app.settings).start(ctx.clone()){
-                            Ok(rx)=>self.tray_opening=Some((unread,rx)),
-                            Err(error)=>{
-                                messenger::windows::trace(format!("唤起 {} 账号 {}：未开始 {error:?}",unread.source.name(),unread.pid));
-                                if error==OpenError::Unidentified{self.app.reveal_messenger_notice(unread);}
-                                self.app.messenger_unavailable(error.message(unread.source));ctx.request_repaint();
-                            }
-                        }
-                    }
-                }
                 Cmd::RestartApp=>{
                     // 先拉起新进程（它会等本进程退出），再像托盘「退出」一样摘图标后结束。
                     if diagnostics::spawn_replacement(){
@@ -994,7 +810,6 @@ Some(wait)=>ctx.request_repaint_after(wait),
                     #[cfg(windows)] if let Err(e)=lingqi::system::drag_file(&p){self.app.say(format!("无法拖出文件：{}",e.code()));}
                     ctx.input_mut(|i| i.pointer=Default::default());
                 },
-                Cmd::DisconnectNotifications=>{#[cfg(windows)]{self.incoming=None;self.app.settings.read_notifications=false;self.app.settings.save();self.app.listener_status="已断开，不再读取 Windows 通知".into();}},
                 Cmd::Reveal(p)=>{let _=lingqi::child_process::spawn(std::process::Command::new("explorer.exe").arg(format!("/select,{}",p.display())));},
                 Cmd::ToggleAutostart=>{
                     #[cfg(windows)] {let want=!self.autostart;match lingqi::tray::set_autostart(want){Ok(())=>self.autostart=want,Err(e)=>self.app.say(e)}}
@@ -1013,9 +828,6 @@ Some(wait)=>ctx.request_repaint_after(wait),
                         if sound==app::NotificationSound::Health {lingqi::tray::play_health_sound();}
                         if let Some(tray)=&self.tray {tray.notify(&title,&body,sound==app::NotificationSound::System);}
                     }
-                },
-                cmd @ (Cmd::RequestNotifications|Cmd::RequestQqNotifications)=>{
-                    #[cfg(windows)] {self.app.settings.qq_only=matches!(cmd,Cmd::RequestQqNotifications);self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match lingqi::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
                 },
                 // 模块关闭时设置项已置灰；万一仍有命令到达，只提示，不为它临时启动服务。
                 Cmd::Focus => ctx.send_viewport_cmd(egui::ViewportCommand::Focus),
@@ -1076,36 +888,7 @@ Some(wait)=>ctx.request_repaint_after(wait),
     }
 }
 
-#[cfg(windows)]
-fn messenger_foreground_sources(pending:&[app::Unread],changed:bool,poll_due:bool)->Vec<app::Messenger>{
-    let mut sources=Vec::new();
-    if changed || poll_due{
-        for unread in pending{
-            // 办公窗口的前台事件可能早于最小化状态的恢复，同一窗口恢复后无需再次换前台。
-            if !changed && (unread.pid==0 || !app::Messenger::OFFICE.contains(&unread.source)){continue;}
-            if !sources.contains(&unread.source){sources.push(unread.source);}
-        }
-    }
-    sources
-}
 
-#[cfg(all(test,windows))]
-mod messenger_foreground_tests {
-    use super::*;
-    use app::{Messenger,Unread};
-
-    #[test]
-    fn a_restored_office_window_gets_rechecked_without_another_foreground_event(){
-        let pending=[
-            Unread{source:Messenger::Feishu,pid:21,window:42},
-            Unread::of(Messenger::DingTalk),
-            Unread{source:Messenger::Wechat,pid:22,window:43},
-        ];
-        assert_eq!(messenger_foreground_sources(&pending,true,false),[Messenger::Feishu,Messenger::DingTalk,Messenger::Wechat]);
-        assert!(messenger_foreground_sources(&pending,false,false).is_empty());
-        assert_eq!(messenger_foreground_sources(&pending,false,true),[Messenger::Feishu]);
-    }
-}
 
 
 // ---------------- 系统信息 ----------------
@@ -1382,4 +1165,4 @@ fn run() -> eframe::Result<()> {
         }
         result
     })
-}
+}

@@ -30,11 +30,8 @@ pub mod sprite;
 pub mod worldclock;
 pub mod oled_shift;
 pub mod app;
-pub mod messenger;
 pub mod child_process;
 mod settings_window;
-pub mod bt;
-mod bluetooth_ui;
 pub mod glass;
 pub mod skin_paint;
 pub mod icons;
@@ -96,7 +93,6 @@ mod window_bounds;
 #[cfg(windows)]
 mod crop_front_buffer;
 #[cfg(windows)]
-pub mod wechat;
 #[cfg(windows)]
 pub mod tray;
 

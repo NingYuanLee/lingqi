@@ -104,9 +104,7 @@ impl App {
                     page: usize::MAX,
                     at: self.t,
                     duration: 4.5,
-                    bluetooth: None,
                     
-                    unread: None,
                 };
                 let source = &completion.source;
                 let oldest_from_source = self.plugin_notice_ui.unread.iter().enumerate()
@@ -146,8 +144,7 @@ impl App {
                         }
                     }
                 } else {
-                    let generic = status || self.plugin_notice_ui.find(&source, &id).is_some_and(|notice| notice.title.is_some());
-                    self.messenger_unavailable(if generic { "暂时无法执行操作" } else { "暂时无法打开会话" });
+                    let _generic = status || self.plugin_notice_ui.find(&source, &id).is_some_and(|notice| notice.title.is_some());
                 }
             }
         }
@@ -207,7 +204,6 @@ impl App {
                 self.mark_plugin_notice_read(source, id);
             }
             self.plugin_notice_ui.detail = Some(notice);
-            self.reveal_unread();
         }
     }
 
@@ -299,7 +295,6 @@ impl App {
             }
         }
         if expand {
-            self.reveal_unread();
         } else if let Some((source, id, status)) = clicked {
             if status {
                 self.show_plugin_notice_detail(&source, &id);

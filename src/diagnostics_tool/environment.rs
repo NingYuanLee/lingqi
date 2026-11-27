@@ -26,9 +26,39 @@ use windows_sys::Win32::System::{
     ProcessStatus::{K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS_EX},
 };
 
-use crate::messenger::windows::{company_name, registry_string};
 use crate::exe_info;
+use windows::Win32::System::Registry::{HKEY, RegGetValueW, RRF_RT_REG_SZ};
 
+/// 读注册表里的字符串值（安装路径之类）。
+pub(crate) fn registry_string(root:HKEY,key:PCWSTR,name:PCWSTR)->Option<String>{
+    let mut data=[0u16;2048];let mut size=(data.len()*2) as u32;
+    unsafe {RegGetValueW(root,key,name,RRF_RT_REG_SZ,None,Some(data.as_mut_ptr().cast()),Some(&mut size))}.ok().ok()?;
+    let length=data.iter().position(|c|*c==0).unwrap_or(data.len());
+    Some(String::from_utf16_lossy(&data[..length]))
+}
+
+/// 可执行文件的厂商名（从版本信息里取）。
+pub(crate) fn company_name(path:&str)->String{
+    use windows::Win32::Storage::FileSystem::{GetFileVersionInfoSizeW,GetFileVersionInfoW,VerQueryValueW};
+    static CACHE:std::sync::Mutex<Option<std::collections::HashMap<String,String>>>=std::sync::Mutex::new(None);
+    if let Some(name)=CACHE.lock().ok().and_then(|c|c.as_ref().and_then(|c|c.get(path).cloned())){return name;}
+    let name=unsafe{(||->Option<String>{
+        let wide:Vec<u16>=path.encode_utf16().chain(Some(0)).collect();
+        let size=GetFileVersionInfoSizeW(PCWSTR(wide.as_ptr()),None);
+        if size==0 {return None;}
+        let mut data=vec![0u8;size as usize];
+        GetFileVersionInfoW(PCWSTR(wide.as_ptr()),0,size,data.as_mut_ptr().cast()).ok()?;
+        let mut pointer=std::ptr::null_mut();let mut length=0u32;
+        if !VerQueryValueW(data.as_ptr().cast(),w!("\\VarFileInfo\\Translation"),&mut pointer,&mut length).as_bool() || length<4 {return None;}
+        let translation=*(pointer as *const [u16;2]);
+        let key:Vec<u16>=format!("\\StringFileInfo\\{:04x}{:04x}\\CompanyName",translation[0],translation[1]).encode_utf16().chain(Some(0)).collect();
+        if !VerQueryValueW(data.as_ptr().cast(),PCWSTR(key.as_ptr()),&mut pointer,&mut length).as_bool() || length==0 {return None;}
+        let text=std::slice::from_raw_parts(pointer as *const u16,length as usize);
+        Some(String::from_utf16_lossy(text).trim_end_matches('\0').to_string())
+    })()}.unwrap_or_default();
+    if let Ok(mut cache)=CACHE.lock(){cache.get_or_insert_with(Default::default).insert(path.to_string(),name.clone());}
+    name
+}
 const MESSENGERS: &[&str] = &["weixin", "wechat", "wxwork", "feishu", "dingtalk", "qq"];
 const PLAYERS: &[&str] = &["cloudmusic", "qqmusic", "kugou", "sodamusic", "kwmusic", "bodian_pc", "spotify", "applemusic"];
 

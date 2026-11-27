@@ -24,7 +24,7 @@ pub const SIDE_HALF_EXTENT: f32 = 150.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum SideItem {
-    Clock, Date(f32), Weather, Battery, Focus, Bell, Wireless, Performance(f32),
+    Clock, Date(f32), Weather, Battery, Focus, Bell, Performance(f32), Health,
     #[cfg(feature="sdk-js")]
     Pinned(usize),
 }
@@ -34,7 +34,7 @@ impl SideItem {
         match self {
             #[cfg(feature="sdk-js")]
             Self::Pinned(_) => PINNED_HEIGHT,
-            Self::Performance(h) | Self::Date(h) => h, Self::Clock => if clock_seconds {46.0}else{32.0}, Self::Weather => 40.0, Self::Wireless=>37.0, Self::Battery => 20.0, Self::Focus => 22.0, Self::Bell => 22.0 }
+            Self::Performance(h) | Self::Date(h) => h, Self::Clock => if clock_seconds {46.0}else{32.0}, Self::Weather => 40.0, Self::Battery => 20.0, Self::Focus => 22.0, Self::Bell => 22.0, Self::Health => 22.0 }
     }
 }
 
@@ -52,11 +52,11 @@ impl App {
             ResidentDate::LunarOnly | ResidentDate::Lunar=>items.push(SideItem::Date(44.0)),
         }
         if self.weather_pill().is_some() {items.push(SideItem::Weather);}
-        if !self.wireless_resident().is_empty(){items.push(SideItem::Wireless);}
         if self.settings.show_battery && self.resident_power.0.is_some() { items.push(SideItem::Battery); }
         if self.performance_on_bar() {items.push(SideItem::Performance(self.settings.performance_bar.side_height(self.settings.performance_metrics)));}
         if self.pomo.running { items.push(SideItem::Focus); }
         if self.notification_bell().is_some() { items.push(SideItem::Bell); }
+        if !self.health_badges().is_empty() { items.push(SideItem::Health); }
         #[cfg(feature="sdk-js")]
         items.extend((0..self.pinned_displays.len()).map(SideItem::Pinned));
         items
@@ -150,7 +150,6 @@ impl App {
                 }
                 SideItem::Date(_) => if let Some(day)=resident_day {day.draw_side(c,cx,mid);},
                 SideItem::Weather => self.draw_side_weather(c,cx,mid),
-                SideItem::Wireless=>self.draw_wireless_side(c,cx,mid),
                 SideItem::Battery => paint::battery(c, cx, mid, env.battery, env.charging, 0.72),
                 SideItem::Focus => {
                     let minutes = (self.pomo.remaining / 60.0).ceil().max(0.0) as u32;
@@ -159,6 +158,15 @@ impl App {
                     c.text(cx, mid + 9.0, &format!("{minutes}′"), size::TINY, W::Semibold, theme::WHITE, H::Center);
                 }
                 SideItem::Performance(h) => self.side_performance(c,cx,mid,h),
+                SideItem::Health => {
+                    for (i,kind) in self.health_badges().iter().enumerate(){
+                        let x=cx+(i as f32-0.5)*16.0;
+                        kind.icon(c,x,mid-1.0,0.7);
+                        c.circle(x+7.0,mid-8.0,2.4,Color32::from_rgb(255,59,48));
+                        let button=c.hit(x-8.0,mid-11.0,16.0,22.0,kind.id().to_string());
+                        if crate::paint::bar_tooltip(button,format!("{} · 点击确认，重新计时",kind.label())).clicked(){self.confirm_health_reminder(*kind);}
+                    }
+                }
                 #[cfg(feature="sdk-js")]
                 SideItem::Pinned(index) => if let Some(display) = self.pinned_displays.get(index) {
                     if display.draw(c, cx, mid, display.width(width), true, self.pinned_canvas_theme()) {

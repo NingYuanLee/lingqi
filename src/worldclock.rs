@@ -27,7 +27,6 @@ pub fn valid(zone: &str) -> bool {
 
 /// 本地时区相对 UTC 的秒数（夏令时自动生效）。
 pub fn local_offset_seconds() -> i32 {
-    use chrono::Offset as _;
     chrono::Local::now().offset().local_minus_utc()
 }
 

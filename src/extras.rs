@@ -8,8 +8,6 @@ use eframe::egui::{self, Color32, Rect};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum AlertSource {
     Internal,
-    Messenger(crate::app::Messenger),
-    External(String),
     #[cfg(windows)]
     Plugin { source: String, id: String },
 }
@@ -44,20 +42,11 @@ pub(crate) struct Alert {
     pub page: usize,
     pub at: f64,
     pub duration: f64,
-    pub bluetooth: Option<(crate::bt::DeviceKind, bool)>,
-    pub unread: Option<crate::app::Unread>,
 }
 impl Alert {
     pub(crate) fn health(&self)->Option<HealthReminder> {
         if self.source!=AlertSource::Internal{return None;}
         HealthReminder::ALL.into_iter().find(|kind|self.title==kind.title())
-    }
-    pub(crate) fn messenger(&self)->Option<crate::app::Messenger>{
-        match &self.source {
-            AlertSource::Messenger(client)=>Some(*client),
-            AlertSource::External(id)=>crate::app::Messenger::from_notification_id(id).filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast),
-            _=>None,
-        }
     }
     pub(crate) fn is_hud(&self)->bool {self.source==AlertSource::Internal && matches!(self.title.as_str(),"系统音量"|"大写锁定"|"键盘输入语言"|"网络连接"|"电源已连接"|"已切换电池供电"|"蓝牙设备")}
 }
@@ -73,81 +62,13 @@ fn reminder_module(title:&str)->Option<usize> {
     }
 }
 
-fn bluetooth_notice_content(body:&str)->(&str,&str,Option<u8>){
-    if let Some(name)=body.strip_suffix(" · 已断开") {return (name,"已断开",None);}
-    if body=="已断开连接" {return ("蓝牙设备","已断开",None);}
-    if let Some((name,level))=body.rsplit_once(" · 电量 ") {
-        if let Some(level)=level.strip_suffix('%').and_then(|s|s.parse::<u8>().ok()).filter(|v|*v<=100){
-            return (name,"已连接",Some(level));
-        }
-    }
-    // 电量事件：「名称 · 开始充电 · 64%」。
-    if let Some((rest,level))=body.rsplit_once(" · ") {
-        if let (Some(level),Some((name,status)))=(level.strip_suffix('%').and_then(|s|s.parse::<u8>().ok()).filter(|v|*v<=100),rest.rsplit_once(" · ")) {
-            return (name,status,Some(level));
-        }
-    }
-    (body,"已连接",None)
-}
 
-/// 每种设备一个图标；入耳、骨传导、耳夹等各有外形，AirPods 系列按带杆样式单独画。
-pub(crate) fn device_icon_source(kind: crate::bt::DeviceKind) -> egui::ImageSource<'static> {
-    use crate::bt::DeviceKind::*;
-    match kind {
-        Headphones=>egui::include_image!("../assets/device-icons/headphones-round-bold.svg"),
-        Earbuds=>egui::include_image!("../assets/device-icons/earbuds.svg"),
-        EarbudsStem=>egui::include_image!("../assets/device-icons/earbuds-stem.svg"),
-        EarbudsStemTips=>egui::include_image!("../assets/device-icons/earbuds-stem-tips.svg"),
-        OpenEar=>egui::include_image!("../assets/device-icons/open-ear.svg"),
-        Bone=>egui::include_image!("../assets/device-icons/bone.svg"),
-        HearingAid=>egui::include_image!("../assets/device-icons/hearing-aid.svg"),
-        Speaker=>egui::include_image!("../assets/device-icons/speaker-bold.svg"),
-        Mic=>egui::include_image!("../assets/device-icons/mic.svg"),
-        Keyboard=>egui::include_image!("../assets/device-icons/keyboard-bold.svg"),
-        Mouse=>egui::include_image!("../assets/device-icons/mouse-bold.svg"),
-        Trackpad=>egui::include_image!("../assets/device-icons/trackpad.svg"),
-        Pen=>egui::include_image!("../assets/device-icons/pen.svg"),
-        Presenter=>egui::include_image!("../assets/device-icons/presenter.svg"),
-        Remote=>egui::include_image!("../assets/device-icons/remote.svg"),
-        Gamepad=>egui::include_image!("../assets/device-icons/gamepad-bold.svg"),
-        JoyCon=>egui::include_image!("../assets/device-icons/joycon.svg"),
-        Phone=>egui::include_image!("../assets/device-icons/smartphone-bold.svg"),
-        Tablet=>egui::include_image!("../assets/device-icons/tablet.svg"),
-        Watch=>egui::include_image!("../assets/device-icons/watch.svg"),
-        Band=>egui::include_image!("../assets/device-icons/band.svg"),
-        Health=>egui::include_image!("../assets/device-icons/health.svg"),
-        Receiver24G=>egui::include_image!("../assets/device-icons/usb-receiver.svg"),
-        Other=>egui::include_image!("../assets/device-icons/bluetooth-linear.svg"),
-    }
-}
-pub(crate) const ALL_DEVICE_KINDS:[crate::bt::DeviceKind;24]={
-    use crate::bt::DeviceKind::*;
-    [Headphones,Earbuds,EarbudsStem,EarbudsStemTips,OpenEar,Bone,HearingAid,Speaker,Mic,Keyboard,Mouse,Trackpad,Pen,Presenter,Remote,Gamepad,JoyCon,Phone,Tablet,Watch,Band,Health,Receiver24G,Other]
-};
-pub(crate) fn device_icon(c: &Card, kind: crate::bt::DeviceKind, x: f32, y: f32, size: f32) {
-    device_icon_tinted(c,kind,x,y,size,Color32::WHITE);
-}
-pub(crate) fn device_icon_tinted(c: &Card, kind: crate::bt::DeviceKind, x: f32, y: f32, size: f32, tint: Color32) {
-    let icon=device_icon_source(kind);
-    let rect=c.rect(x,y,size,size);
-    let egui::ImageSource::Bytes{uri,bytes}=icon else{return};
-    let pixels=(rect.width()*c.ui.ctx().pixels_per_point()).ceil() as u32;
-    let icon=egui::Image::from_bytes(format!("{uri}/{pixels}.svg"),bytes);
-    if let Ok(egui::load::TexturePoll::Ready { texture })=icon.fit_to_exact_size(rect.size()).load_for_size(c.ui.ctx(),rect.size()) {
-        crate::skin_paint::mark_monochrome(texture.id);
-        c.painter.image(texture.id,rect,Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),tint);
-    }
-}
 
 pub(crate) use crate::pet::PetState;
 
 pub(crate) fn notice_badge(c:&Card,x:f32,y:f32,a:&Alert){
-    if a.source==AlertSource::Internal && a.title=="蓝牙设备"{
-        c.circle(x,y,11.0,if a.body.contains("已断开"){Color32::from_gray(95)}else{theme::BLUE});
-        device_icon(c,a.bluetooth.map_or(crate::bt::DeviceKind::Other,|v|v.0),x-7.5,y-7.5,15.0);
-    }else{notice_icon(&c.scaled(x,y,0.85),x,y,a);}
+    notice_icon(&c.scaled(x,y,0.85),x,y,a);
 }
-pub(crate) fn messenger_icon(c:&Card,x:f32,y:f32,source:crate::app::Messenger){(source.adapter().paint_icon)(c,x,y);}
 fn notice_icon(c:&Card,x:f32,y:f32,a:&Alert) {
     if a.source!=AlertSource::Internal{crate::paint::bell(c,x,y,theme::WHITE,0.0);return;}
     match a.title.as_str() {
@@ -293,34 +214,9 @@ impl App {
             page,
             at: self.t,
             duration: if transient { 2.5 } else { 8.0 },
-            bluetooth: None,
             
-            unread: None,
         };
         self.enqueue_alert(a, system);
-    }
-    pub(crate) fn mail_code_alert(&mut self, body: String) {
-        self.enqueue_alert(Alert {
-            source: AlertSource::Internal, title: "新邮件".into(), body,
-            page: crate::app::MAIL_PAGE, at: self.t, duration: 8.0, bluetooth: None,  unread: None,
-        }, false);
-    }
-    pub(crate) fn bluetooth_alert(&mut self, device: &crate::bt::Device, connected: bool) {
-        if !self.settings.bluetooth_notifications { return; }
-        if connected && device.kind.is_audio() {
-            self.alerts.retain(|a|a.title!="系统音量");
-            if self.notice.as_ref().is_some_and(|a|a.title=="系统音量") {self.notice=None;}
-        }
-        let a = Alert {
-            source: AlertSource::Internal,
-            title: "蓝牙设备".into(),
-            body: if connected { device.summary() } else { format!("{} · 已断开", device.name) },
-            page: 5, at: self.t, duration: 2.5,
-            bluetooth: Some((device.kind, connected)),
-            
-            unread: None,
-        };
-        self.enqueue_alert(a, false);
     }
     pub(crate) fn enqueue_alert(&mut self, a: Alert, system: bool) {
         if a.source==AlertSource::Internal &&
@@ -356,9 +252,9 @@ impl App {
                     else { NotificationSound::System };
                 self.pending.push(Cmd::Notify(a.title.clone(), a.body.clone(), sound));
             }
-            let same_event=|old:&Alert| old.source==a.source && old.title==a.title && old.unread==a.unread && (a.is_hud() || old.body==a.body);
-            if a.source!=AlertSource::Internal || a.title != "蓝牙设备" { self.alerts.retain(|old| !same_event(old)); }
-            if (a.source!=AlertSource::Internal || a.title != "蓝牙设备") && self.notice.as_ref().is_some_and(same_event) {
+    let same_event=|old:&Alert| old.source==a.source && old.title==a.title && (a.is_hud()||old.body==a.body);
+    self.alerts.retain(|old| !same_event(old));
+    if self.notice.as_ref().is_some_and(same_event) {
                 self.notice = Some(a);
                 return;
             }
@@ -390,121 +286,17 @@ impl App {
         if self.hud_notice.as_ref().is_some_and(matches){self.hud_notice=None;}
         self.pending.retain(|cmd|!matches!(cmd,Cmd::Notify(title,body,_) if belongs(title,body)));
     }
-    /// 该来源的所有账号都已查看。
-    pub fn viewed_messenger(&mut self,source:crate::app::Messenger){
-        self.pending_messengers.retain(|u|u.source!=source);
-        self.clear_messenger_notices(source);
-    }
-    /// 只清已查看的账号；无法确认账号的 QQ 提醒由用户明确关闭。
-    pub fn viewed_client(&mut self,source:crate::app::Messenger,pid:u32){
-        self.pending_messengers.retain(|u|!u.viewed_by(source,pid));
-        if pid!=0{self.clear_account_notices(source,pid);}
-        if !source.adapter().keep_unidentified{self.clear_account_notices(source,0);}
-        if !self.pending_messengers.iter().any(|u|u.source==source){self.clear_messenger_notices(source);}
-    }
-    pub fn confirm_messenger_open(&mut self,unread:crate::app::Unread,foreground:Option<(crate::app::Messenger,u32)>)->bool{
-        if unread.pid==0 || foreground!=Some((unread.source,unread.pid)){return false;}
-        self.viewed_client(unread.source,unread.pid);
-        true
-    }
-    pub fn discard_unread(&mut self,unread:crate::app::Unread){
-        if !self.pending_messengers.contains(&unread){return;}
-        self.pending_messengers.retain(|current|*current!=unread);
-        self.clear_account_notices(unread.source,unread.pid);
-        if !self.pending_messengers.iter().any(|current|current.source==unread.source){self.clear_messenger_notices(unread.source);}
-    }
-    fn clear_account_notices(&mut self,source:crate::app::Messenger,pid:u32){
-        let matches=|notice:&Alert|notice.unread.is_some_and(|u|u.source==source && u.pid==pid);
-        self.alerts.retain(|notice|!matches(notice));
-        if self.notice.as_ref().is_some_and(matches){self.notice=None;self.notification_bell_until=0.0;}
-    }
-    fn clear_messenger_notices(&mut self,source:crate::app::Messenger){
-        self.alerts.retain(|a|a.messenger()!=Some(source));
-        if self.notice.as_ref().is_some_and(|a|a.messenger()==Some(source)){self.notice=None;self.notification_bell_until=0.0;}
-    }
-    fn mark_messenger(&mut self,source:crate::app::Messenger,pid:u32,window:isize){
-        if let Some(index)=self.pending_messengers.iter().position(|u|u.source==source && u.pid==pid){
-            if window!=0 && self.pending_messengers[index].window!=window {
-                self.pending_messengers[index].window=window;
-                if source.adapter().capture==crate::messenger::Capture::Taskbar{
-                    let unread=self.pending_messengers[index];
-                    for alert in self.alerts.iter_mut().chain(self.notice.iter_mut()){
-                        if alert.unread.is_some_and(|old|old.source==source && old.pid==pid){alert.unread=Some(unread);}
-                    }
-                }else{self.clear_account_notices(source,pid);}
-            }
-            return;
-        }
-        self.pending_messengers.push(crate::app::Unread{source,pid,window});
-    }
-    /// 横幅「查看」：跳到该来源最近一条未读的窗口。
-    pub(crate) fn latest_unread(&self,source:crate::app::Messenger)->crate::app::Unread{
-        self.pending_messengers.iter().rev().find(|u|u.source==source).copied().unwrap_or(crate::app::Unread::of(source))
-    }
-    pub fn receive_wechat_reminder(&mut self){self.receive_wechat_reminder_from(0,0);}
-    /// 微信窗口闪动：`pid` 是该账号的进程，`window` 是闪动的窗口。
-    pub fn receive_wechat_reminder_from(&mut self,pid:u32,window:isize){
-        self.receive_messenger_reminder(crate::app::Unread{source:crate::app::Messenger::Wechat,pid,window});
-    }
-    pub fn receive_messenger_reminder(&mut self,unread:crate::app::Unread){
-        let client=unread.source;
-        if client.adapter().capture!=crate::messenger::Capture::Taskbar || !client.enabled(&self.settings){return;}
-        let pending=self.pending_messengers.iter().any(|old|old.source==client && old.pid==unread.pid);
-        self.mark_messenger(client,unread.pid,unread.window);
-        if pending{return;}
-        self.notification_bell_at=self.t;self.notification_bell_until=self.t+4.5;
-        self.enqueue_alert(Alert{source:AlertSource::Messenger(client),title:client.name().into(),body:format!("有新消息 · 请到{}查看",client.name()),page:usize::MAX,at:self.t,duration:4.5,bluetooth:None,unread:Some(unread)},false);
-    }
-    pub fn set_messenger_status(&mut self,client:crate::app::Messenger,status:String){self.messenger_statuses.insert(client,status);}
-    pub fn messenger_status(&self,client:crate::app::Messenger)->&str{self.messenger_statuses.get(&client).map(String::as_str).unwrap_or("")}
-    pub fn receive_notification(&mut self, app:String, id:String, body:String){
-        self.receive_notification_from(app,id,body,None);
-    }
-    pub fn receive_notification_from(&mut self,app:String,id:String,body:String,unread:Option<crate::app::Unread>){
-        if !self.settings.read_notifications || id.is_empty() || !crate::messenger::NotificationFilter::for_settings(&self.settings).allows(&id){return;}
-        if crate::messenger::suppresses_toast(&app,&id,crate::messenger::toast_suppression(&self.settings)){return;}
-        let client=crate::app::Messenger::from_notification_id(&id).filter(|client|client.adapter().capture==crate::messenger::Capture::SystemToast);
-        let id=client.map(|client|client.adapter().notification_id.to_string()).unwrap_or(id);
-        // 灵栖自己发出的系统提醒会被通知中心回传；已在历史里的同一内容不再入队，避免重复显示。
-        if crate::messenger::Messenger::from_notification_id(&id).is_none() && self.history.iter().any(|a|format!("{} · {}",a.title,a.body)==body){return;}
-        if !self.notification_apps.observe(&id,&app) || !self.settings.notifications{return;}
-        let unread=client.map(|client|unread.filter(|u|u.source==client && u.pid!=0).unwrap_or(crate::app::Unread::of(client)));
-        if let Some(unread)=unread{self.mark_messenger(unread.source,unread.pid,unread.window);}
-        self.notification_bell_at=self.t;
-        self.notification_bell_until=self.t+4.5;
-        let title=app.chars().filter(|c|!c.is_control()).take(80).collect();
-        let body=if self.settings.notification_preview {
-            crate::notify_privacy::sanitize(&body.chars().filter(|c|!c.is_control()).take(300).collect::<String>())
-        }else{"收到新通知 · 内容已隐藏".into()};
-        self.enqueue_alert(Alert{source:AlertSource::External(id),title,body,page:usize::MAX,at:self.t,duration:4.5,bluetooth:None,unread},false);
-    }
-    pub fn reveal_messenger_notice(&mut self,unread:crate::app::Unread){
-        if !unread.source.adapter().dismiss_unread || !self.pending_messengers.contains(&unread){return;}
-        let body=if unread.pid==0{"消息账号暂无法确认"}else{"暂时无法打开对应窗口"};
-        let source=if unread.source.adapter().capture==crate::messenger::Capture::Taskbar{AlertSource::Messenger(unread.source)}else{AlertSource::External(unread.source.adapter().notification_id.into())};
-        self.notice=Some(Alert{source,title:unread.source.name().into(),body:body.into(),page:usize::MAX,at:self.t,duration:4.5,bluetooth:None,unread:Some(unread)});
-        self.notification_bell_at=self.t;self.notification_bell_until=self.t+4.5;
-    }
     pub(crate) fn tick_alerts(&mut self) {
-        self.pending_messengers.retain(|u|u.source.enabled(&self.settings) && (u.source.adapter().capture!=crate::messenger::Capture::SystemToast
-            || self.notification_apps.items.iter().any(|(key,_,on)|key==u.source.adapter().notification_id && *on)));
         let allowed=|a:&Alert|match &a.source {
-            AlertSource::Internal=>!self.fullscreen_hidden || a.health().is_none(),
-            AlertSource::Messenger(client)=>client.enabled(&self.settings),
-            AlertSource::External(id)=>self.settings.read_notifications && crate::messenger::NotificationFilter::for_settings(&self.settings).allows(id) && self.settings.notifications && !crate::messenger::suppresses_toast(&a.title,id,crate::messenger::toast_suppression(&self.settings)) && self.notification_apps.items.iter().any(|(key,_,on)|key==id && *on),
-            #[cfg(windows)]
-            AlertSource::Plugin { .. } => self.settings.notifications,
+        AlertSource::Internal=>!self.fullscreen_hidden || a.health().is_none(),
+        #[cfg(windows)]
+        AlertSource::Plugin { .. } => self.settings.notifications,
         };
         self.alerts.retain(&allowed);
         if self.notice.as_ref().is_some_and(|a|!allowed(a)){self.notice=None;}
         if self.hud_notice.as_ref().is_some_and(|a|!allowed(a)){self.hud_notice=None;}
         if self.fullscreen_hidden {
             self.pending.retain(|cmd|!matches!(cmd,Cmd::Notify(title,..)if HealthReminder::ALL.into_iter().any(|kind|title==kind.title())));
-        }
-        if !self.settings.notification_preview {
-            for a in self.alerts.iter_mut().chain(self.notice.iter_mut()).chain(self.hud_notice.iter_mut()) {
-                if matches!(&a.source,AlertSource::External(_)){a.body="收到新通知 · 内容已隐藏".into();}
-            }
         }
         if self
             .notice
@@ -527,18 +319,6 @@ impl App {
             self.draw_plugin_notice_banner(&nc, a, source, id, _cmds);
             return;
         }
-        if let Some(source)=a.messenger(){
-            messenger_icon(&nc,22.0,22.0,source);
-            nc.circle(31.0,14.0,2.6,Color32::from_rgb(255,72,72));
-            nc.centered_text(44.0,14.0,&a.title,11.0,W::Semibold,theme::WHITE,H::Left);
-            nc.centered_text(44.0,30.0,&nc.fit(&a.body,10.5,W::Regular,154.0),10.5,W::Regular,theme::GRAY,H::Left);
-            if notice_button(&nc,206.0,12.0,52.0,"查看","messenger-view"){_cmds.push(Cmd::ViewMessenger(a.unread.unwrap_or_else(||self.latest_unread(source))));}
-            if notice_button(&nc,265.0,12.0,52.0,"关闭","messenger-dismiss"){
-                if source.adapter().dismiss_unread{if let Some(unread)=a.unread{self.discard_unread(unread);}}
-                self.notice=None;self.notification_bell_until=0.0;
-            }
-            return;
-        }
         if a.source!=AlertSource::Internal {
             crate::paint::bell(&nc,310.0,22.0,theme::GRAY,crate::paint::bell_swing(self.t-a.at));
             nc.circle(314.0,17.5,2.0,Color32::from_rgb(255,72,72));
@@ -551,28 +331,6 @@ impl App {
             return;
         }
         if a.is_hud(){
-            if a.title=="蓝牙设备" {
-                let (name,status,battery)=bluetooth_notice_content(&a.body);
-                let badge=if status=="已连接"{Color32::from_rgb(10,132,255)}else if let Some(level)=battery.filter(|_|status!="已断开"){crate::bluetooth_ui::level_color(level)}else{Color32::from_gray(95)};
-                nc.circle(26.0,24.0,14.0,badge);
-                let kind=a.bluetooth.map(|(kind,_)|kind).unwrap_or(crate::bt::DeviceKind::Other);
-                device_icon(&nc,kind,17.0,15.0,18.0);
-                let right=HUD_W-14.0;
-                let name_end=if let Some(level)=battery {
-                    let pct=format!("{level}%");
-                    let pct_width=nc.text_w(&pct,10.5,W::Semibold);
-                    let x=right-pct_width-22.0;
-                    nc.stroke(x,20.0,15.0,8.0,2.0,1.0,Color32::from_gray(175));
-                    nc.fill(x+15.5,22.5,2.0,3.0,0.8,Color32::from_gray(175));
-                    let fill=11.0*level as f32/100.0;
-                    if fill>0.0 {nc.fill(x+2.0,22.0,fill,4.0,1.0,crate::bluetooth_ui::level_color(level));}
-                    nc.centered_text(right,24.0,&pct,10.5,W::Semibold,theme::WHITE,H::Right);
-                    x-8.0
-                } else {right};
-                nc.centered_text(49.0,16.0,&nc.fit(name,11.0,W::Semibold,(name_end-49.0).max(20.0)),11.0,W::Semibold,theme::WHITE,H::Left);
-                nc.centered_text(49.0,32.0,status,10.5,W::Regular,theme::GRAY,H::Left);
-                return;
-            }
             match a.title.as_str(){
                 "系统音量"=>{
                     nc.poly(&[(17.0,16.0),(21.0,16.0),(26.0,12.0),(26.0,26.0),(21.0,22.0),(17.0,22.0)],theme::WHITE);
@@ -798,39 +556,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn bluetooth_notice_uses_real_connection_and_battery_data(){
-        assert_eq!(bluetooth_notice_content("OpenMove by Shokz · 电量 80%"),("OpenMove by Shokz","已连接",Some(80)));
-        assert_eq!(bluetooth_notice_content("耳机"),("耳机","已连接",None));
-        assert_eq!(bluetooth_notice_content("已断开连接"),("蓝牙设备","已断开",None));
-        assert_eq!(bluetooth_notice_content("青龙键盘 · 已断开"),("青龙键盘","已断开",None));
-        assert_eq!(bluetooth_notice_content("耳机 · 电量 101%"),("耳机 · 电量 101%","已连接",None));
-    }
-
-    #[test]
-    fn device_icons_render_as_visible_svg() {
-        for kind in ALL_DEVICE_KINDS {
-            let egui::ImageSource::Bytes{bytes,..}=device_icon_source(kind) else {panic!("{kind:?}")};
-            let image=egui_extras::image::load_svg_bytes(&bytes).unwrap();
-            assert!(image.pixels.iter().any(|p|p.a()>0),"{kind:?}");
-        }
-    }
-
-    /// 图标要在圆环里视觉居中：按 96px 渲染后，不透明部分的外框中心偏离不超过 0.25 个图标单位。
-    #[test]
-    fn device_icons_are_visually_centered() {
-        let mut off=vec![];
-        for kind in ALL_DEVICE_KINDS {
-            let egui::ImageSource::Bytes{uri,bytes}=device_icon_source(kind) else {panic!()};
-            let image=egui_extras::image::load_svg_bytes_with_size(&bytes,Some(egui::load::SizeHint::Size(96,96))).unwrap();
-            let [w,h]=image.size;let (mut x0,mut y0,mut x1,mut y1)=(w,h,0,0);
-            for y in 0..h {for x in 0..w {if image.pixels[y*w+x].a()>40 {x0=x0.min(x);y0=y0.min(y);x1=x1.max(x);y1=y1.max(y);}}}
-            let dx=(w as f32/2.0-(x0+x1+1) as f32/2.0)*24.0/w as f32;let dy=(h as f32/2.0-(y0+y1+1) as f32/2.0)*24.0/h as f32;
-            println!("ICON-OFFSET {uri} {dx:.2} {dy:.2}");
-            if dx.abs()>0.25||dy.abs()>0.25 {off.push(format!("{kind:?} 偏移 ({dx:.2},{dy:.2})"));}
-        }
-        assert!(off.is_empty(),"图标没有居中：{off:?}");
-    }
 
     #[test]
     fn due_time_checks_calendar_and_format() {
@@ -1122,7 +847,6 @@ impl App {
                     self.settings.sound=!(self.settings.system_notify && self.settings.sound);
                     if self.settings.sound {self.settings.system_notify=true;}
                 }
-                if setting_button(c,43.0,84.0,152.0,if self.settings.read_notifications{"断开系统通知"}else{"连接系统通知"},self.settings.read_notifications,"set-listener"){self.pending.push(if self.settings.read_notifications{Cmd::DisconnectNotifications}else{Cmd::RequestNotifications});}
                 let status=c.fit(&self.listener_status,10.5,W::Regular,170.0);c.text(210.0,97.0,&status,10.5,W::Regular,theme::GRAY,H::Left);
             }
         }
@@ -1242,7 +966,6 @@ pub(crate) fn settings_advanced(ui:&mut egui::Ui,id:&str,add:impl FnOnce(&mut eg
     // 右侧箭头：收起朝右，展开朝下。
     let c=egui::pos2(rect.right()-10.0,rect.center().y);
     let pts=if open{vec![c+egui::vec2(-4.5,-2.0),c+egui::vec2(0.0,2.5),c+egui::vec2(4.5,-2.0)]}else{vec![c+egui::vec2(-2.0,-4.5),c+egui::vec2(2.5,0.0),c+egui::vec2(-2.0,4.5)]};
-    ui.painter().add(egui::Shape::line(pts,egui::Stroke::new(1.6,fg)));
     if response.on_hover_cursor(egui::CursorIcon::PointingHand).clicked(){open=!open;ctx.data_mut(|d|d.insert_temp(state,open));}
     if open {
         ui.spacing_mut().item_spacing.y=8.0;
@@ -1768,7 +1491,6 @@ impl App {
                                 resident_setting_row(ui,"无线设备电量","收起时显示，最多两台",on,&mut self.settings.show_bluetooth);
                                 if self.settings.show_bluetooth {
                                     settings_separator(ui);
-                                    self.wireless_resident_settings(ui);
                                 }
                             });
                             settings_label(ui,"电量提醒");
@@ -2279,15 +2001,6 @@ impl App {
                                 if self.settings.wechat_notifications {
                                     sub(ui,"托盘一键唤起","微信缩在托盘时，点提醒直接唤起微信",&mut self.settings.wechat_tray_open);
                                 }
-                                if master && !self.messenger_status(crate::app::Messenger::Wechat).is_empty(){settings_hint(ui,&self.messenger_status(crate::app::Messenger::Wechat));}
-                                ui.separator();
-                                setting_row(ui,"企业微信","",&mut self.settings.wecom_notifications);
-                                setting_row(ui,"飞书","",&mut self.settings.feishu_notifications);
-                                setting_row(ui,"钉钉","",&mut self.settings.dingtalk_notifications);
-                                settings_hint(ui,"企业微信、飞书、钉钉需在客户端开启任务栏闪动；点击提醒打开对应窗口。");
-                                for client in crate::messenger::Messenger::OFFICE {
-                                    if client.enabled(&self.settings) && !self.messenger_status(client).is_empty(){settings_hint(ui,&self.messenger_status(client));}
-                                }
                                 ui.separator();
                                 ui.horizontal(|ui|{
                                     ui.vertical(|ui|{
@@ -2297,7 +2010,6 @@ impl App {
                                     });
                                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
                                         if self.settings.read_notifications {
-                                            if ui.button(if self.settings.qq_only{"断开 QQ 通知"}else{"断开系统通知"}).clicked(){self.pending.push(Cmd::DisconnectNotifications);}
                                         } else if ui.button("连接…").clicked(){open_connect=true;}
                                     });
                                 });
@@ -2329,10 +2041,8 @@ impl App {
                             let modal=egui::Modal::new(connect_id.with("modal")).frame(settings_modal_frame(ctx)).backdrop_color(Color32::from_black_alpha(110)).show(ctx,|ui|{
                                 ui.set_width(360.0);
                                 settings_apply_style(ui);if settings_modal_title(ui,"连接 QQ 与其他应用"){close=true;}
-                                if ui.add_sized([ui.available_width(),30.0],egui::Button::new("只连接 QQ")).clicked(){self.pending.push(Cmd::RequestQqNotifications);close=true;}
                                 settings_hint(ui,"QQ 需开启系统通知；新通知在岛上显示约 4.5 秒，默认隐藏正文。");
                                 ui.add_space(6.0);
-                                if ui.add_sized([ui.available_width(),30.0],egui::Button::new("连接所有应用通知")).clicked(){self.pending.push(Cmd::RequestNotifications);close=true;}
                                 settings_hint(ui,"只接收 Windows 通知中心可见的内容；应用会在收到通知后出现在列表里。");
                                 ui.add_space(8.0);
                                 if ui.button("取消").clicked(){close=true;}

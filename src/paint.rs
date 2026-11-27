@@ -755,23 +755,6 @@ pub(crate) fn page_shortcut_icon(c: &Card, page: usize, x: f32, y: f32, color: C
             line((-1.8, -5.4), (1.8, -5.4));
             check(&c, 0.0, 0.2, 4.0, 1.0, stroke, color);
         }
-        MAIL_PAGE => {
-            outline(-6.0, -4.2, 12.0, 8.4);
-            path(&[(-5.6, -3.5), (0.0, 0.8), (5.6, -3.5)]);
-        }
-        QUOTA_PAGE => path(&[
-            (0.0, -5.8), (1.6, -1.6), (5.8, 0.0), (1.6, 1.6),
-            (0.0, 5.8), (-1.6, 1.6), (-5.8, 0.0), (-1.6, -1.6), (0.0, -5.8),
-        ]),
-        CALENDAR_PAGE => {
-            outline(-5.2, -4.2, 10.4, 9.7);
-            line((-5.2, -1.3), (5.2, -1.3));
-            line((-2.5, -5.5), (-2.5, -3.0));
-            line((2.5, -5.5), (2.5, -3.0));
-            c.circle(-2.1, 1.6, 0.65, color);
-            c.circle(0.0, 1.6, 0.65, color);
-            c.circle(2.1, 1.6, 0.65, color);
-        }
         WEATHER_PAGE => {
             c.ring(0.0, 0.0, 2.8, stroke, color);
             for i in 0..8 {
@@ -782,10 +765,6 @@ pub(crate) fn page_shortcut_icon(c: &Card, page: usize, x: f32, y: f32, color: C
         PERFORMANCE_PAGE => {
             outline(-5.8, -4.6, 11.6, 9.2);
             path(&[(-4.1, 0.5), (-2.2, 0.5), (-1.0, -2.3), (1.0, 2.4), (2.0, 0.2), (4.1, 0.2)]);
-        }
-        BLUETOOTH_PAGE => {
-            path(&[(0.0, -6.0), (4.0, -2.9), (-3.8, 3.2)]);
-            path(&[(0.0, -6.0), (0.0, 6.0), (4.0, 2.9), (-3.8, -3.2)]);
         }
         _ => outline(-5.5, -4.5, 11.0, 9.0),
     }

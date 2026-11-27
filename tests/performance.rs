@@ -24,18 +24,14 @@ fn sample()->(f64,usize,usize){unsafe{
 fn background_service_sample(){
     let service=std::env::var("LINGQI_PERF_SERVICE").unwrap_or_else(|_|"idle".into());
     let context=eframe::egui::Context::default();
-    let(mut bluetooth,mut system,mut notifications)=(None,None,None);
+    let mut system=None;
     match service.as_str(){
-        "bluetooth"=>bluetooth=Some(lingqi::bt::spawn()),
-        "system"=>system=Some(lingqi::system::observe(context,Default::default(),None)),
-        "notifications"=>notifications=Some(lingqi::system::connect(context,lingqi::messenger::NotificationFilter::All).expect("已有通知权限")),
+            "system"=>system=Some(lingqi::system::observe(context,Default::default(),None)),
         "idle"=>{},_=>panic!("未知采样服务"),
     }
     let before=sample();let started=Instant::now();
     while started.elapsed()<Duration::from_secs(20){
-        if let Some(service)=&bluetooth{while service.rx.try_recv().is_ok(){}}
         if let Some(rx)=&system{while rx.try_recv().is_ok(){}}
-        if let Some(rx)=&notifications{while rx.try_recv().is_ok(){}}
         std::thread::sleep(Duration::from_millis(100));
     }
     let after=sample();

@@ -73,9 +73,6 @@ impl Layout {
         self.widths[PERFORMANCE]=width;
         self.x[PERFORMANCE]=Some(self.width/2.0-16.0-width/2.0);
     }
-    pub fn append_bluetooth(&mut self,width:f32){
-        self.append_slot(BLUETOOTH,width);
-    }
     /// 追加多时区时钟。
     pub fn append_worldclock(&mut self,width:f32){
         self.append_slot(WORLDCLOCK,width);
@@ -214,7 +211,6 @@ mod tests {
     #[test]
     fn bluetooth_slot_keeps_device_chips_separate(){
         let mut layout=Layout::new(true,true,false,false,true,true);
-        layout.append_bluetooth(102.0);
         let mut boxes:Vec<_>=layout.x.iter().enumerate().filter_map(|(i,x)|x.map(|x|(x-layout.widths[i]/2.0,x+layout.widths[i]/2.0))).collect();
         boxes.sort_by(|a,b|a.0.total_cmp(&b.0));
         assert!(boxes.windows(2).all(|pair|pair[1].0-pair[0].1>=6.9));

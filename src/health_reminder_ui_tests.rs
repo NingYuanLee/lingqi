@@ -67,19 +67,6 @@ fn health_pending_survives_restart_and_day_change(){
     assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text().contains("已坐"))),"待处理不再显示持续增长的久坐分钟数");
 }
 
-#[test]
-fn health_actions_clear_pending_and_keep_messenger_unread(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=due();
-    h.app.settings.wechat_notifications=true;h.app.receive_wechat_reminder();h.app.alerts.clear();h.app.notice=None;
-    h.app.show_page(crate::app::WATER_PAGE);h.hover(H::local(280.0,80.0),1.0);
-    let water=badge(&h,"water");let sit=badge(&h,"sit");
-    assert!((water.center().x-sit.center().x).abs()<0.1 && water.bottom()<=sit.top()+0.1,"展开时健康提醒沿右侧竖排");
-    h.click_text("喝一口");assert_eq!(h.app.water.drunk_ml,250);
-    click_badge(&mut h,"sit");
-    assert_eq!(h.app.pending_messengers.len(),1,"处理健康提醒不影响微信未读");
-    h.app=App::new(&h.ctx,Options{pet_idle:1e9});h.frame(vec![]);
-    assert_eq!(h.app.health_pending,[false,false],"处理结果已保存");
-}
 
 #[test]
 fn health_notice_body_confirms_without_recording_water(){
@@ -219,7 +206,6 @@ fn health_reminder_gallery(){
         shoot_unread(&mut h,&mut raster,&dest,&format!("health-{}-sit",dock.key()),90,Some(near));
         h.app.sit_mode=false;
         shoot_unread(&mut h,&mut raster,&dest,&format!("health-{}-water",dock.key()),60,Some(near));
-        h.app.settings.wechat_notifications=true;h.app.receive_wechat_reminder();h.app.notice=None;h.app.alerts.clear();
         shoot_unread(&mut h,&mut raster,&dest,&format!("health-{}-wechat",dock.key()),60,Some(near));
         if dock==crate::model::Dock::Top {
             h.app.water.goal_ml=2750;h.app.open_settings_category(1);

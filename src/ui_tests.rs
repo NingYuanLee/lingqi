@@ -1,7 +1,5 @@
 //! 无窗口交互测试：直接向 egui 注入输入事件，验证悬停展开、切页、按钮。
 use crate::app::{App, Env, Options, PH, PW, WIN_H, WIN_W};
-#[path="messenger/ui_tests.rs"]
-mod enterprise_messenger;
 #[path="health_reminder_ui_tests.rs"]
 mod health_reminder;
 #[path="settings_redesign_ui_tests.rs"]
@@ -186,7 +184,7 @@ fn weather_solar_view_preserves_readable_times_across_skins_and_scales(){
         for _ in 0..60 {
             h.t+=1.0/60.0;
             let cursor=H::local(180.0,185.0);
-            let env=Env{t:h.t,clock:now.format("%H:%M:%S").to_string(),today:now.format("%Y-%m-%d").to_string(),date:now.format("%m月%d日").to_string(),cursor:Some(cursor),bt_ready:true,..Default::default()};
+            let env=Env{t:h.t,clock:now.format("%H:%M:%S").to_string(),today:now.format("%Y-%m-%d").to_string(),date:now.format("%m月%d日").to_string(),cursor:Some(cursor),..Default::default()};
             let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(h.t),focused:true,
                 events:vec![egui::Event::PointerMoved(cursor)],..Default::default()};
             h.shapes=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{
@@ -240,7 +238,7 @@ fn weather_foundation_preview(){
         for frame in 0..frames {
             h.t+=1.0/60.0;
             let cursor=Some(if dock==Dock::Top{H::local(180.0,185.0)}else{Pos2::new(250.0,580.0)});
-            let env=Env{t:h.t,clock:clock.into(),today:"2026-11-11".into(),date:"11月11日 周三".into(),cursor,battery:Some(76),bt_ready:true,..Default::default()};
+            let env=Env{t:h.t,clock:clock.into(),today:"2026-11-11".into(),date:"11月11日 周三".into(),cursor,battery:Some(76),..Default::default()};
             let events=vec![egui::Event::PointerMoved(cursor.unwrap())];
             let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
                 events,viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
@@ -285,7 +283,7 @@ fn weather_solar_entry_preview(){
     let shots=[(70,"weather-entry-a"),(85,"weather-entry-b"),(110,"weather-entry-c"),(160,"weather-entry-d")];
     for frame in 0..161 {
         h.t+=1.0/60.0;
-        let env=Env{t:h.t,clock:"14:08:00".into(),today:"2026-11-11".into(),date:"11月11日 周三".into(),cursor:Some(click),battery:Some(76),bt_ready:true,..Default::default()};
+        let env=Env{t:h.t,clock:"14:08:00".into(),today:"2026-11-11".into(),date:"11月11日 周三".into(),cursor:Some(click),battery:Some(76),..Default::default()};
         let mut events=vec![egui::Event::PointerMoved(click)];
         if frame==60||frame==61 {events.push(egui::Event::PointerButton{pos:click,button:egui::PointerButton::Primary,pressed:frame==60,modifiers:Default::default()});}
         let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,events,
@@ -823,8 +821,6 @@ struct H {
     animating:bool,
     interactive_transition:bool,
     shapes:Vec<egui::epaint::ClippedShape>,
-    bt: Vec<crate::bt::Device>,
-    receivers: Vec<crate::bt::Device>,
     power: (Option<u8>, bool),
     network: Option<bool>,
     system_idle: Option<f64>,
@@ -850,7 +846,7 @@ impl H {
         std::env::set_var("LINGQI_DATA_DIR", &dir);
         let ctx = egui::Context::default();
         let app = App::new(&ctx, Options { pet_idle: 1e9 });
-        Self { ctx, app, t: 0.0, cursor: None,cmds:vec![],region:Rect::NOTHING,hit:Rect::NOTHING,top_bar_notice:None,animating:false,interactive_transition:false,shapes:Vec::new(), bt:Vec::new(),receivers:Vec::new(),power:(None,false),network:None,system_idle:None,screen_locked:false,fullscreen:false,browser_at_top:None,file_drop_zone:None,hovered_files:vec![],dropped_files:vec![] }
+        Self { ctx, app, t: 0.0, cursor: None,cmds:vec![],region:Rect::NOTHING,hit:Rect::NOTHING,top_bar_notice:None,animating:false,interactive_transition:false,shapes:Vec::new(),power:(None,false),network:None,system_idle:None,screen_locked:false,fullscreen:false,browser_at_top:None,file_drop_zone:None,hovered_files:vec![],dropped_files:vec![] }
     }
     fn frame(&mut self, events: Vec<egui::Event>) {
         self.t += 1.0 / 60.0;
@@ -869,9 +865,7 @@ impl H {
             today: "2026-10-28".into(),
             date: "10月28日 周三".into(),
             cursor: self.cursor,
-            bt: self.bt.clone(),
-            bt_ready: true,
-            receivers: self.receivers.clone(),
+
             battery:self.power.0,
             charging:self.power.1,
             network:self.network,
@@ -971,7 +965,7 @@ fn island_drag_frame(h:&mut H,bounds:crate::display_layout::Bounds,ppp:f32,point
     let mut events=cursor.map(|p|vec![egui::Event::PointerMoved(p)]).unwrap_or_default();
     if let (Some(pos),Some(pressed))=(cursor,pressed){events.push(egui::Event::PointerButton{pos,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()});}
     h.t+=1.0/60.0;
-    let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-10-28".into(),date:"10月28日 周三".into(),cursor,desktop_cursor:pointer.map(|p|(bounds.left+(p.x*ppp).round() as i32,bounds.top+(p.y*ppp).round() as i32)),screen:Some(screen),bt_ready:true,..Default::default()};
+    let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-10-28".into(),date:"10月28日 周三".into(),cursor,desktop_cursor:pointer.map(|p|(bounds.left+(p.x*ppp).round() as i32,bounds.top+(p.y*ppp).round() as i32)),screen:Some(screen),..Default::default()};
     let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W.max(width),height))),time:Some(h.t),events,focused:true,
         viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
     let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{
@@ -1888,14 +1882,6 @@ fn wheel_handles_small_deltas_without_skipping_pages_on_bursts(){
     assert_eq!(h.app.page,3,"一次连续滚动不能瞬间跳过多个页面");
 }
 
-#[test]
-fn navigation_wraps_between_ten_pages_and_notification_settings_remain_accessible() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.click(H::local(21.0,68.0));assert_eq!(h.app.page,crate::app::BLUETOOTH_PAGE);
-    h.hover(H::local(300.0,60.0),0.8);h.click(H::local(398.0,68.0));assert_eq!(h.app.page,1);
-    h.app.open_settings_category(3);assert!(h.app.settings_open);assert_eq!(h.app.settings_tab,6);
-}
-
 
 
 
@@ -1911,7 +1897,7 @@ fn resident_layout_gallery(){
         h
     }
     fn capture(h:&mut H,raster:&mut crate::preview_raster::Raster,t:f64,draw:bool)->Vec<u8>{
-        let env=Env{t,clock:"09:41:00".into(),today:"2026-10-31".into(),date:"10月31日 周六".into(),battery:h.power.0,charging:h.power.1,bt_ready:true,..Default::default()};
+        let env=Env{t,clock:"09:41:00".into(),today:"2026-10-31".into(),date:"10月31日 周六".into(),battery:h.power.0,charging:h.power.1,..Default::default()};
         let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H))),time:Some(t),
             viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
         let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{let win=ui.max_rect();h.app.frame(ui,win,&env);});});
@@ -2057,60 +2043,6 @@ fn page_visibility_does_not_reopen_hidden_pages_through_shortcuts_or_drops() {
     h.app.on_drop(vec![file]);
     assert_eq!(h.app.page,1);
     assert!(h.app.shelf.items.is_empty());
-}
-
-#[test]
-fn wireless_module_hides_resident_shortcuts_and_exits_detail() {
-    use crate::{app::BLUETOOTH_PAGE,bt::Device,model::Dock};
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let frame=|h:&mut H,cursor,events|{
-        if h.app.side() {side_frame_events(h,cursor,events);}
-        else {h.cursor=cursor;h.frame(events);}
-    };
-    let click=|h:&mut H,pos|{
-        frame(h,Some(pos),vec![egui::Event::PointerMoved(pos)]);
-        for pressed in [true,false] {
-            frame(h,Some(pos),vec![egui::Event::PointerButton{pos,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()}]);
-        }
-    };
-    for dock in [Dock::Top,Dock::Left,Dock::Right] {
-        let mut h=H::new();
-        h.app.settings.dock=dock;
-        h.app.settings.pet=false;
-        h.app.settings.notifications=false;
-        h.bt.push(Device{id:"keyboard".into(),name:"键盘".into(),battery:Some(93),..Default::default()});
-        let id=if dock==Dock::Top {
-            egui::Id::new(("card",true,("wireless-resident","keyboard")))
-        } else {
-            egui::Id::new(("card",true,"wireless-side"))
-        };
-        for _ in 0..60 {frame(&mut h,None,vec![]);}
-        let shortcut=h.ctx.read_response(id).expect("启用时应有常驻入口").rect.center();
-        click(&mut h,shortcut);
-        assert_eq!(h.app.page(),BLUETOOTH_PAGE,"{dock:?} 常驻入口应打开详情");
-        assert_eq!(h.app.wireless_focus.as_deref(),Some("keyboard"));
-
-        h.app.set_page_visible(BLUETOOTH_PAGE,false);
-        assert_ne!(h.app.page(),BLUETOOTH_PAGE);
-        assert!(h.app.wireless_focus.is_none());
-        h.t+=5.0;
-        for _ in 0..60 {frame(&mut h,None,vec![egui::Event::PointerGone]);}
-        assert!(h.ctx.read_response(id).is_none(),"关闭后应移除原有热点：{dock:?}");
-        click(&mut h,shortcut);
-        assert_ne!(h.app.page(),BLUETOOTH_PAGE);
-        assert!(!h.app.settings_open);
-    }
-}
-
-#[test]
-fn wireless_page_gear_opens_its_settings() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.show_page(crate::app::BLUETOOTH_PAGE);
-    h.hover(H::local(300.0,60.0),1.0);
-    h.click(H::local(394.0,18.0));
-    assert!(h.app.settings_open);
-    assert_eq!(h.app.settings_tab,crate::extras::SETTINGS_TAB_WIRELESS);
 }
 
 
@@ -2507,73 +2439,6 @@ fn mascot_integrated_expression_gallery(){
     }
 }
 #[test]
-fn minimal_island_hides_messenger_notices_until_expanded(){
-    // 群友截图：极简刘海下来电 / 新消息后，细线变成带微信图标的方块。极简刘海照常弹横幅，收起后只留细线，未读不常挂。
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    use crate::app::Messenger;
-    for (source,shape) in [(Messenger::Wechat,crate::model::IslandShape::Notch),(Messenger::Wechat,crate::model::IslandShape::Pill),(Messenger::Qq,crate::model::IslandShape::Pill)] {
-        let mut h=H::new();
-        h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;h.app.settings.minimal=true;h.app.settings.island_shape=shape;
-        for _ in 0..60 {h.frame(vec![]);}
-        let idle=h.region;
-        match source {
-            Messenger::Wechat=>h.app.receive_wechat_reminder_from(4242,0x1234),
-            Messenger::Qq=>h.app.receive_notification("QQ".into(),"QQ".into(),"QQ · 新消息".into()),
-            Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>h.app.receive_messenger_reminder(crate::app::Unread::of(source)),
-        }
-        for _ in 0..30 {h.frame(vec![]);}
-        assert!(h.app.notice.as_ref().and_then(|a|a.messenger())==Some(source),"{source:?} {shape:?}：极简刘海照常弹横幅");
-        for _ in 0..(8*60) {h.frame(vec![]);}
-        assert!(h.app.notice.is_none(),"{source:?}：横幅按时收起");
-        assert_eq!(h.app.pending_messengers.len(),1,"{source:?}：未读仍要记住");
-        assert_eq!(h.region,idle,"{source:?} {shape:?}：收起时仍只有细线");
-        // 鼠标移上去展开：未读胶囊出现在面板旁，可以点。
-        h.hover(Pos2::new(WIN_W/2.0,2.0),0.8);h.hover(Pos2::new(WIN_W/2.0,40.0),1.0);
-        assert!(h.app.open && h.app.progress()>0.9,"{source:?}：悬停应展开");
-        assert!(h.app.messenger_appear()>0.9 && h.app.pending_messengers.len()==1,"{source:?}：展开后未读胶囊在面板旁显示");
-    }
-}
-/// 微信语音来电：响铃期间任务栏持续闪动，按秒渲染岛体，排查样式问题。
-#[test]
-#[ignore="生成来电响铃时的岛体逐帧画面，供人工查看"]
-fn preview_wechat_call_ringing(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::env::var_os("LINGQI_CALL_PREVIEW_DIR").map(std::path::PathBuf::from)
-        .unwrap_or_else(||std::env::temp_dir().join(format!("lingqi-call-preview-{}",std::process::id())));
-    std::fs::create_dir_all(&dest).unwrap();
-    // 单条提醒 / 响铃期间反复提醒 / 来电窗口在另一个进程里（被当成第二个账号）。
-    for (scenario,minimal) in [("single",false),("single",true),("ringing",false),("ringing",true),("twoproc",false),("twoproc",true)] {
-        let mode=format!("{scenario}-{}",if minimal{"minimal"}else{"normal"});
-        let mut h=H::new();h.app.settings.wechat_notifications=true;h.app.settings.minimal=minimal;
-        let mut raster=crate::preview_raster::Raster::new(1280,380);
-        for frame in 0..=(16*60) {
-            let t=frame as f64/60.0;
-            match scenario {
-                "single" if frame==60=>h.app.receive_wechat_reminder_from(4242,0x1234),
-                "ringing" if frame>=60 && t<12.0 && frame%330==60=>h.app.receive_wechat_reminder_from(4242,0x1234),
-                "twoproc" if frame==60=>h.app.receive_wechat_reminder_from(4242,0x1234),
-                "twoproc" if frame==120=>h.app.receive_wechat_reminder_from(4343,0x5678),
-                _=>{}
-            }
-            let env=Env{t,clock:"09:41:00".into(),today:"2026-10-31".into(),date:"10月31日 周六".into(),..Default::default()};
-            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H))),time:Some(t),
-                viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
-            let output=h.ctx.run(raw,|ctx|{
-                egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{let win=ui.max_rect();h.app.frame(ui,win,&env);});
-            });
-            raster.update_textures(&output.textures_delta);
-            if frame%60==0 {
-                raster.buf.fill([0.09,0.11,0.18,1.0]);
-                raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-                let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-                image::save_buffer(dest.join(format!("{mode}-{:04.1}s.png",t)),&rgba,1280,380,image::ColorType::Rgba8).unwrap();
-            }
-            raster.free_textures(&output.textures_delta);
-        }
-    }
-    eprintln!("来电预览：{}",dest.display());
-}
-#[test]
 fn todo_due_roundtrip_and_fires_only_once(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.todos.items.push(crate::model::TodoItem{text:"会议 | 准备".into(),done_on:None,due:Some("2026-10-28 09:40".into()),reminded:false,..Default::default()});h.app.todos.save();
@@ -2882,85 +2747,6 @@ fn volume_hud_drag_maps_pointer_to_percentage(){
 }
 
 #[test]
-fn wireless_receiver_presence_updates_without_bluetooth_notices(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.visible_pages[crate::app::BLUETOOTH_PAGE]=true;
-    h.app.settings.bluetooth_notifications=true;
-    h.frame(vec![]);
-    let receiver=crate::bt::Device{id:"usb:receiver".into(),name:"USB 接收器".into(),kind:crate::bt::DeviceKind::Receiver24G,..Default::default()};
-    h.receivers.push(receiver.clone());
-    h.frame(vec![]);
-    assert_eq!(h.app.wireless_devices,[receiver.clone()]);
-    assert!(h.app.notice.is_none()&&h.app.alerts.is_empty());
-
-    h.receivers.clear();
-    h.frame(vec![]);
-    assert!(h.app.wireless_devices.is_empty());
-    assert!(h.app.notice.is_none()&&h.app.alerts.is_empty());
-
-    h.app.settings.visible_pages[crate::app::BLUETOOTH_PAGE]=false;
-    h.receivers.push(receiver);
-    h.frame(vec![]);
-    assert!(h.app.wireless_devices.is_empty());
-}
-
-#[test]
-fn bluetooth_connection_soon_after_initial_scan_is_not_suppressed(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.frame(vec![]);
-    h.t=2.0;
-    h.bt=vec![crate::bt::Device{id:"shokz".into(),name:"Shokz".into(),battery:Some(100),kind:crate::bt::DeviceKind::Bone,..Default::default()}];
-    h.frame(vec![]);
-    assert_eq!(h.app.notice.as_ref().map(|a|a.title.as_str()),Some("蓝牙设备"));
-}
-
-#[test]
-fn bluetooth_audio_connection_takes_precedence_over_volume_notice(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for volume_already_visible in [false,true] {
-        let mut h=H::new();h.frame(vec![]);
-        h.app.alert("系统音量","音量 80%",5,false);
-        if volume_already_visible {h.frame(vec![]);}
-        h.bt=vec![crate::bt::Device{id:"audio".into(),name:"Shokz".into(),battery:Some(80),kind:crate::bt::DeviceKind::Bone,..Default::default()}];
-        h.frame(vec![]);
-        assert_eq!(h.app.notice.as_ref().map(|a|a.title.as_str()),Some("蓝牙设备"),"耳机连接应优先于音量提示");
-        assert!(!h.app.alerts.iter().any(|a|a.title=="系统音量"),"切换耳机产生的音量提示不应延后补弹");
-        h.t+=3.0;h.frame(vec![]);
-        h.app.alert("系统音量","音量 60%",5,false);h.frame(vec![]);
-        assert_eq!(h.app.notice.as_ref().map(|a|a.body.as_str()),Some("音量 60%"),"连接后手动调节音量应正常提示");
-    }
-}
-
-#[test]
-fn bluetooth_keyboard_connection_keeps_unrelated_volume_notice(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.frame(vec![]);
-    h.app.alert("系统音量","音量 60%",5,false);h.frame(vec![]);
-    h.bt=vec![crate::bt::Device{id:"keyboard".into(),name:"Keyboard".into(),battery:None,kind:crate::bt::DeviceKind::Keyboard,..Default::default()}];h.frame(vec![]);
-    assert_eq!(h.app.notice.as_ref().map(|a|a.title.as_str()),Some("系统音量"));
-    assert!(h.app.alerts.iter().any(|a|a.title=="蓝牙设备"));
-}
-
-#[test]
-fn bluetooth_notices_track_multiple_devices_independently(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    let audio=crate::bt::Device{id:"audio".into(),name:"Shokz".into(),battery:None,kind:crate::bt::DeviceKind::Bone,..Default::default()};
-    let keyboard=crate::bt::Device{id:"keyboard".into(),name:"QingLong 87".into(),battery:None,kind:crate::bt::DeviceKind::Keyboard,..Default::default()};
-    h.bt=vec![audio.clone()];h.frame(vec![]);
-    h.bt.push(keyboard.clone());h.t=3.0;h.frame(vec![]);
-    let notice=h.app.notice.as_ref().unwrap();
-    assert_eq!(notice.body,"QingLong 87");
-    assert_eq!(notice.bluetooth,Some((crate::bt::DeviceKind::Keyboard,true)));
-    h.t=7.0;h.bt=vec![keyboard];h.frame(vec![]);
-    let notice=h.app.notice.as_ref().unwrap();
-    assert_eq!(notice.body,"Shokz · 已断开");
-    assert_eq!(notice.bluetooth,Some((crate::bt::DeviceKind::Bone,false)));
-}
-
-#[test]
 fn display_choice_saves_and_keeps_disconnected_selection(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings_open=true;h.app.settings_tab=crate::extras::SETTINGS_TAB_POSITION;h.ctx.set_embed_viewports(false);
     let bounds=crate::display_layout::Bounds{left:0,top:0,right:1920,bottom:1080};
@@ -3034,17 +2820,6 @@ fn hud_expands_smoothly_from_collapsed_width(){
     assert!(h.app.current_width()-before < 30.0, "提示条不能在第一帧突然跳到目标宽度");
 }
 
-#[test]
-fn bluetooth_notification_keeps_its_full_message_outside_lyric_mode(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();for _ in 0..90 {h.frame(vec![]);}
-    h.app.alert("蓝牙设备","OpenMove by Shokz · 电量 80%",5,false);
-    for _ in 0..60 {h.frame(vec![]);}
-    assert!((h.app.current_width()-crate::app::HUD_W-h.app.pet_space()).abs()<1.0);
-    assert!(h.region.height()>60.0,"两行蓝牙提示保持完整高度");
-    h.click_notice_badge();
-    for label in ["OpenMove by Shokz","已连接","80%"]{assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()==label)),"点击后可查看设备信息：{label}");}
-}
 
 #[test]
 fn hud_repeated_volume_changes_do_not_restart_entrance(){
@@ -3073,24 +2848,6 @@ fn hud_shrinks_smoothly_after_expiration(){
     assert!(h.app.notice.is_none());
     assert!(h.app.current_width()>collapsed+5.0);
     assert!(h.app.current_width()<before);
-}
-
-#[test]
-fn bluetooth_badge_follows_connect_and_disconnect(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    // 首次扫描已连接的设备，记录但不作为新连接提醒。
-    h.bt=vec![crate::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::bt::DeviceKind::Earbuds,..Default::default()}];h.frame(vec![]);
-    assert!(h.app.notice.is_none());
-    assert_eq!(h.app.bt_shown.first().map(|d|d.name.as_str()),Some("Buds"));
-    // 之后断开、再连上，各弹一条 HUD 通知。
-    h.t=20.0;h.bt.clear();h.frame(vec![]);
-    assert_eq!(h.app.notice.as_ref().map(|a|a.body.as_str()),Some("Buds · 已断开"));
-    assert!(h.app.bt_shown.is_empty());
-    h.t=30.0;h.bt=vec![crate::bt::Device{id:"buds".into(),name:"Buds".into(),battery:Some(80),kind:crate::bt::DeviceKind::Earbuds,..Default::default()}];h.frame(vec![]);
-    assert_eq!(h.app.notice.as_ref().map(|a|a.body.as_str()),Some("Buds · 电量 80%"));
-    // 没有设备时不留残留状态。
-    h.t=40.0;h.bt.clear();h.frame(vec![]);
-    assert!(h.app.bt_shown.is_empty()&&h.app.notice.as_ref().is_none_or(|a|a.title!="蓝牙设备"||a.body=="Buds · 已断开"));
 }
 
 #[test]
@@ -3449,24 +3206,6 @@ fn frame_control_cream_startup_notice_keeps_view_action_whole() {
     assert_eq!(h.app.page,4,"稳定态的查看按钮仍应打开待办页");
 }
 
-
-#[test]
-fn new_notification_sways_twice_then_stops_and_restarts_on_the_next_one() {
-    for (i,expected_positive) in [true,false,true,false].into_iter().enumerate(){
-        let angle=crate::paint::bell_swing(0.95*(i as f64*0.25+0.125));
-        assert_eq!(angle>0.0,expected_positive);
-    }
-    assert_eq!(crate::paint::bell_swing(1.0),0.0);
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
-    h.app.settings.read_notifications=true;h.app.receive_notification("测试通知".into(),"test.notification".into(),"第一条".into());
-    let first=h.app.notification_bell_at;
-    for _ in 0..90{h.frame(vec![]);}
-    h.app.settings.read_notifications=true;h.app.receive_notification("测试通知".into(),"test.notification".into(),"第二条".into());
-    assert!(h.app.notification_bell_at>first+1.0);
-    h.frame(vec![]);
-    assert!(h.app.notification_bell_until>h.t);
-}
-
 #[test]
 fn hud_titles_and_states_share_the_icon_center_without_overlapping() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -3634,53 +3373,6 @@ fn remove_icons_are_centered_in_their_buttons_at_each_scale(){
         assert_eq!(h.app.todos.items.iter().map(|t|t.text.as_str()).collect::<Vec<_>>(),["第一项","第三项"]);
         assert!(h.app.todos.items.iter().all(|t|t.done_on.is_none()),"删除入口不能同时勾选其他待办");
     }
-}
-
-#[test]
-#[ignore="按需检查全部页面与设置的实际排版"]
-fn ui_alignment_layout_gallery(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_UI_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
-    fn fixture()->H{
-        let mut h=H::new();h.app.settings.pet=false;h.power=(Some(76),false);
-        h.app.todos.items=["整理会议资料","Review design details","确认项目需求与下一阶段开发排期"].into_iter().map(|text|crate::model::TodoItem{text:text.into(),due:None,done_on:None,reminded:false,..Default::default()}).collect();
-        h.app.shelf.items=["项目设计方案与交付说明.pdf","design-preview.png","本周工作安排.docx","project-files.zip","notes.md"].into_iter().map(std::path::PathBuf::from).collect();
-        h
-    }
-    let collapsed=["collapsed","volume","caps","language","power","network","bt-headphones","bt-keyboard","bt-mouse","bt-gamepad","bt-phone","bt-other","bt-speaker"];
-    let scenes=["page-0","page-1","page-2","page-3","page-4","page-5","page-6","page-7","lyrics","todo-empty","shelf-empty","reminder","water-chart","focus-running"];
-    for ppp in [1.25,2.0]{for name in scenes.into_iter().chain(collapsed){
-        let mut h=fixture();let page=name.strip_prefix("page-").and_then(|p|p.parse::<usize>().ok()).unwrap_or(match name{"lyrics"=>0,"shelf-empty"=>3,_=>4});
-        if name=="todo-empty"{h.app.todos.items.clear();}if name=="shelf-empty"{h.app.shelf.items.clear();}
-        if !collapsed.contains(&name){h.app.show_page(page);}
-        if name=="water-chart"{h.app.show_page(2);h.app.water_view=1;h.app.water.drunk_ml=1250;h.app.water.hours[9]=250;h.app.water.hours[8]=500;h.app.water.hours[7]=500;}
-        if name=="focus-running"{h.app.show_page(1);h.app.pomo.running=true;h.app.pomo.remaining=1283.0;}
-        if let Some(kind)=name.strip_prefix("bt-"){
-            let kind=match kind{"headphones"=>crate::bt::DeviceKind::Headphones,"keyboard"=>crate::bt::DeviceKind::Keyboard,"mouse"=>crate::bt::DeviceKind::Mouse,"gamepad"=>crate::bt::DeviceKind::Gamepad,"phone"=>crate::bt::DeviceKind::Phone,"speaker"=>crate::bt::DeviceKind::Speaker,_=>crate::bt::DeviceKind::Other};
-            h.app.bluetooth_alert(&crate::bt::Device{id:"preview".into(),name:"我的蓝牙设备 · 超长设备名称与连接状态".into(),battery:Some(100),kind,..Default::default()},true);
-        }
-        match name{"volume"=>{h.app.volume_ui=Some((64,false));h.app.alert("系统音量","64%",0,false);},"caps"=>h.app.alert("大写锁定","已开启",0,false),"language"=>h.app.alert("键盘输入语言","中文（简体，中国）",0,false),"network"=>h.app.alert("网络连接","Wi-Fi · 网络已连接",0,false),"power"=>h.app.alert("电源已连接","当前电量 76%",0,false),_=>{}}
-        if name=="reminder"{h.app.open_task_reminder(0);}
-        let (width,height)=((WIN_W*ppp)as u32,(WIN_H*ppp)as u32);let mut raster=crate::preview_raster::Raster::new(width as usize,height as usize);
-        for f in 0..90{
-            let t=f as f64/60.0;let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(WIN_W,WIN_H))),time:Some(t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
-            let env=Env{t,clock:"09:41:00".into(),today:"2026-11-01".into(),date:"11月1日 周日".into(),cursor:if collapsed.contains(&name){None}else{Some(H::local(150.0,40.0))},battery:h.power.0,bt_ready:true,..Default::default()};
-            let out=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{let win=ui.max_rect();h.app.frame(ui,win,&env);});});raster.update_textures(&out.textures_delta);
-            if f==89{raster.buf.fill([0.07,0.09,0.13,1.0]);raster.draw(&h.ctx.tessellate(out.shapes,out.pixels_per_point),out.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);image::save_buffer(dest.join(format!("{name}-{}.png",(ppp*100.0)as u32)),&rgba,width,height,image::ColorType::Rgba8).unwrap();}
-            raster.free_textures(&out.textures_delta);
-        }
-    }}
-    for width in [600.0,690.0]{for tab in 0..12{
-        let mut h=fixture();h.app.settings_tab=tab;h.app.open_settings();h.ctx.set_embed_viewports(false);
-        let size=egui::vec2(width,if width==600.0{450.0}else{560.0});let ppp=1.25;
-        let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
-        egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{let id=viewport.ids.this;let raw=egui::RawInput{viewport_id:id,screen_rect:Some(Rect::from_min_size(Pos2::ZERO,size)),viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(ppp),focused:Some(true),..Default::default()})).collect(),focused:true,..Default::default()};*capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));});
-        let (w,height)=((size.x*ppp)as u32,(size.y*ppp)as u32);let mut raster=crate::preview_raster::Raster::new(w as usize,height as usize);
-        for f in 0..5{let root=h.ctx.run(egui::RawInput::default(),|ctx|h.app.settings_ui(ctx,false));raster.update_textures(&root.textures_delta);let child=output.lock().unwrap().take().unwrap();raster.update_textures(&child.textures_delta);
-            if f==4{raster.buf.fill([0.0,0.0,0.0,1.0]);raster.draw(&h.ctx.tessellate(child.shapes,child.pixels_per_point),child.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);image::save_buffer(dest.join(format!("settings-{tab}-{}.png",width as u32)),&rgba,w,height,image::ColorType::Rgba8).unwrap();}
-            raster.free_textures(&root.textures_delta);raster.free_textures(&child.textures_delta);
-        }
-    }}
 }
 
 
@@ -4254,50 +3946,6 @@ fn compact_canvas_preserves_panel_and_notice_pixels(){
     }
 }
 
-#[test]
-fn external_notice_respects_permissions_masks_preview_and_never_reemits(){
- let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
- h.app.receive_notification("系统音量".into(),"external.test".into(),"验证码 123456".into());assert!(h.app.alerts.is_empty());
- h.app.settings.read_notifications=true;
- h.app.receive_notification("系统音量".into(),"external.test".into(),"验证码 123456".into());
- let a=h.app.alerts.back().unwrap();assert!(!a.is_hud());assert!(!a.body.contains("123456"));assert_eq!(a.page,usize::MAX);
- assert!(h.app.history.is_empty());assert!(!h.app.pending.iter().any(|c|matches!(c,crate::app::Cmd::Notify(..))));
- h.app.tick_alerts();assert!(h.app.notice.is_some());h.app.settings.read_notifications=false;h.app.tick_alerts();assert!(h.app.notice.is_none());
- h.app.settings.read_notifications=true;h.app.settings.notification_preview=true;
- h.app.receive_notification("测试".into(),"external.test".into(),"验证码 123456，请勿泄露".into());assert!(!h.app.alerts.back().unwrap().body.contains("123456"));
- h.app.tick_alerts();h.app.t+=4.6;h.app.tick_alerts();assert!(h.app.notice.is_none());
-}
-
-#[test]
-fn qq_only_notifications_filter_by_app_id_before_display_and_respect_preview(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
-    h.app.settings.read_notifications=true;h.app.settings.qq_only=true;h.app.settings.save();
-    assert!(crate::model::Settings::load().qq_only);
-    h.app.receive_notification("QQ".into(),"QQMusic".into(),"不属于 QQ 聊天".into());assert!(h.app.alerts.is_empty());
-    h.app.receive_notification("QQ".into(),"QQ".into(),"测试联系人 · 测试消息".into());
-    assert!(!h.app.alerts.back().unwrap().body.contains("测试联系人"));
-    h.app.settings.notification_preview=true;
-    h.app.receive_notification("QQ".into(),"QQ".into(),"测试联系人 · 测试消息".into());
-    assert_eq!(h.app.alerts.back().unwrap().body,"测试联系人 · 测试消息");assert!(h.app.history.is_empty());
-}
-
-#[test]
-fn wechat_notifications_work_without_toast_permission_and_stop_when_disabled(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
-    h.app.receive_wechat_reminder();assert!(h.app.alerts.is_empty());
-    h.app.settings.wechat_notifications=true;
-    h.app.settings.save();assert!(crate::model::Settings::load().wechat_notifications);
-    assert!(!h.app.settings.read_notifications);
-    h.app.receive_wechat_reminder();h.app.tick_alerts();
-    let notice=h.app.notice.as_ref().unwrap();
-    assert_eq!(notice.title,"微信");assert_eq!(notice.body,"有新消息 · 请到微信查看");
-    assert!(h.app.history.is_empty());
-    assert!(!h.app.pending.iter().any(|c|matches!(c,crate::app::Cmd::Notify(..))));
-    h.app.settings.wechat_notifications=false;h.app.tick_alerts();assert!(h.app.notice.is_none());
-    h.app.settings.wechat_notifications=true;h.app.settings.notifications=false;
-    h.app.receive_wechat_reminder();assert!(h.app.alerts.is_empty());
-}
-
 
 #[test]
 fn compact_font_atlas_preserves_panel_and_notice_pixels(){
@@ -4376,27 +4024,6 @@ fn compact_font_atlas_preserves_settings_pixels_at_multiple_scales(){
 
 
 
-#[test]
-fn bluetooth_switch_clears_notices_and_restarts_with_fresh_baseline(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    let device=crate::bt::Device{id:"keyboard".into(),name:"Keyboard".into(),battery:None,kind:crate::bt::DeviceKind::Keyboard,..Default::default()};
-    h.app.bluetooth_alert(&device,true);h.frame(vec![]);
-    h.app.bluetooth_alert(&device,false);
-    h.app.settings.bluetooth_notifications=false;h.frame(vec![]);
-    assert!(h.app.notice.as_ref().is_none_or(|a|a.title!="蓝牙设备"));
-    assert!(!h.app.alerts.iter().any(|a|a.title=="蓝牙设备"));
-    h.app.bluetooth_alert(&device,true);
-    assert!(!h.app.alerts.iter().any(|a|a.title=="蓝牙设备"));
-    h.app.settings.save();assert!(!crate::model::Settings::load().bluetooth_notifications);
-    h.bt=vec![device];h.app.settings.bluetooth_notifications=true;h.frame(vec![]);
-    assert!(h.app.notice.as_ref().is_none_or(|a|a.title!="蓝牙设备"));
-    h.bt.clear();h.frame(vec![]);
-    assert!(h.app.notice.as_ref().is_some_and(|a|a.title=="蓝牙设备") || h.app.alerts.iter().any(|a|a.title=="蓝牙设备"));
-}
-
-
-
 
 
 
@@ -4412,7 +4039,7 @@ fn shoot_feature(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::p
     let ppp=2.0;let (w,hgt)=(crate::app::CANVAS_W,WIN_H);
     for f in 0..frames {
         h.t+=1.0/60.0;
-        let env=Env{t:h.t,clock:"09:41:00".into(),today:today.into(),date:"11月4日 周三".into(),cursor,bt_ready:true,..Default::default()};
+        let env=Env{t:h.t,clock:"09:41:00".into(),today:today.into(),date:"11月4日 周三".into(),cursor,..Default::default()};
         let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
             events:cursor.map(|p|vec![egui::Event::PointerMoved(p)]).unwrap_or_default(),
             viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
@@ -4480,7 +4107,7 @@ fn shoot_side_with_bounds(h:&mut H,raster:&mut crate::preview_raster::Raster,des
     let ppp=2.0;let (w,hgt)=(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H);
     for f in 0..frames {
         h.t+=1.0/60.0;
-        let mut env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-04".into(),date:"11月4日 周三".into(),cursor,bt_ready:true,battery:Some(76),..Default::default()};
+        let mut env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-04".into(),date:"11月4日 周三".into(),cursor,battery:Some(76),..Default::default()};
         let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
             events:cursor.map(|p|vec![egui::Event::PointerMoved(p)]).unwrap_or_default(),
             viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
@@ -4514,66 +4141,6 @@ fn shoot_side_with_bounds(h:&mut H,raster:&mut crate::preview_raster::Raster,des
 }
 
 fn feature_raster_sized(w:f32,h:f32)->crate::preview_raster::Raster{crate::preview_raster::Raster::new((w*2.0) as usize,(h*2.0) as usize)}
-
-/// 三个环形额度账号，随后显示 WorkBuddy 与 DeepSeek 余额。
-
-
-#[test]
-fn minimal_side_pill_returns_to_line_while_wechat_is_unread(){
-    use crate::model::{Dock,IslandShape};
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for dock in [Dock::Right,Dock::Left] {
-        let mut h=H::new();
-        h.app.settings.dock=dock;
-        h.app.settings.island_shape=IslandShape::Pill;
-        h.app.settings.minimal=true;
-        h.app.settings.wechat_notifications=true;
-        for _ in 0..90 {side_frame_with(&mut h,None);}
-        let idle=side_frame_with(&mut h,None);
-        h.app.receive_wechat_reminder_from(4242,0x1234);
-        for _ in 0..30 {side_frame_with(&mut h,None);}
-        assert_eq!(h.app.notice.as_ref().and_then(|a|a.messenger()),Some(crate::app::Messenger::Wechat));
-        for _ in 0..480 {side_frame_with(&mut h,None);}
-        let collapsed=side_frame_with(&mut h,None);
-        assert!(h.app.notice.is_none() && collapsed.notice_hit.is_none());
-        assert_eq!(h.app.pending_messengers.len(),1);
-        assert_eq!(collapsed.hit,idle.hit,"{dock:?} 有未读时也应收回细线");
-        assert_eq!(collapsed.region,idle.region);
-        let edge=Some(idle.hit.center());
-        for _ in 0..90 {side_frame_with(&mut h,edge);}
-        assert!(h.app.open && side_frame_with(&mut h,edge).notice_hit.is_some());
-    }
-}
-
-#[test]
-fn automatic_minimal_hides_unread_hit_area_until_reopened(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for dock in [crate::model::Dock::Top,crate::model::Dock::Left,crate::model::Dock::Right] {
-        let mut h=H::new();
-        h.app.settings.dock=dock;
-        h.app.settings.browser_minimal=true;
-        h.app.settings.wechat_notifications=true;
-        h.app.settings.read_notifications=true;
-        h.app.receive_wechat_reminder();
-        h.app.receive_notification("QQ".into(),"QQ".into(),"测试".into());
-        h.app.alerts.clear();
-        h.app.notice=None;
-        h.app.notification_bell_until=0.0;
-        h.browser_at_top=Some(true);
-        for _ in 0..90 {side_frame_with(&mut h,None);}
-        let out=side_frame_with(&mut h,None);
-        assert!(out.notice_hit.is_none(),"{dock:?} 避让时未读仍占用鼠标区域");
-        assert!(out.click_through,"{dock:?} 细条可感应悬停，点击应交给底下的程序");
-        assert_eq!(h.app.pending_messengers.len(),2);
-        h.app.show_page(1);
-        for _ in 0..60 {side_frame_with(&mut h,None);}
-        let opened=side_frame_with(&mut h,None);
-        assert!(opened.notice_hit.is_some() && !opened.click_through);
-        h.browser_at_top=Some(false);
-        for _ in 0..360 {side_frame_with(&mut h,None);}
-        assert!(!h.app.open && side_frame_with(&mut h,None).notice_hit.is_some());
-    }
-}
 
 #[test]
 fn side_dock_auto_minimal_follows_avoidance(){
@@ -4610,7 +4177,7 @@ fn side_frame(h:&mut H,cursor:Option<Pos2>)->crate::app::FrameOut{
 fn side_frame_events(h:&mut H,cursor:Option<Pos2>,events:Vec<egui::Event>)->crate::app::FrameOut{
     let (w,hgt)=(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H);
     h.t+=1.0/60.0;
-    let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-04".into(),date:"11月4日 周三".into(),cursor,bt:h.bt.clone(),bt_ready:true,battery:Some(76),..Default::default()};
+    let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-04".into(),date:"11月4日 周三".into(),cursor,battery:Some(76),..Default::default()};
     let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
         events,..Default::default()};
     let app=&mut h.app;let mut out=None;
@@ -4648,381 +4215,6 @@ fn side_dock_opens_from_the_edge_and_collapses_back(){
     }
 }
 
-
-
-#[test]
-fn notification_preview_masks_fullwidth_and_zero_width_codes(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.settings.read_notifications=true;h.app.settings.notification_preview=true;
-    for body in ["验证码 １２３４５６，请勿泄露","验证码 12\u{200b}3456，请勿泄露"] {
-        h.app.receive_notification("测试".into(),"external.test".into(),body.into());
-        assert_eq!(h.app.alerts.back().unwrap().body,"验证码 ••••••，请勿泄露");
-    }
-}
-
-
-
-
-#[test]
-fn qq_unknown_reminders_survive_viewing_other_accounts(){
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.read_notifications=true;
-    h.app.receive_notification("QQ".into(),"QQ".into(),"未确认账号的消息".into());
-    h.app.viewed_client(crate::app::Messenger::Qq,200);
-    assert_eq!(h.app.pending_messengers,[crate::app::Unread::of(crate::app::Messenger::Qq)]);
-}
-
-#[test]
-fn messenger_window_replacement_removes_stale_banner_targets_without_clearing_other_accounts(){
-    use crate::app::{Cmd,Messenger,Unread};
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for source in Messenger::ALL{
-        let mut h=H::new();h.app.settings.read_notifications=true;h.app.settings.wechat_notifications=true;h.app.settings.wecom_notifications=true;h.app.settings.feishu_notifications=true;h.app.settings.dingtalk_notifications=true;
-        let old=Unread{source,pid:100,window:11};let other=Unread{source,pid:200,window:22};let current=Unread{window:33,..old};
-        let receive=|app:&mut App,unread:Unread|match source{
-            Messenger::Wechat|Messenger::WeCom|Messenger::Feishu|Messenger::DingTalk=>app.receive_messenger_reminder(unread),
-            Messenger::Qq=>app.receive_notification_from("QQ".into(),"QQ".into(),"有新消息".into(),Some(unread)),
-        };
-        receive(&mut h.app,old);h.frame(vec![]);receive(&mut h.app,other);receive(&mut h.app,current);
-        assert_eq!(h.app.pending_messengers,[current,other]);
-        assert!(h.app.alerts.iter().chain(h.app.notice.iter()).all(|alert|alert.unread!=Some(old)),"窗口被新消息替换后，横幅不能继续引用已经失效的目标");
-        assert!(h.app.alerts.iter().chain(h.app.notice.iter()).any(|alert|alert.unread==Some(other)),"其他账号的横幅必须保留");
-        h.app.discard_unread(other);for _ in 0..45{h.frame(vec![]);}
-        h.click_text("查看");assert!(h.cmds.contains(&Cmd::ViewMessenger(current)));
-    }
-}
-
-#[test]
-fn qq_bound_notices_open_their_original_account_and_clear_independently(){
-    use crate::app::{Cmd,Messenger,Unread};
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.read_notifications=true;
-    let a=Unread{source:Messenger::Qq,pid:100,window:11};let b=Unread{source:Messenger::Qq,pid:200,window:22};
-    h.app.receive_notification_from("QQ".into(),"QQ".into(),"有新消息".into(),Some(a));h.frame(vec![]);
-    h.app.receive_notification_from("QQ".into(),"QQ".into(),"有新消息".into(),Some(b));
-    assert_eq!(h.app.pending_messengers,[a,b]);
-    for _ in 0..45{h.frame(vec![]);}
-    assert!(!h.app.open);
-    let hit=h.top_bar_notice.expect("收起态的消息横幅应提供置顶命中区");
-    for id in ["messenger-view","messenger-dismiss"] {
-        let button=h.ctx.read_response(egui::Id::new(("card",true,id))).expect("横幅按钮应可点击");
-        assert!(hit.contains_rect(button.interact_rect),"{id} 应位于通知命中区内");
-    }
-    h.click_text("查看");assert!(h.cmds.contains(&Cmd::ViewMessenger(a)),"横幅应打开它自己的账号，不能取最近新增的另一个账号");
-    h.app.viewed_client(Messenger::Qq,200);h.frame(vec![]);
-    assert_eq!(h.app.pending_messengers,[a]);
-    h.cmds.clear();h.click_text("查看");assert!(h.cmds.contains(&Cmd::ViewMessenger(a)));
-    h.app.discard_unread(a);h.frame(vec![]);assert!(h.app.pending_messengers.is_empty());assert!(h.app.notice.is_none());
-    assert!(h.top_bar_notice.is_none());
-}
-
-#[test]
-fn qq_unknown_notice_can_close_without_dismissing_a_bound_account(){
-    use crate::app::{Messenger,Unread};
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.read_notifications=true;
-    h.app.receive_notification("QQ".into(),"QQ".into(),"未确认账号".into());h.frame(vec![]);
-    let b=Unread{source:Messenger::Qq,pid:200,window:22};
-    h.app.receive_notification_from("QQ".into(),"QQ".into(),"另一账号的消息".into(),Some(b));
-    for _ in 0..45{h.frame(vec![]);}
-    h.click_text("关闭");h.frame(vec![]);
-    assert_eq!(h.app.pending_messengers,[b]);
-}
-
-#[test]
-fn qq_expired_unidentified_notice_can_be_reopened_and_explicitly_cleared(){
-    use crate::app::{Messenger,Unread};
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.read_notifications=true;
-    let unread=Unread::of(Messenger::Qq);
-    h.app.receive_notification("QQ".into(),"QQ".into(),"测试消息".into());
-    for _ in 0..360{h.frame(vec![]);}assert!(h.app.notice.is_none());
-    h.app.reveal_messenger_notice(unread);for _ in 0..45{h.frame(vec![]);}
-    h.click_text("关闭");h.frame(vec![]);assert!(h.app.pending_messengers.is_empty());
-}
-
-#[test]
-fn qq_unknown_reminders_are_not_numbered_as_another_known_account(){
-    use crate::app::{Messenger,Unread};
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.read_notifications=true;
-    for (pid,window) in [(100,11),(0,0),(200,22)]{
-        h.app.receive_notification_from("QQ".into(),"QQ".into(),"有新消息".into(),(pid!=0).then_some(Unread{source:Messenger::Qq,pid,window}));
-    }
-    assert_eq!((h.app.unread_tag(0),h.app.unread_tag(1),h.app.unread_tag(2)),(Some(1),None,Some(2)));
-    h.app.alerts.clear();h.app.notice=None;h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(text)if text.galley.text()=="?")));
-}
-
-#[test]
-fn unavailable_messenger_status_stays_visible_when_the_island_is_collapsed(){
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for message in ["QQ 账号已退出","微信 账号已退出","暂时无法确认此 QQ 消息的账号"]{
-        let mut h=H::new();h.hover(Pos2::new(600.0,180.0),1.0);
-        h.app.messenger_unavailable(message);h.hover(Pos2::new(600.0,180.0),0.3);
-        let bounds=h.shapes.iter().find_map(|shape|match &shape.shape{
-            egui::Shape::Text(text) if text.galley.text()==message=>Some(text.visual_bounding_rect()),_=>None,
-        }).expect("岛收起时仍应完整显示账号状态提示");
-        assert!(h.app.progress()<0.02,"提示不应展开岛体");
-        assert!(h.region.contains_rect(bounds),"原生窗口区域应包含提示");
-        assert!(!h.hit.intersects(bounds),"提示不应拦截鼠标");
-    }
-}
-
-#[test]
-fn exited_messenger_unreads_clear_their_badges_and_notifications(){
-    use crate::app::{Messenger,Unread};
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;
-    h.app.receive_wechat_reminder_from(100,11);h.frame(vec![]);
-    assert_eq!(h.app.notice.as_ref().and_then(|notice|notice.messenger()),Some(Messenger::Wechat));
-    h.app.receive_wechat_reminder_from(200,22);h.app.receive_wechat_reminder_from(300,33);
-    h.app.receive_notification("QQ".into(),"QQ".into(),"测试".into());
-    for (pid,window) in [(200,22),(100,11)]{
-        h.app.discard_unread(Unread{source:Messenger::Wechat,pid,window});h.frame(vec![]);
-        assert!(h.app.pending_messengers.contains(&Unread{source:Messenger::Wechat,pid:300,window:33}));
-        assert_eq!(h.app.notice.as_ref().and_then(|notice|notice.messenger()),Some(Messenger::Wechat));
-    }
-    h.app.discard_unread(Unread{source:Messenger::Wechat,pid:300,window:33});h.frame(vec![]);
-    assert_eq!(h.app.pending_messengers,[Unread::of(Messenger::Qq)]);
-    assert!(h.app.alerts.iter().all(|notice|notice.messenger()!=Some(Messenger::Wechat)));
-    assert_ne!(h.app.notice.as_ref().and_then(|notice|notice.messenger()),Some(Messenger::Wechat));
-    h.app.discard_unread(Unread::of(Messenger::Qq));h.frame(vec![]);
-    assert!(h.app.pending_messengers.is_empty());
-    assert!(h.app.alerts.iter().all(|notice|notice.messenger()!=Some(Messenger::Qq)));
-    assert_ne!(h.app.notice.as_ref().and_then(|notice|notice.messenger()),Some(Messenger::Qq));
-}
-
-#[test]
-fn stale_exit_results_preserve_new_windows_and_unidentified_accounts(){
-    use crate::app::{Messenger,Unread};
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.wechat_notifications=true;
-    let old=Unread{source:Messenger::Wechat,pid:100,window:11};
-    h.app.receive_wechat_reminder_from(old.pid,old.window);h.app.receive_wechat_reminder_from(100,12);
-    h.app.receive_wechat_reminder();h.app.discard_unread(old);
-    assert_eq!(h.app.pending_messengers,[Unread{window:12,..old},Unread::of(Messenger::Wechat)]);
-    h.app.discard_unread(Unread{window:12,..old});h.frame(vec![]);
-    assert_eq!(h.app.pending_messengers,[Unread::of(Messenger::Wechat)]);
-    h.app.discard_unread(Unread::of(Messenger::Wechat));h.frame(vec![]);
-    assert!(h.app.pending_messengers.is_empty());
-}
-
-#[test]
-fn messenger_notifications_keep_separate_badges_until_the_client_is_viewed(){
-    use crate::app::{Cmd,Messenger,Unread};
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;
-    h.frame(vec![]);h.app.receive_wechat_reminder();
-    for _ in 0..60{h.frame(vec![]);}
-    h.click_text("查看");assert!(h.cmds.contains(&Cmd::ViewMessenger(Unread::of(Messenger::Wechat))));
-    h.click_text("关闭");assert!(h.app.notice.is_none());
-    h.cursor=None;h.app.receive_notification("QQ".into(),"QQ".into(),"小林 · 测试".into());
-    for _ in 0..360{h.frame(vec![]);}
-    assert!(h.app.notice.is_none());
-    let sources=|h:&H|h.app.pending_messengers.iter().map(|u|u.source).collect::<Vec<_>>();
-    assert_eq!(sources(&h),[Messenger::Wechat,Messenger::Qq]);
-    // 收起时两条未读叠成一个入口，点它展开面板，再在旁边的胶囊里逐个点开。
-    h.frame(vec![]);
-    let stack=h.ctx.read_response(egui::Id::new(("card",true,"messenger-stack"))).expect("叠放入口可点击").rect.center();
-    h.click(stack);for _ in 0..60{h.frame(vec![]);}
-    assert!(h.app.open);
-    for source in [Messenger::Wechat,Messenger::Qq]{
-        h.frame(vec![]);
-        let pos=h.ctx.read_response(egui::Id::new(("card",true,source.name()))).expect("胶囊图标可点击").rect.center();
-        h.cmds.clear(); h.click(pos);assert!(h.cmds.contains(&Cmd::ViewMessenger(Unread::of(source))),"{source:?} {pos:?} {:?}",h.cmds);
-        h.app.viewed_messenger(source);h.frame(vec![]);
-    }
-    assert!(h.app.pending_messengers.is_empty());
-    h.app.receive_wechat_reminder();h.app.receive_wechat_reminder();
-    assert_eq!(sources(&h),[Messenger::Wechat]);
-    h.app.settings.wechat_notifications=false;h.frame(vec![]);assert!(h.app.pending_messengers.is_empty());
-}
-
-#[test]
-fn unread_capsule_center_stays_put_as_the_island_springs_open() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for dock in crate::model::Dock::ALL {
-        let mut h=H::new();
-        h.app.settings.dock=dock;
-        h.app.settings.wechat_notifications=true;
-        h.app.receive_wechat_reminder();
-        h.app.alerts.clear();
-        h.app.notice=None;
-        let win=Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H));
-        h.cursor=Some(match dock {
-            crate::model::Dock::Bottom=>win.center_bottom()-Vec2::new(0.0,12.0),
-            crate::model::Dock::Top=>win.center_top()+Vec2::new(0.0,12.0),
-            crate::model::Dock::Left=>win.left_center()+Vec2::new(8.0,0.0),
-            crate::model::Dock::Right=>win.right_center()-Vec2::new(8.0,0.0),
-        });
-        let id=egui::Id::new(("card",true,"微信"));
-        let mut centers=Vec::new();
-        for _ in 0..90 {
-            h.frame(vec![]);
-            if let Some(button)=h.ctx.read_response(id) {
-                if h.app.open && button.rect.width()>crate::app::UNREAD_W-0.1 {
-                    centers.push(button.rect.center());
-                }
-            }
-        }
-        assert!(centers.len()>30,"{dock:?} 应采集到完整展开后的按钮");
-        let end=*centers.last().unwrap();
-        let drift=centers.iter().map(|p|p.distance(end)).fold(0.0_f32,f32::max);
-        assert!(drift<0.1,"{dock:?} 未读图标展开后又移动了 {drift:.2} 个逻辑像素");
-    }
-}
-
-#[test]
-fn messenger_capsule_grows_during_opening(){
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.wechat_notifications=true;
-    h.app.receive_wechat_reminder();
-    h.app.alerts.clear();
-    h.app.notice=None;
-    for opening in [true,false,true,false] {
-        h.cursor=opening.then_some(Pos2::new(WIN_W/2.0,12.0));
-        let mut sampled=false;
-        for _ in 0..90 {
-            h.frame(vec![]);
-            let appear=h.app.messenger_appear();
-            if (0.02..0.95).contains(&appear) {
-                let button=h.ctx.read_response(egui::Id::new(("card",true,"微信".to_string()))).unwrap();
-                sampled|=(1.0..crate::app::UNREAD_W-1.0).contains(&button.rect.width());
-            }
-        }
-        assert!(sampled && h.app.open==opening,"每次展开与收回都应经过中间尺寸");
-    }
-}
-
-#[test]
-fn messenger_accounts_get_number_tags_and_clear_one_by_one(){
-    use crate::app::{Cmd,Messenger,Unread};
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;
-    h.app.receive_wechat_reminder_from(100,11);h.app.receive_wechat_reminder_from(200,22);h.app.receive_wechat_reminder_from(100,12);
-    h.app.receive_notification("QQ".into(),"QQ".into(),"测试".into());
-    assert_eq!(h.app.pending_messengers,[Unread{source:Messenger::Wechat,pid:100,window:12},Unread{source:Messenger::Wechat,pid:200,window:22},Unread::of(Messenger::Qq)]);
-    assert_eq!((h.app.unread_tag(0),h.app.unread_tag(1),h.app.unread_tag(2)),(Some(1),Some(2),None),"只有同一来源多个账号才编号");
-    h.app.alerts.clear();h.app.notice=None;
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.5);
-    let rect=|h:&H,name:&str|h.ctx.read_response(egui::Id::new(("card",true,name.to_string()))).unwrap_or_else(||panic!("{name}")).rect;
-    let panel=h.app.island_rect(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),crate::app::PW,h.app.expanded_height());
-    let (a,b,q)=(rect(&h,"微信"),rect(&h,"微信2"),rect(&h,"QQ"));
-    assert!(a.bottom()<=b.top()+0.5 && b.bottom()<=q.top()+0.5);
-    let inset=h.app.unread_top_inset();assert!(inset>0.0,"顶部停靠时胶囊离开屏幕上沿");
-    assert!((a.top()-panel.top()-inset-2.0).abs()<1.0 && (q.bottom()-panel.bottom()+2.0).abs()<1.0,"三个图标时胶囊下沿与面板对齐 {a:?} {q:?} {panel:?}");
-    h.cmds.clear();h.click(b.center());
-    assert!(h.cmds.contains(&Cmd::ViewMessenger(Unread{source:Messenger::Wechat,pid:200,window:22})));
-    h.app.viewed_client(Messenger::Wechat,200);
-    assert_eq!(h.app.pending_messengers,[Unread{source:Messenger::Wechat,pid:100,window:12},Unread::of(Messenger::Qq)]);
-    assert_eq!(h.app.unread_tag(0),None,"剩一个账号就不再编号");
-    h.app.viewed_client(Messenger::Qq,4321);
-    assert!(h.app.pending_messengers.contains(&Unread::of(Messenger::Qq)),"查看其他 QQ 不能清除无法归属的提醒");
-    h.app.discard_unread(Unread::of(Messenger::Qq));
-    assert_eq!(h.app.pending_messengers,[Unread{source:Messenger::Wechat,pid:100,window:12}]);
-    // 四个以上：胶囊仍与面板等高，滚轮翻到后面的图标。
-    for pid in [300,400,500]{h.app.receive_wechat_reminder_from(pid,0);}
-    h.hover(Pos2::new(WIN_W/2.0,12.0),0.2);
-    let capsule=rect(&h,"微信");
-    let last=|h:&H|rect(h,"微信4");
-    let before=last(&h);
-    assert!(before.height()<1.0 || before.top()>=panel.bottom()-3.0,"第四个先藏在下面");
-    h.hover(Pos2::new(capsule.center().x,panel.top()+30.0),0.1);
-    for _ in 0..10{h.wheel(-40.0);}
-    h.frame(vec![]);
-    assert!(last(&h).height()>20.0 && last(&h).bottom()<=panel.bottom(),"滚动后露出第四个 {:?}",last(&h));
-}
-
-#[test]
-fn unread_capsule_stays_full_size_when_crossing_the_gap() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for dock in crate::model::Dock::ALL {
-        let mut h=H::new();
-        h.app.settings.dock=dock;
-        h.app.settings.wechat_notifications=true;
-        h.app.receive_wechat_reminder();
-        let win=Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H));
-        let panel=h.app.island_rect(win,crate::app::PW,h.app.expanded_height());
-        h.app.show_page(1);
-        h.hover(panel.center(),5.0);
-        let badge=|h:&H|h.ctx.read_response(egui::Id::new(("card",true,"微信"))).unwrap().rect;
-        let initial=badge(&h);
-        let y=initial.center().y;
-        let left=initial.center().x<panel.center().x;
-        let (edge,near)=if left {(panel.left(),initial.right())}else{(panel.right(),initial.left())};
-        let gap=Pos2::new(edge+(near-edge)*0.80,y);
-        assert!(!h.hit.contains(gap) && !initial.contains(gap),"间隙不属于可点击区域");
-        h.hover(gap,0.8);
-        assert!(h.app.open,"{dock:?} 停在通往未读图标的间隙时误收起");
-        if dock==crate::model::Dock::Top {
-            h.hover(Pos2::new(initial.center().x,panel.top()+1.0),0.4);
-            assert!(h.app.open,"沿屏幕顶边移到图标上方应保持展开");
-        }
-        h.hover(initial.center(),0.2);
-        assert_eq!(badge(&h),initial,"鼠标移到图标时应保持原有位置和尺寸");
-        h.hover(Pos2::new(gap.x,initial.bottom()+12.0),1.0);
-        assert!(!h.app.open,"离开胶囊高度范围后应恢复收起");
-    }
-}
-
-#[test]
-fn messenger_notifications_stay_right_and_move_outside_expanded_panel(){
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.wechat_notifications=true;
-    h.frame(vec![]);h.app.receive_wechat_reminder();
-    for _ in 0..360{h.frame(vec![]);}
-    let badge=|h:&H|h.ctx.read_response(egui::Id::new(("card",true,"微信"))).unwrap().rect;
-    assert!(badge(&h).left()>WIN_W/2.0);
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.5);
-    assert!(h.app.open && badge(&h).left()>WIN_W/2.0);
-    assert!((badge(&h).left()-(WIN_W/2.0+crate::app::PW/2.0+crate::app::UNREAD_GAP)).abs()<1.0,"展开后与面板留一小段间距 {:?}",badge(&h));
-    let center=badge(&h).center();
-    assert!(h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Rect(r)
-        if r.rect.contains(center) && (r.rect.width()-crate::app::UNREAD_W).abs()<0.1 && (r.rect.height()-crate::app::UNREAD_W).abs()<0.1)),"一个图标时是正圆");
-    h.click(badge(&h).center());
-    assert!(h.cmds.contains(&crate::app::Cmd::ViewMessenger(crate::app::Unread::of(crate::app::Messenger::Wechat))));
-}
-
-#[test]
-fn messenger_notifications_align_with_system_banner(){
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.wechat_notifications=true;
-    h.app.settings.read_notifications=true;
-    h.frame(vec![]);h.app.receive_wechat_reminder();
-    for _ in 0..360{h.frame(vec![]);}
-    h.app.receive_notification("ChatGPT".into(),"ChatGPT".into(),"测试".into());
-    for _ in 0..60{h.frame(vec![]);}
-    let rect=|name|h.ctx.read_response(egui::Id::new(("card",true,name))).unwrap().rect;
-    let badge=rect("微信");let close=rect("external-dismiss");
-    assert!(badge.left()>close.right());
-    assert!((badge.center().y-close.center().y).abs()<1.1);
-}
-
-#[test]
-fn messenger_notifications_side_docks_keep_one_column(){
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for dock in [crate::model::Dock::Left,crate::model::Dock::Right]{
-        let mut h=H::new();h.app.settings.dock=dock;h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;
-        h.app.receive_wechat_reminder();h.app.receive_notification("QQ".into(),"QQ".into(),"测试".into());
-        for _ in 0..720{h.frame(vec![]);}
-        let win=Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H));
-        let stack=h.ctx.read_response(egui::Id::new(("card",true,"messenger-stack"))).unwrap().rect;
-        let bar=h.app.island_rect(win,h.app.w.pos,h.app.h.pos);
-        assert!((stack.center().x-bar.center().x).abs()<1.0 && (stack.top()-(bar.bottom()-stack.height()/2.0)).abs()<0.5,"收起时竖胶囊和下方未读整体居中");
-        h.click(stack.center());for _ in 0..90{h.frame(vec![]);}
-        let rect=|name|h.ctx.read_response(egui::Id::new(("card",true,name))).unwrap().rect;
-        let a=rect("微信");let b=rect("QQ");
-        assert_eq!(a.center().x,b.center().x);assert!(a.bottom()<=b.top()+0.01);
-        let panel=h.app.island_rect(win,crate::app::PW,h.app.expanded_height());
-        if dock==crate::model::Dock::Left {assert!(a.left()>=panel.right()+crate::app::UNREAD_GAP-0.5,"左停靠：胶囊在面板右侧");}
-        else {assert!(a.right()<=panel.left()-crate::app::UNREAD_GAP+0.5,"右停靠：胶囊在面板左侧");}
-        assert!((a.top()-panel.top()-2.0).abs()<1.0 && h.app.unread_top_inset()==0.0,"侧边停靠时顶端与面板对齐");
-    }
-}
-
 #[test]
 fn side_dock_file_drag_opens_the_shelf_and_drop_saves_it(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -5052,75 +4244,6 @@ fn side_dock_file_drag_opens_the_shelf_and_drop_saves_it(){
         frame(&mut h,false,true);
         assert!(h.app.shelf.items.contains(&path),"{dock:?} 松手后应放进置物架");
         h.app.shelf.items.clear();h.app.shelf.save();
-    }
-}
-
-fn shoot_unread(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::path::Path,name:&str,frames:usize,cursor:Option<Pos2>){
-    let ppp=2.0;
-    let side=h.app.settings.dock.is_side();
-    let (w,hgt)=if side {(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H)} else {(crate::app::CANVAS_W,WIN_H)};
-    let (ww,wh)=if side {(w,hgt)} else {(WIN_W,WIN_H)};
-    for f in 0..frames {
-        h.t+=1.0/60.0;
-        let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-05".into(),date:"11月5日 周四".into(),cursor,bt_ready:true,battery:Some(76),..Default::default()};
-        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
-            events:cursor.map(|p|vec![egui::Event::PointerMoved(p)]).unwrap_or_default(),
-            viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
-        let app=&mut h.app;
-        let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{let win=Rect::from_min_size(ui.max_rect().min,Vec2::new(ww,wh));app.frame(ui,win,&env);});});
-        raster.update_textures(&output.textures_delta);
-        if f+1==frames {
-            raster.buf.fill([0.20,0.24,0.32,1.0]);
-            raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-            let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-            let image=image::RgbaImage::from_raw((w*ppp) as u32,(hgt*ppp) as u32,rgba).unwrap();
-            let image=if side {image::imageops::crop_imm(&image,0,240,(w*ppp) as u32,720).to_image()} else {image::imageops::crop_imm(&image,0,0,(WIN_W*ppp) as u32,(WIN_H*ppp) as u32).to_image()};
-            image.save(dest.join(format!("{name}.png"))).unwrap();
-        }
-        raster.free_textures(&output.textures_delta);
-    }
-}
-
-#[test]
-#[ignore="按需导出微信 / QQ 未读胶囊的实际画面"]
-fn unread_gallery(){
-    use crate::app::Messenger;
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_FEATURE_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
-    let fill=|h:&mut H,n:usize|{
-        h.app.settings.wechat_notifications=true;h.app.settings.read_notifications=true;h.app.settings.pet=false;
-        let all=[(Messenger::Wechat,101),(Messenger::Qq,0),(Messenger::Wechat,202),(Messenger::Wechat,303),(Messenger::Qq,0)];
-        for (source,pid) in all.into_iter().take(n){
-            if source==Messenger::Wechat {h.app.receive_wechat_reminder_from(pid,0);} else {h.app.receive_notification("QQ".into(),"QQ".into(),"测试".into());}
-        }
-        h.app.alerts.clear();h.app.notice=None;h.app.notification_bell_until=0.0;
-    };
-    for dock in [crate::model::Dock::Top,crate::model::Dock::Left,crate::model::Dock::Right]{
-        let key=dock.key();
-        for n in [1,2,3,4]{
-            let mut h=H::new();h.app.settings.dock=dock;fill(&mut h,n);
-            let side=dock.is_side();
-            let (w,hgt)=if side {(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H)} else {(crate::app::CANVAS_W,WIN_H)};
-            let mut r=if side {feature_raster_sized(w,hgt)} else {feature_raster()};
-            let away=Some(Pos2::new(if side {w/2.0} else {WIN_W/2.0},hgt-6.0));
-            let near=if dock==crate::model::Dock::Left {Pos2::new(8.0,hgt/2.0)} else if dock==crate::model::Dock::Right {Pos2::new(w-8.0,hgt/2.0)} else {Pos2::new(WIN_W/2.0,12.0)};
-            if n!=3 {shoot_unread(&mut h,&mut r,&dest,&format!("unread-{key}-{n}-collapsed"),60,away);}
-            shoot_unread(&mut h,&mut r,&dest,&format!("unread-{key}-{n}-open"),80,Some(near));
-        }
-        // 微信多开：两个微信账号；两个微信账号 + QQ。
-        for (tag,qq) in [("multi2",false),("multi3",true)]{
-            let mut h=H::new();h.app.settings.dock=dock;fill(&mut h,0);
-            h.app.receive_wechat_reminder_from(101,0);h.app.receive_wechat_reminder_from(202,0);
-            if qq {h.app.receive_notification("QQ".into(),"QQ".into(),"测试".into());}
-            h.app.alerts.clear();h.app.notice=None;h.app.notification_bell_until=0.0;
-            let side=dock.is_side();
-            let (w,hgt)=if side {(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H)} else {(crate::app::CANVAS_W,WIN_H)};
-            let mut r=if side {feature_raster_sized(w,hgt)} else {feature_raster()};
-            let away=Some(Pos2::new(if side {w/2.0} else {WIN_W/2.0},hgt-6.0));
-            let near=if dock==crate::model::Dock::Left {Pos2::new(8.0,hgt/2.0)} else if dock==crate::model::Dock::Right {Pos2::new(w-8.0,hgt/2.0)} else {Pos2::new(WIN_W/2.0,12.0)};
-            shoot_unread(&mut h,&mut r,&dest,&format!("unread-{key}-{tag}-collapsed"),60,away);
-            shoot_unread(&mut h,&mut r,&dest,&format!("unread-{key}-{tag}-open"),80,Some(near));
-        }
     }
 }
 
@@ -5409,18 +4532,6 @@ fn closed_modules_stop_their_reminders_and_timers(){
 
 
 #[test]
-fn every_module_settings_tab_maps_to_its_page(){
-    let titles=["通用","","专注","健康","待办","置物","消息提醒","","","关于","页面管理","","天气","外观","位置","系统性能","无线设备"];
-    let mut pages:Vec<_>=(0..titles.len()).filter_map(crate::extras::settings_tab_module).collect();
-    for tab in 0..titles.len() {
-        if let Some(page)=crate::extras::settings_tab_module(tab) {assert!(crate::app::PAGE_NAMES[page].chars().next()==titles[tab].chars().next(),"{} ↔ {}",titles[tab],crate::app::PAGE_NAMES[page]);}
-    }
-    pages.sort();assert_eq!(pages,vec![1,2,3,4,8,9,10],"每个功能页面各有一个设置分页");
-    assert_eq!(crate::app::PAGE_SETTINGS_TABS[crate::app::BLUETOOTH_PAGE],crate::extras::SETTINGS_TAB_WIRELESS);
-}
-
-
-#[test]
 fn performance_badge_opens_overview_and_drills_into_details() {
     use crate::{app::PERFORMANCE_PAGE,bar_layout::PERFORMANCE,performance::{BarStyle,View},performance_ui::{overview_card_center,view_tab_center,BACK}};
     let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -5592,8 +4703,6 @@ fn performance_gallery() {
 
 /// 设置页的 AI 额度账号默认收起成一行；需要检查明细的测试先把所有账号展开。
 
-#[path="bluetooth_ui_tests.rs"]
-mod bluetooth_ui_tests;
 
 #[cfg(all(windows, feature = "sdk-js"))]
 #[path = "quota_plugin_ui_tests.rs"]
@@ -5641,7 +4750,7 @@ fn performance_side_gallery() {
         let mut raster=feature_raster_sized(w,hgt);
         for frame in 0..60 {
             h.t+=1.0/60.0;
-            let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-11".into(),date:"11月11日 周三".into(),cursor:Some(Pos2::new(400.0,590.0)),bt_ready:true,..Default::default()};
+            let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-11".into(),date:"11月11日 周三".into(),cursor:Some(Pos2::new(400.0,590.0)),..Default::default()};
             let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
                 viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
             let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{
@@ -5691,7 +4800,7 @@ fn performance_morph_film() {
     for f in 0..300 {
         let cursor=if f<30 {away} else if f<140 {inside} else {away};
         h.t+=1.0/60.0;
-        let env=Env{t:h.t,clock:"09:41:00".into(),today:today.clone(),date:"11月4日 周三".into(),cursor:Some(cursor),bt_ready:true,..Default::default()};
+        let env=Env{t:h.t,clock:"09:41:00".into(),today:today.clone(),date:"11月4日 周三".into(),cursor:Some(cursor),..Default::default()};
         let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
             events:vec![egui::Event::PointerMoved(cursor)],
             viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
@@ -5754,3 +4863,29 @@ fn lingqi_island_gallery(){
 }
 
 
+
+fn shoot_unread(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::path::Path,name:&str,frames:usize,cursor:Option<Pos2>){
+    let ppp=2.0;
+    let side=h.app.settings.dock.is_side();
+    let (w,hgt)=if side {(crate::side_dock::SIDE_W,crate::side_dock::SIDE_H)} else {(crate::app::CANVAS_W,WIN_H)};
+    let (ww,wh)=if side {(w,hgt)} else {(WIN_W,WIN_H)};
+    for f in 0..frames {
+        h.t+=1.0/60.0;
+        let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-05".into(),date:"11月5日 周四".into(),cursor,battery:Some(76),..Default::default()};
+        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
+            events:cursor.map(|p|vec![egui::Event::PointerMoved(p)]).unwrap_or_default(),
+            viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
+        let app=&mut h.app;
+        let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{let win=Rect::from_min_size(ui.max_rect().min,Vec2::new(ww,wh));app.frame(ui,win,&env);});});
+        raster.update_textures(&output.textures_delta);
+        if f+1==frames {
+            raster.buf.fill([0.20,0.24,0.32,1.0]);
+            raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
+            let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
+            let image=image::RgbaImage::from_raw((w*ppp) as u32,(hgt*ppp) as u32,rgba).unwrap();
+            let image=if side {image::imageops::crop_imm(&image,0,240,(w*ppp) as u32,720).to_image()} else {image::imageops::crop_imm(&image,0,0,(WIN_W*ppp) as u32,(WIN_H*ppp) as u32).to_image()};
+            image.save(dest.join(format!("{name}.png"))).unwrap();
+        }
+        raster.free_textures(&output.textures_delta);
+    }
+}

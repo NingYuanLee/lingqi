@@ -707,7 +707,6 @@ impl App {
                 let input=ui.add_sized([ui.available_width()-38.0,32.0],egui::TextEdit::singleline(&mut self.weather.city_input)
                     .id_salt("weather-city-input").vertical_align(egui::Align::Center).margin(egui::vec2(10.0,7.0)).hint_text("输入城市名称搜索"));
                 let arrow=ui.add_sized([30.0,32.0],egui::Button::new("").corner_radius(7.0)).on_hover_text("选择具体地区");
-                let center=arrow.rect.center();ui.painter().add(egui::Shape::line(vec![center+egui::vec2(-4.0,-2.0),center+egui::vec2(0.0,2.0),center+egui::vec2(4.0,-2.0)],egui::Stroke::new(1.5,ui.visuals().text_color())));
                 if input.changed() || input.clicked() {ui.memory_mut(|m|m.open_popup(popup));}
                 if arrow.clicked() {ui.memory_mut(|m|m.toggle_popup(popup));}
                 enter=input.lost_focus() && ui.input(|i|i.key_pressed(egui::Key::Enter));

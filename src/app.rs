@@ -146,11 +146,8 @@ pub struct Env {
     /// 系统主音量（0..100, 是否静音）；v0.5.4 音量条与系统双向同步。
     pub volume: Option<(u32, bool)>,
     /// 蓝牙设备快照：连接状态、电量来源及本次会话的断开记录。
-    pub bt: Vec<crate::bt::Device>,
     /// 蓝牙服务是否已经完成首次扫描。
-    pub bt_ready: bool,
     /// Windows 当前识别到的 2.4G USB 接收器。
-    pub receivers: Vec<crate::bt::Device>,
     /// 岛所在屏幕（与 `win` 同一坐标系，逻辑点）；用于让通知详情留在屏幕内。
     pub screen: Option<Rect>,
     /// 毛玻璃皮肤：岛体四周采样得到的背景色（sRGB 0..1）。
@@ -174,7 +171,6 @@ impl Env {
     }
 }
 
-pub use crate::messenger::{Messenger,Unread};
 
 /// 展开后未读胶囊的宽度、离面板的间距和每个图标占的高度。
 pub(crate) const UNREAD_W: f32 = 40.0;
@@ -190,7 +186,6 @@ pub enum NotificationSound { Silent, System, Health }
 #[derive(Clone, Debug, PartialEq)]
 pub enum Cmd {
     Open(PathBuf),
-    ViewMessenger(Unread),
     #[cfg(windows)]
     OpenPluginNotice { source: String, id: String, session: String },
     OpenUrl(String),
@@ -199,9 +194,6 @@ pub enum Cmd {
     Reveal(PathBuf),
     Copy(String),
     Notify(String, String, NotificationSound),
-    RequestNotifications,
-    RequestQqNotifications,
-    DisconnectNotifications,
     ToggleAutostart,
     AddFiles,
     DragFile(PathBuf),
@@ -679,7 +671,6 @@ pub struct App {
     #[cfg(feature="sdk-js")]
     pub(crate) settings_plugin:Option<String>,
     pub(crate) settings_category:usize,
-    pub messenger_statuses:std::collections::HashMap<Messenger,String>,
     pub(crate) notification_apps:model::NotificationApps,
     pub(crate) subpage:Option<usize>,
     pub(crate) task_dialog:Option<crate::extras::TaskDraft>,
@@ -691,7 +682,6 @@ pub struct App {
     hud_alpha: f32,
     notice_width: Spring,
     notice_details: bool,
-    pub pending_messengers:Vec<Unread>,
     #[cfg(windows)]
     pub(crate) plugin_notice_ui: crate::plugin_notice_ui::NoticeUi,
     #[cfg(windows)]
@@ -748,17 +738,7 @@ pub struct App {
     pub(crate) music_seek_quiet_until: f64,
     /// 点了上一首 / 下一首的时刻：先本地把进度归零，等播放器报回新歌位置再交还。
     pub(crate) music_restart_at: Option<f64>,
-    /// 上一次看到的蓝牙设备，用来只在连接/断开时提示一次。
-    pub(crate) bt_shown: Vec<crate::bt::Device>,
-    pub(crate) wireless_devices: Vec<crate::bt::Device>,
-    pub(crate) wireless_offset: usize,
-    pub(crate) wireless_focus: Option<String>,
-    /// 展开电量页的时刻，用于入场动效；离开页面或收起后清空。
-    pub(crate) wireless_enter_at: Option<f64>,
-    pub(crate) wireless_fx: std::collections::HashMap<String,crate::bluetooth_ui::WirelessFx>,
-    pub(crate) wireless_alerted: std::collections::HashMap<(String,&'static str),f64>,
     /// 每台已连接设备第一次出现的时刻；用来区分“正在读取电量”和“设备不提供电量”。
-    pub(crate) wireless_seen_at: std::collections::HashMap<String,f64>,
     bt_initialized: bool,
     /// v0.5.5：邮件账号、最近邮件与设置表单。
     /// 岛内详情与独立阅读窗口各保留一份排版缓存。
@@ -789,6 +769,8 @@ impl App {
         let initial_page=settings.page_order.iter().copied().find(|page|settings.visible_pages[*page]).unwrap_or(0);
         let mut weather=crate::weather::State::load(&settings.weather_city,settings.weather_position.as_ref());
         Self {
+            forced_open_until:0.0, settings_open:false, settings_window:std::sync::Arc::new(std::sync::Mutex::new(crate::settings_window::State::load())), displays:Vec::new(), browser_at_top:false, browser_minimal_active:false, glass_tint:0.0, fluid:Default::default(), fluid_origin:Pos2::ZERO, fluid_art:None, fluid_title:String::new(), screen:None, horizontal_width:WIN_W, settings_focus_requested:false, settings_tab:0, settings_category:0, notification_apps:model::NotificationApps::load(), subpage:None, task_dialog:None,
+            notification_bell_until: 0.0, notification_bell_at: -10.0, notice: None, hud_notice: None, hud_alpha: 0.0, notice_width:Spring::new(0.0,CLOSE.0,CLOSE.1), notice_details:false, messenger_scroll:0.0, alerts: Default::default(), history: Default::default(), pending: vec![],
             #[cfg(feature="sdk-js")]
             plugins: crate::sdk_spike::local::LocalPlugins::open(model::config_dir().join("local-plugins")),
             #[cfg(feature="sdk-js")]
@@ -889,9 +871,7 @@ impl App {
             todo_pop: Spring::new(0.0, 500.0, 0.45),
                     #[cfg(feature="sdk-js")]
             settings_plugin:None,
-            forced_open_until:0.0, settings_open:false, settings_window:std::sync::Arc::new(std::sync::Mutex::new(crate::settings_window::State::load())), displays:Vec::new(), browser_at_top:false, browser_minimal_active:false, glass_tint:0.0, fluid:Default::default(), fluid_origin:Pos2::ZERO, fluid_art:None, fluid_title:String::new(), screen:None, horizontal_width:WIN_W, settings_focus_requested:false, settings_tab:0, settings_category:0, messenger_statuses:Default::default(), notification_apps:model::NotificationApps::load(), subpage:None, task_dialog:None,
             listener_status: "尚未连接".into(),
-            notification_bell_until: 0.0, notification_bell_at: -10.0, notice: None, hud_notice: None, hud_alpha: 0.0, notice_width:Spring::new(0.0,CLOSE.0,CLOSE.1), notice_details:false, pending_messengers:Vec::new(), messenger_scroll:0.0, alerts: Default::default(), history: Default::default(), pending: vec![],
             #[cfg(windows)]
             plugin_notice_ui: Default::default(),
             #[cfg(windows)]
@@ -916,7 +896,6 @@ impl App {
             music_seek_ui: None,
             music_seek_quiet_until: 0.0,
             music_restart_at: None,
-            bt_shown: Vec::new(), wireless_devices:Vec::new(),wireless_offset:0,wireless_focus:None,wireless_enter_at:None,wireless_fx:Default::default(),wireless_alerted:Default::default(),wireless_seen_at:Default::default(),
             bt_initialized: false,
                 weather,
             updates: crate::updates::State::load(model::config_dir().join("update-check.json")),
@@ -924,14 +903,6 @@ impl App {
         }
     }
 
-    #[cfg(windows)]
-    pub fn wireless_compat_store(&self) -> crate::bt::compat::Store {
-        #[cfg(feature = "sdk-js")]
-        return self.plugins.wireless_store();
-
-        #[cfg(not(feature = "sdk-js"))]
-        crate::bt::compat::Store::default()
-    }
 
     #[cfg(all(windows, feature = "sdk-js", feature = "sdk-material"))]
     pub fn material_spec(&self) -> Option<crate::sdk_spike::local::MaterialSpec<'_>> {
@@ -948,10 +919,6 @@ impl App {
         self.toast_below = false;
     }
 
-    pub fn messenger_unavailable(&mut self, message: impl Into<String>) {
-        self.say(message);
-        self.toast_below = true;
-    }
 
     pub(crate) fn code_copied(&mut self, _code:&str) {
         self.say("验证码已复制");
@@ -972,50 +939,6 @@ impl App {
 
 
 
-    /// v0.5.4：把系统音量与蓝牙设备状态同步进界面；只在连接/断开时提示一次。
-    fn sync_device(&mut self, env: &Env) {
-        if !(self.open&&self.page==BLUETOOTH_PAGE) {self.wireless_enter_at=None;}
-        self.track_wireless_changes(&env.bt);
-        self.wireless_devices=env.bt.clone();
-        if self.module_on(BLUETOOTH_PAGE) {
-            self.wireless_devices.extend(env.receivers.iter().cloned());
-        }
-        if self.wireless_focus.as_ref().is_some_and(|id|!self.wireless_devices.iter().any(|d|&d.id==id)) {
-            self.wireless_focus=None;
-        }
-        if self.t >= self.volume_quiet_until {
-            if let Some(v) = env.volume {
-                self.volume_ui = Some(v);
-            }
-        }
-        let battery_enabled=self.settings.bluetooth_battery_notifications&&self.module_on(BLUETOOTH_PAGE);
-        let connection_enabled=self.settings.bluetooth_notifications;
-        if !battery_enabled||!connection_enabled {
-            let enabled=|a:&crate::extras::Alert| {
-                a.source!=crate::extras::AlertSource::Internal||a.title!="蓝牙设备"||
-                    if a.page==BLUETOOTH_PAGE {battery_enabled} else {connection_enabled}
-            };
-            self.alerts.retain(&enabled);
-            if self.notice.as_ref().is_some_and(|a|!enabled(a)) {self.notice=None;}
-        }
-        if !connection_enabled {
-            self.bt_shown.clear();
-            self.bt_initialized=false;
-            return;
-        }
-        if !env.bt_ready { return; }
-        // 只把首次完整扫描作为基线，之后的连接变化都应提示。
-        if !self.bt_initialized {
-            self.bt_initialized = true;
-            self.bt_shown = env.bt.iter().filter(|d|d.connected).cloned().collect();
-            return;
-        }
-        let connected: Vec<_> = env.bt.iter().filter(|d| d.connected && !self.bt_shown.iter().any(|old| old.id == d.id)).cloned().collect();
-        let disconnected: Vec<_> = self.bt_shown.iter().filter(|d| !env.bt.iter().any(|new| new.connected && new.id == d.id)).cloned().collect();
-        for device in &connected { self.bluetooth_alert(device, true); }
-        for device in &disconnected { self.bluetooth_alert(device, false); }
-        self.bt_shown = env.bt.iter().filter(|d|d.connected).cloned().collect();
-    }
 
     /// 距离上次交互的秒数（小精灵出现的依据）。
     pub fn idle_for(&self) -> f64 {
@@ -1110,8 +1033,6 @@ impl App {
             match page {
                 FOCUS_PAGE=>self.pomo.running=false,
                 BLUETOOTH_PAGE=>{
-                    self.wireless_focus=None;
-                    self.wireless_offset=0;
                 }
                 _=>{}
             }
@@ -1549,7 +1470,6 @@ impl App {
         self.tick(env, dt, elapsed);
         #[cfg(feature="sdk-js")]
         if self.plugins.watch_files_enabled() { ctx.request_repaint_after(std::time::Duration::from_millis(200)); }
-        self.sync_device(env);
         self.tick_alerts();
         #[cfg(windows)]
         self.tick_plugin_notices(&ctx, env);
@@ -1562,11 +1482,13 @@ impl App {
         if let Some(a)=&hud_active {self.hud_notice=Some(a.clone());}
         self.hud_alpha=anim::approach(self.hud_alpha,if hud_active.is_some(){1.0}else{0.0},if hud_active.is_some(){16.0}else{8.0},dt);
         if hud_active.is_none() && self.hud_alpha<0.003 {self.hud_notice=None;}
-        let notice_target=if !self.notice.as_ref().is_some_and(|a|a.messenger().is_some()) && self.compact_notices()&&(self.notice.is_some()||self.notification_bell().is_some()) {44.0}else{0.0};
-        self.notice_width.target=notice_target;
         if self.compact_notices(){self.notice_width.step(dt);}else{self.notice_width.snap(0.0);self.notice_details=false;}
         let bell=self.notification_bell().is_some()&&!self.compact_notices();
         self.resident_power=(env.battery,env.charging);
+        // 系统音量显示：静默窗口过后再更新界面，避免拖动时跳变。
+        if self.t >= self.volume_quiet_until {
+            if let Some(v) = env.volume {self.volume_ui = Some(v);}
+        }
         let mut layout=Layout::new(self.settings.show_battery&&env.battery.is_some(),false,self.pomo.running,bell,self.pet_enabled(),self.weather_pill().is_some());
         let performance_bar=self.performance_on_bar();
         let performance_visible=!env.fullscreen_hidden && !env.screen_locked &&
@@ -1590,10 +1512,7 @@ impl App {
         }
         if let Some(extra)=self.weather_pill_extra(&ctx){ layout.widen(bar::WEATHER,extra); }
         if resident_day.is_none() && !self.settings.show_clock {layout.hide_clock();}
-        let wireless=self.wireless_resident();
         // 放不下整组时不挤压其他常驻项，整组隐藏。
-        let wireless_w=self.wireless_bar_width();
-        if !wireless.is_empty()&&wireless_w<=self.resident_limit()-layout.width-12.0 {layout.append_bluetooth(wireless_w);}
         let zones=self.worldclock_views();
         if !zones.is_empty(){
             let zone_w=self.worldclock_width(&zones);
@@ -1633,9 +1552,9 @@ impl App {
         if self.pet_enabled() {
             if let Some(a)=self.notice.as_ref().filter(|_|!self.compact_notices()&&!self.open){layout.x[bar::PET]=Some(22.0-(self.notice_size(a).0+self.pet_space())/2.0);}
             }
+
         let centered=(self.notice.is_none() || self.open);
         self.resident.step(layout,dt,ctx.style().animation_time>0.0&&bar::animations_enabled(),centered);
-
         // 胶囊皮肤悬浮在屏幕顶边下方。
         let pill = self.settings.island_shape==model::IslandShape::Pill;
         let top = win.top() + if pill { PILL_GAP } else { 0.0 };
@@ -1805,14 +1724,11 @@ impl App {
         let panel=panel.translate(offset);
         let cx=panel.center().x;
         self.update_pet(env,cx,panel.top());
-        let appear=self.messenger_appear();
-        let outside_badge=messenger_rect.filter(|_|appear>0.02);
         let pc = anim::clamp01(p);
         let painter = ui.painter_at(ui.max_rect().expand(40.0));
         let feather = 1.0 / ctx.pixels_per_point();
         let notice_shape=notice_rect.map(|r|Rect::from_min_max(Pos2::new(r.left()-36.0,r.top()),r.max));
-        let body=messenger_rect.filter(|_|outside_badge.is_none()).map_or(panel,|badge|panel.union(badge));
-        let body=notice_shape.map_or(body,|notice|body.union(notice));
+        let body=notice_shape.map_or(panel,|notice|panel.union(notice));
         let minimal_strip = self.effective_minimal()  && self.notice.is_none() && self.notification_bell().is_none();
         let minimal_pill = minimal_strip && pc < 0.02;
         let flare = if minimal_pill || pill { 0.0 } else { lerp(5.0, FLARE, pc) };
@@ -1835,11 +1751,6 @@ impl App {
         // 拿起时投影加深，像被从屏幕边缘提起来。
         let lifted = self.drag_lift.pos.clamp(0.0, 1.2);
         island_shadow(body, flare, flare_h, radius, (smoothstep(0.1, 0.9, pc) + lifted * 0.9) * shadow_k);
-        if let Some(r)=outside_badge{
-            let appear=self.messenger_appear();
-            painter.rect_filled(r,r.width()/2.0,paint::alpha(self.island_overlay_fill(),appear));
-            if glass_skin {painter.rect_stroke(r,r.width()/2.0,egui::Stroke::new(1.0_f32,paint::alpha(self.glass_rim(),appear)),egui::StrokeKind::Inside);}
-        }
         if !self.glassy() && self.effective_skin()==model::Skin::Fluid {
             self.fluid_origin=body.min;
             self.fluid.set_tint(crate::fluid::Fluid::neutral());
@@ -1882,6 +1793,12 @@ impl App {
         if bottom {origin.y=panel.top();}
         let clip = panel.intersect(win);
         let base = Card::new(ui, origin, clip);
+        // 收起时健康提醒的常驻入口（喝水/活动）。
+        // 收起时健康提醒的常驻入口（喝水/活动），画在岛体右侧。
+        if !self.open {
+            let badge_card=Card::new(ui,origin,win);
+            self.draw_health_badges(&badge_card,panel,!self.side(),&mut cmds);
+        }
         self.cursor_local = env.cursor.map(|p| base.to_local(p));
 
         let mut top_bar_notice=None;
@@ -1933,19 +1850,6 @@ impl App {
                     if button.clicked(){self.show_page(MAIL_PAGE);}
                 }
             }
-        }
-        if let Some(rect)=messenger_rect {
-            let from=crate::skin_paint::shape_count(&ctx,layer);
-            let c=Card::new(ui,rect.min,rect.intersect(ui.max_rect()));
-            if outside_badge.is_some() {
-                let c=c.scaled(0.0,0.0,appear);
-                self.draw_unread_capsule(&ctx,&c,rect,env.cursor,&mut cmds);
-            }else{
-                let horizontal=!(self.side() && self.notice.is_none());
-                let scale=self.messenger_stack_appear();
-                self.draw_unread_stack(&c.scaled(0.0,0.0,scale).faded(scale),horizontal,&mut cmds);
-            }
-            keep_colors.push((from,crate::skin_paint::shape_count(&ctx,layer)));
         }
         let notice_details=self.notice_details_rect(notice_rect);
         if let Some(rect)=notice_details {
@@ -2061,7 +1965,6 @@ impl App {
             let outline=|r:Rect,flare:f32,flare_h:f32,radius:f32| if pill {GlassShape::Round(rel(r),radius.min(r.height().min(r.width())*0.5))}
                 else if dock!=model::Dock::Top {GlassShape::Docked{rect:rel(r),dock,flare,flare_h,radius}} else {GlassShape::Notch{rect:rel(r),flare,flare_h,radius}};
             let mut shapes=vec![outline(body,flare,flare_h,radius)];
-            if let Some(r)=outside_badge{shapes.push(GlassShape::Round(rel(r),r.width()/2.0));}
             if let Some(r)=notice_details {
                 shapes.push(GlassShape::Round(rel(r),10.0));
             }
@@ -2103,8 +2006,7 @@ impl App {
             || self.hud_alpha > 0.003 && self.hud_alpha < 0.997
             || !self.notice_width.settled(1.0);
         let pet_visible=self.pet_a>0.01 && !self.open && !minimal_pill;
-        let ambient=!self.glassy() && self.effective_skin()==model::Skin::Fluid && self.fluid.animating() || self.pomo.running && (self.open && self.page==1 || !self.open && !minimal_pill && self.notice.is_none() && bar::animations_enabled())
-            || self.wireless_animating();
+        let ambient=!self.glassy() && self.effective_skin()==model::Skin::Fluid && self.fluid.animating() || self.pomo.running && (self.open && self.page==1 || !self.open && !minimal_pill && self.notice.is_none() && bar::animations_enabled());
         #[cfg(feature="sdk-js")]
         let (canvas_animating, canvas_scroll, canvas_repaint) = self.plugin_canvas_frame.as_ref().map_or(
             (false,None,None),
@@ -2199,49 +2101,15 @@ impl App {
         }
     }
 
-    /// 展开后未读胶囊的出现程度：面板基本展开后从面板旁淡入。
-    pub(crate) fn messenger_appear(&self)->f32 {
-        if self.task_dialog.is_some(){return 0.0;}
-        smoothstep(0.0,1.0,anim::clamp01((self.progress()-0.7)/0.3))
-    }
-    fn messenger_stack_appear(&self)->f32 {1.0-smoothstep(0.04,0.30,self.progress())}
-    /// 同一来源有多个账号时给图标编号（1、2…）；只有一个账号不编号。
-    pub(crate) fn unread_tag(&self,i:usize)->Option<usize>{
-        let unread=self.pending_messengers.get(i)?;let source=unread.source;
-        if unread.unidentified(){return None;}
-        let known=|u:&&Unread|u.source==source && (!source.adapter().keep_unidentified || u.pid!=0);
-        let same=self.pending_messengers.iter().filter(known).count();
-        (same>1).then(||self.pending_messengers[..=i].iter().filter(known).count())
-    }
-    fn unread_id(&self,i:usize)->String{
-        let name=self.pending_messengers[i].source.name();
-        let n=self.pending_messengers[..=i].iter().filter(|u|u.source==self.pending_messengers[i].source).count();
-        if n>1{format!("{name}{n}")}else{name.to_string()}
-    }
-    /// 展开胶囊高度：一个是圆，两个是短胶囊，三个及以上与面板等高（多出的滚动）。
-    fn unread_capsule_height(&self,panel_h:f32)->f32 {
-        let n=self.unread_count();
-        if n>=3 {panel_h} else {4.0+UNREAD_SLOT*n as f32}
-    }
-    pub(crate) fn unread_top_inset(&self)->f32 {if self.dock()==model::Dock::Top {UNREAD_GAP}else{0.0}}
-    fn unread_slot(&self,height:f32)->f32 {
-        if self.unread_count()>=3 {(height-4.0)/3.0} else {UNREAD_SLOT}
-    }
     fn unread_count(&self)->usize {
-        let count=self.pending_messengers.len()+self.health_badges().len();
+        let count=self.health_badges().len();
         #[cfg(windows)]
         let count=count+self.plugin_notice_ui.item_count();
         count
     }
-    /// 收起时叠放的来源图标，每个客户端各占一个。
-    fn unread_sources(&self)->Vec<Messenger>{
-        let mut sources=Vec::new();
-        for u in &self.pending_messengers {if !sources.contains(&u.source){sources.push(u.source);}}
-        sources
-    }
     /// 收起时叠放区沿胶囊方向的长度。
     fn unread_stack_len(&self,horizontal:bool)->f32 {
-        let icons=self.unread_sources().len()+self.health_badges().len();
+        let icons=self.health_badges().len();
         #[cfg(windows)]
         let icons=icons+self.plugin_notice_ui.collapsed_count();
         let icons=icons as f32;
@@ -2257,12 +2125,34 @@ impl App {
         (limit - self.unread_stack_len(!self.side())).max(1.0)
     }
 
+    /// 收起时的健康提醒入口：喝水与活动各一个图标，红点提示到期，点一下确认。
+    fn draw_health_badges(&mut self,c:&Card,panel:Rect,horizontal:bool,cmds:&mut Vec<Cmd>){
+        let health=self.health_badges();
+        if health.is_empty(){return;}
+        let step=unread_step(horizontal);
+        // 入口画在岛体外侧（原先是独立的未读胶囊）：岛内的悬停提示不会挡住它。
+        // 竖向停靠时入口竖排，贴着岛体一侧。
+        let count=health.len() as f32;
+        let side=self.dock().is_side();
+        let (base_x,base_y)=if side {(panel.min.x+4.0,panel.min.y+8.0)}else{(panel.max.x+6.0,panel.min.y+4.0)};
+        let base_x=base_x-c.origin.x;
+        let base_y=base_y-c.origin.y;
+        for (i,kind) in health.iter().enumerate(){
+            let x=if side {base_x}else{base_x+step*i as f32};
+            let y=if side {base_y+step*i as f32}else{base_y};
+            kind.icon(c,x,y,0.7);
+            c.circle(x+8.0,y-7.0,2.6,Color32::from_rgb(255,59,48));
+            let button=if side {c.hit(base_x,base_y+step*i as f32,32.0,step,kind.id().to_string())}
+                        else {c.hit(base_x+step*i as f32,base_y,step,BAR_H,kind.id().to_string())};
+            if crate::paint::bar_tooltip(button,format!("{} · 点击确认，重新计时",kind.label())).clicked(){self.confirm_health_reminder(*kind);}
+        }
+        let _=(horizontal,cmds);
+    }
+
     /// 并入岛体的图标与主内容共用停靠中线；展开后独立显示的胶囊自行定位。
     fn bar_parts(&self,win:Rect,panel:Rect)->(Vec2,Option<Rect>,Option<Rect>) {
-        let badge=self.messenger_badge_rect(win,panel);
         let notice=self.notice_rect(panel);
-        let merged=badge.filter(|_|self.messenger_appear()<=0.02).into_iter().chain(notice);
-        let body=merged.fold(panel,Rect::union);
+        let body=notice.map_or(panel,|r|r);
         let bounds=self.screen.map_or(win,|screen|screen.intersect(win));
         let along=|center:f32,mid:f32,low:f32,high:f32|{
             let shift=center-mid;
@@ -2273,144 +2163,11 @@ impl App {
         }else{
             Vec2::new(along(win.center().x,body.center().x,bounds.left()-body.left(),bounds.right()-body.right()),0.0)
         };
-        (offset,badge.map(|r|r.translate(offset)),notice.map(|r|r.translate(offset)))
+        (offset,None,notice.map(|r|r.translate(offset)))
     }
 
-    fn messenger_badge_rect(&self,win:Rect,panel:Rect)->Option<Rect>{
-        if self.unread_count()==0 || self.browser_minimal_active && !self.open {return None;}
-        // 完整横幅已包含该来源图标。歌词模式和横幅收起后使用常驻入口。
-        if !self.open && !self.compact_notices() && self.unread_count()==1 && self.pending_messengers.len()==1
-            && self.notice.as_ref().and_then(|a|a.messenger())==self.pending_messengers.first().map(|u|u.source){return None;}
-        let bounds=self.screen.map_or(win,|screen|screen.intersect(win));
-        let appear=self.messenger_appear();
-        if appear>0.02 {
-            // 展开：贴在面板外侧、顶端对齐的竖向胶囊；顶部停靠和左停靠在右边，右停靠在左边。
-            let full=self.island_rect(win,PW,self.page_height.pos);
-            // 顶部停靠时面板贴着屏幕上沿，胶囊往下让一点，圆顶不会被屏幕边切掉。
-            let inset=self.unread_top_inset();
-            let height=self.unread_capsule_height(full.height()-inset);
-            let left=self.dock()==model::Dock::Right || !self.side() && full.right()+UNREAD_GAP+UNREAD_W>bounds.right();
-            // 胶囊在展开后的中心原地显现，避免跟着岛体边缘越过终点再弹回来。
-            let cx=if left {full.left()-UNREAD_GAP-UNREAD_W/2.0}else{full.right()+UNREAD_GAP+UNREAD_W/2.0};
-            let center=Pos2::new(cx,full.top()+inset+height/2.0);
-            return Some(Rect::from_center_size(center,Vec2::new(UNREAD_W,height)*appear));
-        }
-        // 极简刘海：横幅照常弹出，收起后只留细线，未读不常挂在线条上；展开岛体时在面板旁出现。
-        if self.effective_minimal(){return None;}
-        let scale=self.messenger_stack_appear();
-        if scale<0.02 || self.open && self.task_dialog.is_some(){return None;}
-        let side_column=self.side() && self.notice.is_none();
-        let length=self.unread_stack_len(!side_column);
-        let (width,height)=if side_column {(32.0,length)}else{(length,BAR_H)};
-        let (width,height)=(width*scale,height*scale);
-        let (x,y)=if side_column {
-            (panel.center().x-width/2.0,panel.bottom())
-        }else{
-            let right=panel.right()+self.notice_width.pos;
-            let y=if self.notice.is_some() && !self.compact_notices(){panel.center().y-BAR_H/2.0}else{panel.top()};
-            (if !self.side() || right+width<=bounds.right(){right}else{panel.left()-width},y)
-        };
-        Some(Rect::from_min_size(Pos2::new(x,y),Vec2::new(width,height)))
-    }
 
-    /// 展开后的未读胶囊：每个账号一个图标，点击跳到对应窗口；超过三个时滚轮翻看。
-    fn draw_unread_capsule(&mut self,ctx:&egui::Context,c:&Card,rect:Rect,cursor:Option<Pos2>,cmds:&mut Vec<Cmd>){
-        let n=self.unread_count();
-        let height=rect.height()/c.s;
-        let slot=self.unread_slot(height);
-        let max_scroll=(n as f32-3.0).max(0.0)*slot;
-        if max_scroll>0.0 && cursor.is_some_and(|p|rect.contains(p)) {
-            let delta=ctx.input(|i|i.raw_scroll_delta.y);
-            self.messenger_scroll-=delta*0.5;
-        }
-        self.messenger_scroll=self.messenger_scroll.clamp(0.0,max_scroll);
-        let c=c.faded(self.messenger_appear());
-        let inner=c.clipped(0.0,2.0,UNREAD_W,height-4.0);
-        let x=UNREAD_W/2.0;
-        for i in 0..self.pending_messengers.len() {
-            let u=self.pending_messengers[i];
-            let cy=2.0+slot*(i as f32+0.5)-self.messenger_scroll;
-            if cy< -slot || cy>height+slot {continue;}
-            let scale=u.source.adapter().icon_scale;
-            crate::extras::messenger_icon(&inner.scaled(x,cy,scale),x,cy,u.source);
-            inner.circle(x+10.0,cy-9.0,2.6,Color32::from_rgb(255,72,72));
-            let tag=self.unread_tag(i).map(|tag|tag.to_string()).or_else(||(u.unidentified()).then(||"?".to_string()));
-            if let Some(tag)=tag{
-                inner.circle(x+10.0,cy+8.5,6.0,Color32::from_gray(238));
-                inner.centered_text(x+10.0,cy+8.5,&tag,8.5,W::Bold,Color32::from_gray(28),H::Center);
-            }
-            let name=if u.unidentified(){format!("{} · 账号未确认",u.source.name())}
-                else{match self.unread_tag(i){Some(n)=>format!("{} · 账号 {n}",u.source.name()),None=>u.source.name().to_string()}};
-            let button=inner.hit(0.0,cy-slot/2.0,UNREAD_W,slot,self.unread_id(i)).on_hover_text(format!("查看{name}"));
-            if button.clicked(){cmds.push(Cmd::ViewMessenger(u));}
-        }
-        let health=self.health_badges();
-        let health_offset=self.pending_messengers.len();
-        #[cfg(windows)]
-        self.draw_plugin_notice_capsule(&inner, health_offset+health.len(), slot, height, self.messenger_scroll, UNREAD_W, cmds);
-        for (i,kind) in health.into_iter().enumerate() {
-            let cy=2.0+slot*((health_offset+i) as f32+0.5)-self.messenger_scroll;
-            if cy< -slot || cy>height+slot {continue;}
-            kind.icon(&inner,x,cy,0.8);
-            inner.circle(x+10.0,cy-9.0,2.6,Color32::from_rgb(255,59,48));
-            let button=crate::paint::bar_tooltip(inner.hit(0.0,cy-slot/2.0,UNREAD_W,slot,kind.id().to_string()),format!("{} · 点击确认，重新计时",kind.label()));
-            if button.clicked(){self.confirm_health_reminder(kind);}
-        }
-        if max_scroll>0.0 {
-            // 还有没露出的图标：上下边缘各一条淡淡的指示。
-            let ink=paint::alpha(theme::WHITE,0.35);
-            if self.messenger_scroll>0.5 {c.fill(x-6.0,4.0,12.0,2.0,1.0,ink);}
-            if self.messenger_scroll<max_scroll-0.5 {c.fill(x-6.0,height-6.0,12.0,2.0,1.0,ink);}
-        }
-    }
 
-    /// 收起时的未读入口：每个来源一个图标加小红点（同一来源多个账号合成一个）。只有一条时点它直接跳转，多条时展开面板挑选。
-    fn draw_unread_stack(&mut self,c:&Card,horizontal:bool,cmds:&mut Vec<Cmd>){
-        let sources=self.unread_sources();
-        let health=self.health_badges();
-        let count=self.pending_messengers.len();
-        let icons=sources.len()+health.len();
-        #[cfg(windows)]
-        let icons=icons+self.plugin_notice_ui.collapsed_count();
-        let step=unread_step(horizontal);
-        let at=|k:usize|if horizontal {(16.0+step*k as f32,14.0)}else{(16.0,14.0+step*k as f32)};
-        for k in 0..sources.len() {
-            let (x,y)=at(k);
-            let scale=sources[k].adapter().collapsed_icon_scale;
-            crate::extras::messenger_icon(&c.scaled(x,y,scale),x,y,sources[k]);
-        }
-        for (i,kind) in health.iter().enumerate(){let (x,y)=at(sources.len()+i);kind.icon(c,x,y,0.7);}
-        // 每个来源图标右上角一个小红点，不显示数字。
-        for k in 0..sources.len()+health.len() {let (x,y)=at(k);c.circle(x+8.0,y-7.0,2.6,Color32::from_rgb(255,59,48));}
-        let length=self.unread_stack_len(horizontal);
-        let messenger_length=if icons==sources.len(){length}else{sources.len() as f32*step+if horizontal{5.0}else{3.0}};
-        let (w,h)=if horizontal {(messenger_length,BAR_H)}else{(32.0,messenger_length)};
-        if count==1 {
-            let u=self.pending_messengers[0];
-            let button=c.hit(0.0,0.0,w,h,u.source.name()).on_hover_text(format!("查看{}",u.source.name()));
-            if button.clicked(){cmds.push(Cmd::ViewMessenger(u));}
-        }else if count>1 {
-            let button=c.hit(0.0,0.0,w,h,"messenger-stack").on_hover_text(format!("{count} 条未读 · 展开挑选"));
-            if button.clicked(){self.reveal_unread();}
-        }
-        #[cfg(windows)]
-        self.draw_plugin_notice_stack(c,horizontal,sources.len()+health.len(),step,length,cmds);
-        for (i,kind) in health.into_iter().enumerate() {
-            let k=sources.len()+i;
-            let (x,y)=at(k);
-            let start=if k==0{0.0}else{(if horizontal{x}else{y})-step/2.0};
-            let end=if k+1==icons{length}else{(if horizontal{x}else{y})+step/2.0};
-            let button=if horizontal{c.hit(start,0.0,end-start,BAR_H,kind.id().to_string())}else{c.hit(0.0,start,32.0,end-start,kind.id().to_string())};
-            if crate::paint::bar_tooltip(button,format!("{} · 点击确认，重新计时",kind.label())).clicked(){self.confirm_health_reminder(kind);}
-        }
-    }
-    /// 展开面板，让旁边的未读胶囊露出来。
-    pub(crate) fn reveal_unread(&mut self){
-        self.notice=None;
-        self.open=true; self.forced_open_until=self.t+4.0;
-        self.w.tune(OPEN_W.0,OPEN_W.1);self.h.tune(OPEN_H.0,OPEN_H.1);
-        self.w.target=PW;self.h.target=self.expanded_height();
-    }
     fn notice_rect(&self,panel:Rect)->Option<Rect>{
         if !self.compact_notices(){return None;}
         let width=self.notice_width.pos-8.0;
@@ -2741,7 +2498,6 @@ impl App {
             // 停在中间时绿边以 1.6 秒为周期缓慢呼吸，持续表明「就在中间」。
             let breathe=0.5+0.5*((self.t*std::f64::consts::TAU/1.6).sin() as f32);
             let strength=vis*lerp(0.32,lerp(0.78,1.0,breathe),lock);
-            if lock>0.01 {painter.add(egui::Shape::line(outline(2.0),egui::Stroke::new(5.0,tint(1.0,0.22*strength*lock))));}
             painter.add(egui::Shape::line(points.clone(),egui::Stroke::new(lerp(1.0,1.6,lock),tint(lock,0.95*strength))));
         }
         let mut bounds=body.expand(8.0);
@@ -2788,7 +2544,6 @@ impl App {
                 let d=(m-mid).dot(along).abs();
                 let g=(-((d-front)/18.0).powi(2)).exp()*fade;
                 if g<0.01 {continue;}
-                painter.line_segment([pair[0],pair[1]],egui::Stroke::new(6.0,tint(1.0,0.30*g)));
                 painter.line_segment([pair[0],pair[1]],egui::Stroke::new(1.8,tint(0.45,0.95*g)));
             }
         }
@@ -3034,7 +2789,6 @@ impl App {
         if compact_alpha>0.004 {
             let c=base.faded(compact_alpha);let c=if compact_alpha<0.8{c.ghost()}else{c};
             if let Some(x)=layout.x[bar::PERFORMANCE] {self.performance_bar(&c,local_cx+x);}
-            self.draw_wireless_bar(&c,local_cx,&layout);
             self.draw_worldclock(&c,local_cx,&layout);
             if let Some(x)=layout.x[bar::WEATHER] { self.draw_pill_weather(&c,local_cx+x,&layout); }
             #[cfg(feature="sdk-js")]
@@ -3071,6 +2825,8 @@ impl App {
     /// 左右停靠时竖排内容随展开淡出，顶栏随面板内容淡入。
     fn resident_header(&mut self, base: &Card, panel: Rect, cx: f32, p: f32, reveal: f32, env: &Env, resident_day: Option<&ResidentDay>) {
         if !self.side() {self.shared_header(base,cx,p,reveal,env,resident_day);return;}
+        // 竖向停靠时，健康提醒的入口贴在岛体一侧（展开时也在）。
+        self.draw_health_badges(base,panel,true,&mut Vec::new());
         let bar_alpha=1.0-smoothstep(0.0,0.3,p);
         let minimal=self.effective_minimal()&&self.notification_bell().is_none();
         if bar_alpha>0.004 && !minimal {
@@ -3231,7 +2987,6 @@ impl App {
             PERFORMANCE_PAGE => ("系统", "性能", crate::performance_ui::CPU_COLOR),
             8 => ("当地", "天气", theme::CYAN),
             // 详情页的标题带返回箭头，由页面自己画。
-            BLUETOOTH_PAGE if self.wireless_focus.is_some() && self.wireless_devices.len()>1 => return,
             BLUETOOTH_PAGE => ("无线", "设备", theme::CYAN),
             _ => ("灵栖", "设置", theme::WHITE),
         };
@@ -3418,7 +3173,6 @@ impl App {
             6 => {}
             PERFORMANCE_PAGE => self.page_performance(c),
             8 => self.page_weather(c,&actions,env,cmds),
-            BLUETOOTH_PAGE => self.page_wireless(c,env),
             CALENDAR_PAGE => {},
             _ => self.page_settings(c),
         }
