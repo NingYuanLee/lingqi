@@ -24,7 +24,7 @@ pub const SIDE_HALF_EXTENT: f32 = 150.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum SideItem {
-    Clock, Date(f32), Weather, Battery, Music, Focus, Bell, Wireless, Performance(f32),
+    Clock, Date(f32), Weather, Battery, Focus, Bell, Wireless, Performance(f32),
     #[cfg(feature="sdk-js")]
     Pinned(usize),
 }
@@ -34,7 +34,7 @@ impl SideItem {
         match self {
             #[cfg(feature="sdk-js")]
             Self::Pinned(_) => PINNED_HEIGHT,
-            Self::Performance(h) | Self::Date(h) => h, Self::Clock => if clock_seconds {46.0}else{32.0}, Self::Weather => 40.0, Self::Wireless=>37.0, Self::Battery => 20.0, Self::Music => 18.0, Self::Focus => 22.0, Self::Bell => 22.0 }
+            Self::Performance(h) | Self::Date(h) => h, Self::Clock => if clock_seconds {46.0}else{32.0}, Self::Weather => 40.0, Self::Wireless=>37.0, Self::Battery => 20.0, Self::Focus => 22.0, Self::Bell => 22.0 }
     }
 }
 
@@ -55,7 +55,6 @@ impl App {
         if !self.wireless_resident().is_empty(){items.push(SideItem::Wireless);}
         if self.settings.show_battery && self.resident_power.0.is_some() { items.push(SideItem::Battery); }
         if self.performance_on_bar() {items.push(SideItem::Performance(self.settings.performance_bar.side_height(self.settings.performance_metrics)));}
-        if self.media.is_music() { items.push(SideItem::Music); }
         if self.pomo.running { items.push(SideItem::Focus); }
         if self.notification_bell().is_some() { items.push(SideItem::Bell); }
         #[cfg(feature="sdk-js")]
@@ -153,7 +152,6 @@ impl App {
                 SideItem::Weather => self.draw_side_weather(c,cx,mid),
                 SideItem::Wireless=>self.draw_wireless_side(c,cx,mid),
                 SideItem::Battery => paint::battery(c, cx, mid, env.battery, env.charging, 0.72),
-                SideItem::Music => paint::playback_bars(c, cx, mid, self.t, self.media.playing, theme::WHITE),
                 SideItem::Focus => {
                     let minutes = (self.pomo.remaining / 60.0).ceil().max(0.0) as u32;
                     let color = if self.pomo.phase == Phase::Focus { theme::RED_TOP } else { theme::GREEN };

@@ -1,7 +1,7 @@
 //! AI 模块的纯函数测试：不碰网络、不碰凭据管理器。
 
 use super::context::{
-    clamp, clipboard_for_prompt, IslandContext, Media, Performance, Power, Weather, CLIP_PROMPT_MAX,
+    clamp, clipboard_for_prompt, IslandContext, Performance, Power, Weather, CLIP_PROMPT_MAX,
     CONTEXT_MAX,
 };
 use super::credentials::validate_key;
@@ -181,16 +181,10 @@ fn context_render_lists_every_available_field() {
         power: Some(Power { percent: 76, charging: false }),
         performance: Some(Performance { cpu: Some(12.0), ram: Some(58.0), gpu: None }),
         clipboard: Some("订单号 A1234567".into()),
-        media: Some(Media {
-            title: "晴天".into(),
-            artist: "周杰伦".into(),
-            source: "网易云音乐".into(),
-            playing: true,
-        }),
         city: Some("佛山".into()),
     };
     let rendered = context.render();
-    for needle in ["本地时间", "天气：佛山", "电量：76%", "CPU 12%", "剪贴板：", "正在播放：晴天", "常驻城市：佛山"] {
+    for needle in ["本地时间", "天气：佛山", "电量：76%", "CPU 12%", "剪贴板：", "常驻城市：佛山"] {
         assert!(rendered.contains(needle), "上下文里应含 {needle}，实际：{rendered}");
     }
     assert!(!rendered.contains("None"));

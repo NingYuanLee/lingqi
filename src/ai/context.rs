@@ -37,15 +37,6 @@ pub struct Performance {
     pub gpu: Option<f32>,
 }
 
-/// 正在播放。刻意用自有类型，媒体模块下线时只需删掉一处转换。
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Media {
-    pub title: String,
-    pub artist: String,
-    pub source: String,
-    pub playing: bool,
-}
-
 /// 一次采集到的上下文。
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct IslandContext {
@@ -55,7 +46,6 @@ pub struct IslandContext {
     pub power: Option<Power>,
     pub performance: Option<Performance>,
     pub clipboard: Option<String>,
-    pub media: Option<Media>,
     pub city: Option<String>,
 }
 
@@ -66,7 +56,6 @@ pub struct Sources {
     pub weather: Option<Weather>,
     pub performance: Option<Performance>,
     pub clipboard: Option<String>,
-    pub media: Option<Media>,
     pub city: Option<String>,
 }
 
@@ -80,7 +69,6 @@ pub fn collect(sources: &Sources) -> IslandContext {
         power: sources.power.map(|(percent, charging)| Power { percent, charging }),
         performance: sources.performance,
         clipboard: sources.clipboard.as_deref().and_then(clipboard_for_prompt),
-        media: sources.media.clone(),
         city: sources.city.clone(),
     }
 }
@@ -137,19 +125,6 @@ impl IslandContext {
         }
         if let Some(clipboard) = &self.clipboard {
             lines.push(format!("剪贴板：{clipboard}"));
-        }
-        if let Some(media) = &self.media {
-            let artist = if media.artist.trim().is_empty() {
-                String::new()
-            } else {
-                format!(" · {}", media.artist)
-            };
-            lines.push(format!(
-                "正在播放：{}{artist}（{}，{}）",
-                media.title,
-                media.source,
-                if media.playing { "播放中" } else { "已暂停" }
-            ));
         }
         if let Some(city) = &self.city {
             if !city.trim().is_empty() {

@@ -3,7 +3,6 @@
 
 use eframe::egui::{self, Color32, Pos2};
 use lingqi::app::{self, App, Cmd, Env, Options};
-use lingqi::smtc;
 #[cfg(windows)]
 use lingqi::messenger::{self,OpenError,TaskbarEvent};
 use lingqi::poll_clock::PollClock;
@@ -24,16 +23,11 @@ struct Shell {
     readback_at: Option<Instant>,
     #[cfg(windows)]
     was_interactive_transition: bool,
-    media: smtc::Shared,
     seek_rx: Option<(&'static str,std::sync::mpsc::Receiver<bool>)>,
-    media_control:Option<smtc::ControlWorker>,
-    music_volume_rx:Option<(String,std::sync::mpsc::Receiver<bool>)>,
     _resource_monitor:Option<lingqi::resources::Monitor>,
     resource_at:PollClock,
     guard_notified:bool,
-    media_enabled: smtc::Poller,
     /// 刚点过播放控制或音量时，短时间内按最快频率采样，让按钮状态及时回显。
-    media_fast_until: Option<Instant>,
     placed: bool,
     placement_at: PollClock,
     placement_scale: f32,
@@ -267,10 +261,7 @@ impl Shell {
         #[cfg(feature="record")]
         if std::env::var("LINGQI_CAL_DEMO").is_ok(){app.calendar_demo();}
         diagnostics::startup("初始化媒体和托盘");
-        let media = smtc::shared();
-        let media_enabled=smtc::spawn_poller(media.clone(),cc.egui_ctx.clone());
-        media_enabled.store(app.settings.visible_pages[0],std::sync::atomic::Ordering::Relaxed);
-        #[cfg(windows)]
+                    #[cfg(windows)]
         let autostart = lingqi::tray::autostart_enabled();
         #[cfg(windows)]
         let tray = if profiling_island(){None}else{app.start_tray(lingqi::tray::State {
@@ -352,16 +343,11 @@ impl Shell {
             readback_at: None,
             #[cfg(windows)]
             was_interactive_transition: false,
-            media,
-            seek_rx: None,
-            media_control:None,
-            music_volume_rx:None,
-            _resource_monitor:lingqi::resources::Monitor::start(lingqi::model::config_dir().join("diagnostics")),
+                seek_rx: None,
+                    _resource_monitor:lingqi::resources::Monitor::start(lingqi::model::config_dir().join("diagnostics")),
             resource_at:PollClock::default(),
             guard_notified:false,
-            media_enabled,
-            media_fast_until: None,
-            placed: false,
+                    placed: false,
             placement_at: PollClock::default(),
             placement_scale: 0.0,
             #[cfg(windows)] placed_bounds:None,
@@ -462,14 +448,6 @@ impl Shell {
     }
 
     fn env(&mut self, ctx: &egui::Context) -> Env {
-        if let Some((source,rx))=&self.music_volume_rx {
-            if let Ok(success)=rx.try_recv() {
-                if !success && self.media.lock().is_ok_and(|media|media.source==*source) {
-                    self.app.say("音乐应用音量暂不可调，请稍后重试");
-                }
-                self.music_volume_rx=None;
-            }
-        }
         let (clock, today, date) = local_now();
         // 电量变化很慢，每 5 秒读一次就够
         if self.sys.2.ready(Duration::from_secs(5)) {
@@ -540,8 +518,7 @@ impl Shell {
                 #[cfg(windows)] {if self.app.settings.browser_minimal {self.native.as_mut().and_then(|native|native.browser_at_top(&self.app.settings))}else{None}}
                 #[cfg(not(windows))] {None}
             },
-            media: self.media.lock().map(|m| m.clone()).unwrap_or_default(),
-            volume: self.system_state.volume,
+                volume: self.system_state.volume,
             bt: self.bt.clone(),
             bt_ready: self.bt_ready,
             receivers: self.receivers.clone(),
@@ -598,21 +575,6 @@ impl eframe::App for Shell {
             lingqi::resources::GALLEYS.store(ctx.fonts(|fonts|fonts.num_galleys_in_cache()),std::sync::atomic::Ordering::Relaxed);
             self.resource_at=PollClock::now();
         }
-        let music_on=self.app.module_on(app::MUSIC_PAGE);
-        let guarded=lingqi::resources::GUARD.tripped();
-        if music_on && guarded && !self.guard_notified {
-            // 资源保护熔断：停止音乐会话轮询（含封面、网易云日志）与歌词查询，保住用户电脑，重启后恢复。
-            self.guard_notified=true;self.app.opts.fetch_lyrics=false;
-            self.app.alert("灵栖已暂停音乐功能","检测到资源占用异常，已暂停读取音乐信息和歌词。重启灵栖即可恢复；诊断记录在数据目录的 diagnostics 文件夹。",0,false);
-        }
-        self.media_enabled.store(music_on && !guarded,std::sync::atomic::Ordering::Relaxed);
-        if !music_on {
-            self.seek_rx=None;
-            self.music_volume_rx=None;
-            self.media_fast_until=None;
-        }
-        if self.media_fast_until.is_some_and(|until|Instant::now()>=until){self.media_fast_until=None;}
-        self.media_enabled.set_interval(if self.media_fast_until.is_some(){smtc::POLL_FAST}else{self.app.media_poll_interval()});
         // 设置里改了岛体大小：下一帧起主窗口按新倍率栅格化，定位逻辑随像素比变化同步调整画布。
         #[cfg(windows)] eframe::set_root_viewport_scale(self.app.settings.island_scale());
         #[cfg(windows)]
@@ -1035,28 +997,6 @@ impl eframe::App for Shell {
         }
         for cmd in out.cmds {
             match cmd {
-                Cmd::Media(t) => {
-                    if !self.app.module_on(app::MUSIC_PAGE) {continue;}
-                    self.media_fast_until=Some(Instant::now()+Duration::from_secs(3));self.media_enabled.set_interval(smtc::POLL_FAST);
-                    let source=self.media.lock().map(|media|media.source.clone()).unwrap_or_default();
-                    let message=if source.eq_ignore_ascii_case("cloudmusic.exe"){"网易云暂未适配进度跳转，请在客户端调整"}
-                        else if source.eq_ignore_ascii_case("bodian_pc.exe"){"波点音乐暂未适配进度跳转，请在客户端调整"}
-                        else if source.eq_ignore_ascii_case("kwmusic.exe"){"酷我音乐暂未适配进度跳转，请在客户端调整"}
-                        else{"播放器未完成跳转，请打开客户端后重试"};
-                    if self.media_control.is_none(){self.media_control=smtc::ControlWorker::start(ctx.clone());}
-                    match self.media_control.as_ref().ok_or(()).and_then(|worker|worker.submit(t,source)){
-                        Ok(Some(rx))=>self.seek_rx=Some((message,rx)),Ok(None)=>{},Err(())=>self.app.say("播放器正在响应，请稍后重试"),
-                    }
-                }
-                Cmd::MusicVolume(command,source)=>{
-                    if !self.app.module_on(app::MUSIC_PAGE) {continue;}
-                    self.media_fast_until=Some(Instant::now()+Duration::from_secs(3));self.media_enabled.set_interval(smtc::POLL_FAST);
-                    if self.media_control.is_none(){self.media_control=smtc::ControlWorker::start(ctx.clone());}
-                    match self.media_control.as_ref().ok_or(()).and_then(|worker|worker.submit(command,source.clone())){
-                        Ok(Some(rx))=>self.music_volume_rx=Some((source,rx)),
-                        _=>self.app.say("音乐应用音量暂不可调，请稍后重试"),
-                    }
-                }
                 #[cfg(windows)]
                 Cmd::OpenPluginNotice{source,id,session}=>{
                     self.app.request_plugin_notice_open(&source,&id,&session);

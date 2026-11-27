@@ -21,21 +21,19 @@ pub enum Intent {
     SetReminder,
     SummarizeClipboard,
     Translate,
-    QueryMusic,
     QueryBattery,
     QueryPerformance,
     OpenPage,
 }
 
 impl Intent {
-    pub const ALL: [Intent; 10] = [
+    pub const ALL: [Intent; 9] = [
         Intent::Chat,
         Intent::CreateTodo,
         Intent::QueryWeather,
         Intent::SetReminder,
         Intent::SummarizeClipboard,
         Intent::Translate,
-        Intent::QueryMusic,
         Intent::QueryBattery,
         Intent::QueryPerformance,
         Intent::OpenPage,
@@ -49,8 +47,7 @@ impl Intent {
             Intent::SetReminder => "set_reminder",
             Intent::SummarizeClipboard => "summarize_clipboard",
             Intent::Translate => "translate",
-            Intent::QueryMusic => "query_music",
-            Intent::QueryBattery => "query_battery",
+                Intent::QueryBattery => "query_battery",
             Intent::QueryPerformance => "query_performance",
             Intent::OpenPage => "open_page",
         }
@@ -65,8 +62,7 @@ impl Intent {
             Intent::SetReminder => "设定一个到点提醒",
             Intent::SummarizeClipboard => "总结剪贴板里最近复制的内容",
             Intent::Translate => "翻译一段文字，默认翻译剪贴板最近一条",
-            Intent::QueryMusic => "查询现在在播放什么",
-            Intent::QueryBattery => "查询电量",
+                Intent::QueryBattery => "查询电量",
             Intent::QueryPerformance => "查询 CPU、内存、GPU 占用",
             Intent::OpenPage => "打开灵动岛里的某个功能页",
         }

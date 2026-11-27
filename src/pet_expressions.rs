@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn focus_music_sleep_and_warning_keep_priority(){
         let mut expressions=Expressions::default();
-        for state in [PetState::Focused,PetState::Music,PetState::Worried,PetState::Waking,PetState::Dozing,PetState::Sleeping] {
+        for state in [PetState::Focused,PetState::Worried,PetState::Waking,PetState::Dozing,PetState::Sleeping] {
             expressions.play(Expression::Wink);expressions.step(state,0.1,true);assert!(expressions.current().is_none());
         }
     }

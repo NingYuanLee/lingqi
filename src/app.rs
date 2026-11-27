@@ -8,13 +8,11 @@ use crate::anim::{self, lerp, smoothstep, Spring};
 use crate::bar_layout::{self as bar, Layout};
 use crate::calendar;
 use crate::glass;
-use crate::lyrics;
 use crate::mail;
 use crate::model;
 use crate::paint::{self, Card, H};
 use crate::resident_date::ResidentDay;
 use crate::shape;
-use crate::smtc::{NowPlaying, Transport};
 use crate::theme::{self, size, W};
 use eframe::egui::{self, Color32, Pos2, Rect, Vec2};
 use std::collections::HashMap;
@@ -108,14 +106,13 @@ const PAGE_TURN_DURATION: f32 = 0.34;
 
 pub struct Options {
     /// 是否联网查歌词（录制/测试时关掉）。
-    pub fetch_lyrics: bool,
     /// 吉祥物在多久无操作后出现（秒）。
     pub pet_idle: f64,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { fetch_lyrics: true, pet_idle: 45.0 }
+        Self { pet_idle: 45.0 }
     }
 }
 
@@ -149,7 +146,6 @@ pub struct Env {
     pub fullscreen_hidden: bool,
     /// 前台浏览器的顶部是否与岛重叠；灵栖自身窗口或暂不可读时为 None。
     pub browser_at_top: Option<bool>,
-    pub media: NowPlaying,
     /// 系统主音量（0..100, 是否静音）；v0.5.4 音量条与系统双向同步。
     pub volume: Option<(u32, bool)>,
     /// 蓝牙设备快照：连接状态、电量来源及本次会话的断开记录。
@@ -196,7 +192,6 @@ pub enum NotificationSound { Silent, System, Health }
 /// 交给外壳执行的副作用。
 #[derive(Clone, Debug, PartialEq)]
 pub enum Cmd {
-    Media(Transport),
     Open(PathBuf),
     ViewMessenger(Unread),
     #[cfg(windows)]
@@ -218,7 +213,6 @@ pub enum Cmd {
     /// 切换系统静音。
     ToggleMute,
     /// 音量命令携带点击时的播放器身份，避免切换歌曲来源后误调其他应用。
-    MusicVolume(Transport,String),
     /// v0.5.5：账号清单变了，让外壳重新同步收信线程。
     MailSync,
     /// 测试某个邮箱的连接（授权码只在内存里传给工作线程）。
@@ -517,95 +511,6 @@ impl Pomo {
     }
 }
 
-/// 本地歌词（酷狗、汽水）每 5 秒复查，最多约 1 分钟；网络失败每 30 秒重试，最多约 5 分钟。手动点重试会重新计数。
-const NATIVE_RETRIES:u32=12;
-const NETWORK_RETRIES:u32=10;
-
-/// 与 `format!("{title}|{artist}|{duration:.0}")` 等价，但不分配内存：界面每帧要比较好几次。
-fn lyric_key_matches(key:&str,media:&NowPlaying)->bool {
-    use std::io::Write;
-    let Some(rest)=key.strip_prefix(media.title.as_str()).and_then(|rest|rest.strip_prefix('|')) else{return false;};
-    let Some(rest)=rest.strip_prefix(media.artist.as_str()).and_then(|rest|rest.strip_prefix('|')) else{return false;};
-    let mut buffer=[0u8;32];
-    let mut cursor=std::io::Cursor::new(&mut buffer[..]);
-    if write!(cursor,"{:.0}",media.duration).is_err(){return rest==format!("{:.0}",media.duration);}
-    let written=cursor.position() as usize;
-    rest.as_bytes()==&buffer[..written]
-}
-
-#[test]
-fn lyric_key_matches_the_formatted_key_without_allocating(){
-    for (title,artist,duration) in [("歌","手",120.4),("A|B","C",0.0),("歌","",239.5),("歌","手",240.5),("","",f64::NAN),("t","a",1e30)] {
-        let media=NowPlaying{title:title.into(),artist:artist.into(),duration,..Default::default()};
-        let key=format!("{}|{}|{:.0}",title,artist,duration);
-        assert!(lyric_key_matches(&key,&media),"{key}");
-        assert!(!lyric_key_matches(&format!("{key}0"),&media));
-        assert!(!lyric_key_matches(&format!("x{key}"),&media));
-    }
-}
-
-/// 发起歌词查询时的歌曲信息，用来判断之后的变化是换歌还是信息补全。
-#[derive(Clone,Debug,Default)]
-pub(crate) struct LyricSong {pub source:String,pub title:String,pub artist:String,pub duration:f64,pub song_id:Option<u64>}
-impl LyricSong {
-    fn of(media:&NowPlaying)->Self {
-        Self{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:media.song_id}
-    }
-}
-
-#[derive(Clone,Copy,Debug,PartialEq,Eq)]
-enum SongChange {
-    /// 换了一首歌：立即清空旧歌词并重新查询。
-    Different,
-    /// 同一首，只是时长、写法等补全：已有同步歌词时不再查询。
-    Same,
-    /// 同一首，署名有补全：重新查询，但查询期间继续显示已有歌词。
-    Refined,
-}
-
-fn song_change(previous:&LyricSong,media:&NowPlaying)->SongChange {
-    if !previous.source.eq_ignore_ascii_case(&media.source) {return SongChange::Different;}
-    match (previous.song_id,media.song_id) {
-        (Some(old),Some(new))=>return if old==new {SongChange::Same}else{SongChange::Different},
-        _=>{}
-    }
-    // 同名的不同版本（现场版、伴奏等）时长通常不同：两边都已知且相差超过 3 秒视为不同歌曲。
-    if previous.duration>0.0 && media.duration>0.0 && (previous.duration-media.duration).abs()>3.0 {return SongChange::Different;}
-    match lyrics::song_relation(&previous.title,&previous.artist,&media.title,&media.artist) {
-        Some(true)=>SongChange::Same,
-        Some(false)=>SongChange::Refined,
-        None=>SongChange::Different,
-    }
-}
-
-/// 等待旧请求结束后再发起的在线查询（同一时间只保留一个网络线程）。
-pub(crate) struct LyricsJob {
-    source:String,title:String,artist:String,duration:f64,song_id:Option<u64>,
-    cached:Option<lyrics::Lyrics>,native_only:bool,manual:bool,
-}
-
-#[derive(Default)]
-pub(crate) struct LyricsState {
-    pub key: String,
-    /// 本次查询对应的歌曲；为空表示还没有按歌曲发起过查询。
-    pub song: Option<LyricSong>,
-    /// 旧请求未结束时排队的在线查询；本机歌词轮询不等它，换歌后立即开始。
-    pub pending: Option<LyricsJob>,
-    pub island_animation_started: bool,
-    pub scroll_animation_started: bool,
-    pub loading: bool,
-    pub error: Option<lyrics::FetchError>,
-    pub retry_at: Option<f64>,
-    /// 发起本次查询时已知的歌曲 ID；之后才拿到 ID 且还没有同步歌词时，按 ID 再查一次。
-    pub song_id: Option<u64>,
-    /// 同一首歌已自动重试的次数；达到上限后停止，避免整首歌期间反复读盘或联网。
-    pub attempts: u32,
-    /// 用户点了「重试」：下一次查询跳过近期「没有歌词」的记录。
-    pub manual_retry: bool,
-    pub lyrics: Option<lyrics::Lyrics>,
-    pub rx: Option<std::sync::mpsc::Receiver<Result<(lyrics::Lyrics,bool), lyrics::FetchError>>>,
-    pub native_rx: Option<std::sync::mpsc::Receiver<Option<lyrics::Lyrics>>>,
-}
 
 /// v0.5.5：邮件面板与设置表单的界面状态。正文只在内存里过一次，不落盘。
 #[derive(Default)]
@@ -897,14 +802,6 @@ pub struct App {
     pub(crate) todo_input_focused: bool,
     pub(crate) todo_pop: Spring,
 
-    // 音乐
-    pub(crate) ly: LyricsState,
-    pub(crate) ly_worker: Option<std::thread::JoinHandle<()>>,
-    pub(crate) show_lyrics: bool,
-    island_lyric_layout: Option<std::sync::Arc<egui::Galley>>,
-    media_anchor: (String, f64, f64, bool),
-    pub(crate) media: NowPlaying,
-    pub(crate) music_artwork: Option<(std::sync::Arc<egui::ColorImage>,egui::TextureHandle)>,
 
     forced_open_until:f64,
     pub settings_open:bool,
@@ -1035,7 +932,6 @@ impl App {
         let clipboard_on = settings.clipboard_history;
         let (bw, bh) = if settings.minimal { (BAR_W_MIN, BAR_H_MIN) } else { (BAR_W, BAR_H) };
         let focus_seconds=settings.focus_minutes as f32*60.0;
-        let initial_lyrics=settings.lyrics_enabled;
         let initial_page=settings.page_order.iter().copied().find(|page|settings.visible_pages[*page]).unwrap_or(0);
         let mut weather=crate::weather::State::load(&settings.weather_city,settings.weather_position.as_ref());
         Self {
@@ -1137,14 +1033,7 @@ impl App {
             editing: None,
             buf: String::new(),
             todo_pop: Spring::new(0.0, 500.0, 0.45),
-            ly: LyricsState::default(),
-            ly_worker: None,
-            show_lyrics: initial_lyrics,
-            island_lyric_layout: None,
-            media_anchor: (String::new(), 0.0, 0.0, false),
-            media: NowPlaying::default(),
-            music_artwork: None,
-            #[cfg(feature="sdk-js")]
+                    #[cfg(feature="sdk-js")]
             settings_plugin:None,
             forced_open_until:0.0, settings_open:false, settings_window:std::sync::Arc::new(std::sync::Mutex::new(crate::settings_window::State::load())), displays:Vec::new(), browser_at_top:false, browser_minimal_active:false, glass_tint:0.0, fluid:Default::default(), fluid_origin:Pos2::ZERO, fluid_art:None, fluid_title:String::new(), screen:None, horizontal_width:WIN_W, settings_focus_requested:false, settings_tab:0, settings_category:0, messenger_statuses:Default::default(), notification_apps:model::NotificationApps::load(), subpage:None, task_dialog:None,
             listener_status: "尚未连接".into(),
@@ -2054,82 +1943,17 @@ impl App {
         self.todo_input_focused=false;
     }
 
-    /// 外壳据此调整音乐采样频率：看着音乐页时最快，收起显示歌词次之，其余只需跟上歌名和播放状态。
-    pub fn media_poll_interval(&self)->std::time::Duration {
-        if self.open && self.page==MUSIC_PAGE {crate::smtc::POLL_FAST}
-        else if self.island_lyrics_active() && !self.open {crate::smtc::POLL_LYRICS}
-        else {crate::smtc::POLL_BACKGROUND}
-    }
-
-    fn island_lyrics_active(&self)->bool {
-        if self.side() {return false;}
-        self.settings.island_lyrics && self.settings.visible_pages[0] && self.media.is_music() && self.media.playing
-            && !self.browser_minimal_active
-    }
     pub(crate) fn compact_notices(&self)->bool {
         #[cfg(windows)]
         if self.notice.as_ref().is_some_and(|a| matches!(a.source, crate::extras::AlertSource::Plugin { .. })) {
             return false;
         }
-        self.island_lyrics_active()&&!self.open&&!self.notice.as_ref().is_some_and(|a|a.meeting.is_some()||self.settings.notification_preview&&matches!(a.source,crate::extras::AlertSource::External(_)))
+        false
     }
 
-    /// 换句、分段和展开高亮共用时间调整；正数延后，负数提前。
-    pub(crate) fn lyric_position(&self)->f32 {(self.media.position-self.settings.lyric_delay_ms as f64/1000.0)as f32}
 
-    /// 当前歌曲没有进度采样且备用读取不可用时，岛上显示歌名。
-    pub(crate) fn music_lyrics_limited(&self)->bool {
-        #[cfg(windows)] {self.media.sampled_at.is_none() && crate::smtc::music_compat::lyrics_limited(&self.media.source)}
-        #[cfg(not(windows))] {false}
-    }
 
-    pub(crate) fn island_lyric(&self) -> Option<(usize,&str)> {
-        if !self.island_lyrics_active() || self.music_lyrics_limited(){return None;}
-        if !lyric_key_matches(&self.ly.key,&self.media) {return None;}
-        let lyrics=self.ly.lyrics.as_ref().filter(|lyrics|lyrics.synced)?;
-        let index=lyrics.index_at(self.lyric_position())?;
-        let text=lyrics.lines.get(index)?.text.trim();
-        (!text.is_empty()).then_some((index,text))
-    }
 
-    fn update_island_lyric_layout(&mut self,ctx:&egui::Context) {
-        if !self.island_lyrics_active(){self.island_lyric_layout=None;return;}
-        let current=self.island_lyric();
-        let limited=self.music_lyrics_limited();
-        let lyrics=self.ly.lyrics.as_ref().filter(|lyrics|!limited && lyric_key_matches(&self.ly.key,&self.media)
-            && lyrics.synced && lyrics.lines.iter().any(|line|!line.text.trim().is_empty()));
-        let title=lyrics.is_none();
-        let text=if let Some((_,line))=current {line}
-            else if let Some(lyrics)=lyrics {
-                if lyrics.index_at(self.lyric_position()).is_none() {"前奏"}
-                else {"间奏"}
-            } else {self.media.title.trim()};
-        let ink=if current.is_some()||title{theme::WHITE}else{theme::GRAY};
-        let layout=|text:String| {
-            // 维语等从右往左的歌词：先按阅读顺序分行再逐行转换，否则折行后第一行会是句子的结尾（#200）。
-            let font=theme::font(11.0,W::Semibold);
-            let text=crate::rtl_text::display_wrapped(&text,LYRIC_BAR_W-80.0,|s|ctx.fonts(|fonts|fonts.layout_no_wrap(s.to_owned(),font.clone(),ink).size().x)).into_owned();
-            let mut job=egui::text::LayoutJob::simple(text,font,ink,LYRIC_BAR_W-80.0);
-            job.halign=egui::Align::Center;
-            job.wrap.break_anywhere=true;
-            if title {job.wrap.max_rows=1;}
-            ctx.fonts(|fonts|fonts.layout_job(job))
-        };
-        let mut galley=layout(text.to_owned());
-        if let Some((index,_))=current.filter(|_|galley.rows.len()>1) {
-            let lyrics=self.ly.lyrics.as_ref().unwrap();
-            let start=lyrics.lines[index].t;
-            let end=lyrics.lines.iter().skip(index+1).find(|line|line.t>start).map_or(self.media.duration as f32,|line|line.t);
-            let progress=if end>start {((self.lyric_position()-start)/(end-start)).clamp(0.0,1.0)}else{0.0};
-            // 按当前句的时间范围与各段字数切换，暂停和跳转直接跟随播放位置。
-            let total:usize=galley.rows.iter().map(|row|row.glyphs.len()).sum();
-            let mut count=0;
-            let page=galley.rows.iter().position(|row|{count+=row.glyphs.len();progress*(total as f32)<count as f32}).unwrap_or(galley.rows.len()-1);
-            let segment=galley.rows[page].glyphs.iter().map(|glyph|glyph.chr).collect::<String>();
-            galley=layout(segment.trim().to_owned());
-        }
-        self.island_lyric_layout=Some(galley);
-    }
 
     pub(crate) fn effective_minimal(&self)->bool {self.settings.minimal || self.browser_minimal_active}
     /// 打开 AI 抽屉：把岛体展开并切到抽屉。
@@ -2148,7 +1972,7 @@ impl App {
     }
     /// 采集本机状态给 AI。只在真正要发请求时调用一次，不进每帧路径。
     pub(crate) fn ai_sources(&self)->crate::ai::context::Sources {
-        use crate::ai::context::{Media,Performance,Sources,Weather};
+        use crate::ai::context::{Performance,Sources,Weather};
         Sources{
             power:self.resident_power.0.map(|percent|(percent,self.resident_power.1)),
             weather:self.weather.snapshot.as_ref().map(|snapshot|Weather{
@@ -2169,10 +1993,6 @@ impl App {
             clipboard:if self.settings.ai_context_clipboard{
                 self.clipboard.lock().items.first().map(|item|item.text.clone())
             }else{None},
-            media:(!self.media.title.trim().is_empty()).then(||Media{
-                title:self.media.title.clone(),artist:self.media.artist.clone(),
-                source:self.media.source.clone(),playing:self.media.playing,
-            }),
             city:(!self.settings.weather_city.trim().is_empty())
                 .then(||self.settings.weather_city.clone())
                 .or_else(||self.settings.weather_saved.first().map(|position|position.label.clone())),
@@ -2239,9 +2059,7 @@ impl App {
             // 左右停靠：竖向胶囊（通知仍是贴边滑出的横向卡片，见上）。
             return self.side_base_size(self.effective_minimal()&&self.notification_bell().is_none());
         }
-        if self.island_lyrics_active() {
-            (self.lyric_bar_width(),BAR_H)
-        } else if self.effective_minimal()&&self.notification_bell().is_none() {
+        if self.effective_minimal()&&self.notification_bell().is_none() {
             (BAR_W_MIN, BAR_H_MIN)
         } else {
             (self.resident.target.width.min(self.resident_limit()), BAR_H)
@@ -2251,7 +2069,7 @@ impl App {
     /// 常驻区比展开面板还宽时（比如开了综合监测），展开、收起途中岛宽会先窄于常驻内容。
     /// 这时常驻内容跟着岛宽一起等比收拢，而不是被岛的边缘直接切掉。
     fn resident_squeeze(&self)->f32 {
-        if self.side()||self.island_lyrics_active()||self.notice.is_some() {return 1.0;}
+        if self.side()||self.notice.is_some() {return 1.0;}
         let content=self.resident.target.width.min(self.resident_limit());
         (self.w.pos/content.max(1.0)).clamp(0.5,1.0)
     }
@@ -2259,7 +2077,6 @@ impl App {
     fn resident_fit(&self) -> f32 {
         #[cfg(feature = "sdk-js")]
         if !self.pinned_displays.is_empty() { return 1.0; }
-        if self.island_lyrics_active() { return 1.0; }
         (self.resident_limit() / self.resident.target.width).min(1.0) * self.resident_squeeze()
     }
 
@@ -2399,13 +2216,12 @@ impl App {
         let notice_target=if !self.notice.as_ref().is_some_and(|a|a.messenger().is_some()) && self.compact_notices()&&(self.notice.is_some()||self.notification_bell().is_some()) {44.0}else{0.0};
         self.notice_width.target=notice_target;
         if self.compact_notices(){self.notice_width.step(dt);}else{self.notice_width.snap(0.0);self.notice_details=false;}
-        self.update_media(env,&ctx);
         let bell=self.notification_bell().is_some()&&!self.compact_notices();
         self.resident_power=(env.battery,env.charging);
-        let mut layout=Layout::new(self.settings.show_battery&&env.battery.is_some(),self.media.is_music()&&!bell,self.pomo.running,bell,self.pet_enabled(),self.weather_pill().is_some());
+        let mut layout=Layout::new(self.settings.show_battery&&env.battery.is_some(),false,self.pomo.running,bell,self.pet_enabled(),self.weather_pill().is_some());
         let performance_bar=self.performance_on_bar();
         let performance_visible=!env.fullscreen_hidden && !env.screen_locked &&
-            (if self.open {self.page==PERFORMANCE_PAGE} else {performance_bar && self.notice.is_none() && !self.island_lyrics_active()});
+            (if self.open {self.page==PERFORMANCE_PAGE} else {performance_bar && self.notice.is_none() });
         let performance_detail=performance_visible && self.open && self.page==PERFORMANCE_PAGE;
         self.performance.tick(self.module_on(PERFORMANCE_PAGE),performance_visible,performance_detail,&ctx);
         // 鼠标移开收起再移回来，接着看刚才的详情；切到别的页面才回到设置里的起始页。
@@ -2437,7 +2253,7 @@ impl App {
         #[cfg(feature="sdk-js")]
         {
             let suppress = self.effective_minimal() || self.notice.is_some() || self.hud_alpha > 0.003
-                || plugin_notice_detail || self.island_lyrics_active() || env.fullscreen_hidden || env.screen_locked;
+                || plugin_notice_detail || env.fullscreen_hidden || env.screen_locked;
             let (mut displays, repaint) = self.plugins.pinned_displays(self.open || suppress);
             if let Some(delay) = repaint { ctx.request_repaint_after(delay); }
             for display in &mut displays { display.measure_width(ui); }
@@ -2467,14 +2283,9 @@ impl App {
         }
         if self.pet_enabled() {
             if let Some(a)=self.notice.as_ref().filter(|_|!self.compact_notices()&&!self.open){layout.x[bar::PET]=Some(22.0-(self.notice_size(a).0+self.pet_space())/2.0);}
-            else if self.island_lyrics_active() {layout.x[bar::PET]=Some(60.0-self.lyric_bar_width()/2.0);}
-        }
-        let centered=!self.island_lyrics_active() && (self.notice.is_none() || self.open);
+            }
+        let centered=(self.notice.is_none() || self.open);
         self.resident.step(layout,dt,ctx.style().animation_time>0.0&&bar::animations_enabled(),centered);
-        if self.opts.fetch_lyrics {
-            self.poll_lyrics();
-        }
-        self.update_island_lyric_layout(&ctx);
 
         // 胶囊皮肤悬浮在屏幕顶边下方。
         let pill = self.settings.island_shape==model::IslandShape::Pill;
@@ -2565,8 +2376,7 @@ impl App {
                 let cursor=env.cursor.unwrap()-(self.content_origin(win)+offset).to_vec2();
                 let mail_reading=inside && self.page==5 && self.mail.open_uid.is_some();
                 let mail_list=self.page==5 && !self.mail.accounts.is_empty() && self.mail.open_uid.is_none() && self.mail_list_bounds().contains(cursor);
-                let music_volume=self.page==0 && (Rect::from_min_max(Pos2::new(354.0,106.0),Pos2::new(380.0,130.0)).contains(cursor)
-                    || self.music_volume_open && self.music_volume_bounds().contains(cursor));
+                let music_volume=false;
                 #[cfg(feature="sdk-js")]
                 let status_scroll=self.plugin_canvas_frame.as_ref().is_some_and(|(page, frame)| {
                     *page==self.page && frame.canvas_scroll.is_some_and(|area|area.contains(env.cursor.unwrap()))
@@ -2659,7 +2469,7 @@ impl App {
         let notice_shape=notice_rect.map(|r|Rect::from_min_max(Pos2::new(r.left()-36.0,r.top()),r.max));
         let body=messenger_rect.filter(|_|outside_badge.is_none()).map_or(panel,|badge|panel.union(badge));
         let body=notice_shape.map_or(body,|notice|body.union(notice));
-        let minimal_strip = self.effective_minimal() && !self.island_lyrics_active() && self.notice.is_none() && self.notification_bell().is_none();
+        let minimal_strip = self.effective_minimal()  && self.notice.is_none() && self.notification_bell().is_none();
         let minimal_pill = minimal_strip && pc < 0.02;
         let flare = if minimal_pill || pill { 0.0 } else { lerp(5.0, FLARE, pc) };
         let k = (w / PW).clamp(0.3, 1.1);
@@ -2688,17 +2498,8 @@ impl App {
         }
         if !self.glassy() && self.effective_skin()==model::Skin::Fluid {
             self.fluid_origin=body.min;
-            let art=self.music_artwork.as_ref().map(|(_,texture)|texture.id());
-            if art!=self.fluid_art || self.media.title!=self.fluid_title {
-                let tint=if self.media.title.is_empty(){crate::fluid::Fluid::neutral()}
-                    else if let Some((image,_))=&self.music_artwork{crate::fluid::Fluid::tint_from_image(image)}
-                    else{crate::fluid::Fluid::tint_from_title(&self.media.title)};
-                self.fluid.set_tint(tint);
-                self.fluid_art=art;
-                self.fluid_title.clone_from(&self.media.title);
-            }
+            self.fluid.set_tint(crate::fluid::Fluid::neutral());
             self.fluid.set_cursor(env.cursor.filter(|p|body.contains(*p)).map(|p|(p.x-body.left(),p.y-body.top())));
-            if !self.open || self.page!=0 || self.media.title.is_empty(){self.fluid.set_seek(None,0.0);}
             self.fluid.advance(env.t,dt);
         }
         if !self.glassy() { self.paint_body(&painter, body, flare, flare_h, radius, feather); }
@@ -2741,7 +2542,7 @@ impl App {
 
         let mut top_bar_notice=None;
         let banner=!self.compact_notices()&&self.notice.is_some()&&!self.open;
-        let restoring_lyrics=!self.open&&self.notice.is_none()&&self.island_lyrics_active()&&self.hud_notice.as_ref().is_some_and(|a|a.meeting.is_some()||a.source!=crate::extras::AlertSource::Internal);
+        let restoring_lyrics=false&&self.hud_notice.as_ref().is_some_and(|a|a.meeting.is_some()||a.source!=crate::extras::AlertSource::Internal);
         let fading_hud=!self.compact_notices()&&!self.open&&self.hud_notice.as_ref().is_some_and(|a|a.is_hud())&&(banner||self.hud_alpha>0.003);
         if fading_hud {
             let from=self.resident.target.width;let to=HUD_W+self.pet_space();
@@ -2961,8 +2762,7 @@ impl App {
             || !self.notice_width.settled(1.0);
         let pet_visible=self.pet_a>0.01 && !self.open && !minimal_pill;
         let ambient=!self.glassy() && self.effective_skin()==model::Skin::Fluid && self.fluid.animating() || self.pomo.running && (self.open && self.page==1 || !self.open && !minimal_pill && self.notice.is_none() && bar::animations_enabled())
-            || self.media.playing && (self.open && self.page==0 || !self.open && !minimal_pill && self.notice.is_none() && self.media.is_music())
-            || self.notice.as_ref().is_some_and(|notice|notice.meeting.is_some())
+                || self.notice.as_ref().is_some_and(|notice|notice.meeting.is_some())
             || self.wireless_animating();
         #[cfg(feature="sdk-js")]
         let (canvas_animating, canvas_scroll, canvas_repaint) = self.plugin_canvas_frame.as_ref().map_or(
@@ -3781,42 +3581,6 @@ impl App {
         let fit = self.resident_fit();
         let fitted=base.scaled(local_cx,15.0,lerp(fit,1.0,p));
         let base=&fitted;
-        let lyric=self.island_lyric().map(|(index,_)|index);
-        let lyric_alpha=if self.island_lyrics_active() {1.0-smoothstep(0.0,0.35,p)}else{0.0};
-        if let Some(galley)=self.island_lyric_layout.clone().filter(|_|lyric_alpha>0.003) {
-            let c=base.faded(lyric_alpha);
-            let content_width=self.lyric_bar_width()-self.lyric_focus_space();
-            let width=self.w.pos.max(content_width);
-            let left=local_cx-width/2.0;
-            let center_y=BAR_H/2.0;
-            if let Some((image,texture))=&self.music_artwork {
-                let [width,height]=image.size;
-                let uv_size=if width>height {egui::vec2(height as f32/width as f32,1.0)}else{egui::vec2(1.0,width as f32/height as f32)};
-                let uv=Rect::from_center_size(Pos2::new(0.5,0.5),uv_size);
-                c.painter.add(egui::epaint::RectShape::filled(c.rect(left+12.0,center_y-10.0,20.0,20.0),5.0*c.s,Color32::WHITE).with_texture(texture.id(),uv));
-            } else {
-                c.fill(left+12.0,center_y-10.0,20.0,20.0,5.0,theme::CARD);
-                paint::note(&c,left+22.0,center_y,13.0,theme::WHITE);
-            }
-            let index=lyric.unwrap_or(0);
-            let id=egui::Id::new("island-lyric-line");
-            if !self.ly.island_animation_started {
-                c.ui.ctx().animate_value_with_time(id,index as f32,0.0);
-                self.ly.island_animation_started=true;
-            }
-            let shown=c.ui.ctx().animate_value_with_time(id,index as f32,0.18);
-            let fade=1.0-(index as f32-shown).abs().min(1.0);
-            let position=c.pos(left+content_width-LYRIC_BAR_W/2.0,center_y-galley.size().y/2.0+(1.0-fade)*3.0);
-            c.painter.galley(position,galley,if lyric.is_some(){theme::WHITE}else{theme::GRAY});
-            paint::playback_bars(&c,left+content_width-21.0,center_y,self.t,self.media.playing,theme::WHITE);
-            if self.pomo.running {
-                let alpha=smoothstep(0.88,1.0,(width-content_width)/self.lyric_focus_space());
-                crate::focus_bar::draw(&c.faded(alpha),left+width-14.0-crate::focus_bar::LYRIC_WIDTH/2.0,center_y,self.t,&self.pomo,self.phase_secs(self.pomo.phase),true);
-            }
-        }
-        if lyric_alpha>=0.997 {return;}
-        let header=base.faded(1.0-lyric_alpha);
-        let base=&header;
         let m = anim::ease_in_out(smoothstep(0.0, 0.85, p));
         let clock = self.settings.clock_text(&env.clock);
         let show_battery=self.settings.show_battery && env.battery.is_some();
@@ -3838,7 +3602,7 @@ impl App {
         let hd = gx + battery_space*fit;
         let hc = hd + (date_w + 8.0)*fit;
         // 药丸起点布局
-        let has_music=self.media.is_music();
+        let has_music=false;
         let layout=self.resident.current();
         let pb=(local_cx+layout.x[bar::BATTERY].unwrap_or(0.0),15.0);
         let pcx=layout.x[bar::CLOCK].map_or(hc,|x|{
@@ -3905,7 +3669,7 @@ impl App {
         if has_music && (p>0.1 || layout.x[bar::MUSIC].is_some()) {
             let x=lerp(local_cx+layout.x[bar::MUSIC].unwrap_or(0.0),367.0-self.header_music_shift(),m);
             let y=lerp(15.0,18.0,m);
-            paint::playback_bars(base,x,y,self.t,self.media.playing,theme::WHITE);
+            paint::playback_bars(base,x,y,self.t,false,theme::WHITE);
             if self.open && reveal>0.6 && base.hit(x-13.0,y-14.0,26.0,28.0,"header-music")
                 .on_hover_text("返回音乐播放页")
                 .on_hover_cursor(egui::CursorIcon::PointingHand).clicked(){self.show_page(0);}
@@ -4011,12 +3775,12 @@ impl App {
     }
 
     pub(crate) fn header_music_shift(&self)->f32 {
-        if self.media.is_music() {28.0*smoothstep(0.0,0.65,self.hold_slot)}else{0.0}
+        0.0
     }
 
     fn draw_hold_open(&mut self,c:&Card) {
         // 声波先让出位置，再显示图钉；收回时按相反顺序。
-        let alpha=smoothstep(if self.media.is_music(){0.65}else{0.0},1.0,self.hold_slot);
+        let alpha=smoothstep(0.0,1.0,self.hold_slot);
         if alpha<=0.001 {return;}
         let Some(button)=c.edge_control(354.0,5.0,25.0,26.0) else{return;};
         let visible=self.shows_hold_open();
@@ -4096,7 +3860,6 @@ impl App {
             self.render_page(self.page, c, c, env, cmds);
         }
         self.nav(c);
-        if self.page==0 && c.live {self.draw_music_volume(c,cmds);}
         in_tx
     }
 
@@ -4297,7 +4060,7 @@ impl App {
         #[cfg(any(feature="sdk-js",feature="sdk-wasm"))]
         if page==4 && crate::sdk_spike::live_card(c){return;}
         match page {
-            0 => self.page_music(c, env, cmds),
+            0 => {}
             1 => self.page_focus(c, header, env),
             2 => self.page_water(c, header, env),
             3 => self.page_shelf(c, header, env, cmds),
@@ -4341,13 +4104,6 @@ impl App {
     // ---------------------------------------------------------------
     fn tick(&mut self, env: &Env, dt: f32, elapsed: f32) {
         if self.toast.as_ref().is_some_and(|(_,at)|self.t-at>2.4){self.toast=None;}
-        // 跳转后先用本地目标位置显示；播放器回报追上了、换歌了或超时就交还真实位置。
-        let seek_done=self.music_seek_ui.as_ref().is_some_and(|(target,title)|{
-            (self.media.duration>0.0 && (self.media.position-*target).abs()<1.5)
-                || self.t>=self.music_seek_quiet_until || &self.media.title!=title
-        });
-        if seek_done {self.music_seek_ui=None;}
-        if self.music_restart_at.is_some_and(|at|self.t>=at+1.5){self.music_restart_at=None;}
         if env.today != self.today {
             self.today = env.today.clone();
             self.water = model::Water::load(&env.today);
@@ -4471,175 +4227,10 @@ impl App {
         }
     }
 
-    /// 媒体进度在两次 SMTC 刷新之间按时间外推，进度条才会连续走动。
-    fn update_media(&mut self, env: &Env, ctx: &egui::Context) {
-        let m = &env.media;
-        if !self.module_on(MUSIC_PAGE) || !m.is_music() {
-            self.music_seek_ui=None;
-            self.music_restart_at=None;
-            self.music_volume_ui=None;
-            self.music_volume_quiet_until=0.0;
-            self.music_volume_open=false;
-            self.media=NowPlaying::default();
-            self.media_anchor=(String::new(),0.0,0.0,false);
-            self.music_artwork=None;
-            self.ly=LyricsState::default();
-            return;
-        }
-        let a = &self.media_anchor;
-        if a.0 != m.title || (a.1 - m.position).abs() > 0.01 || a.3 != m.playing {
-            self.media_anchor = (m.title.clone(), m.position, env.t, m.playing);
-        }
-        let mut np = m.clone();
-        if self.media.source!=m.source || m.volume.is_none(){self.music_volume_open=false;}
-        if self.media.source!=m.source || self.t>=self.music_volume_quiet_until || m.volume.is_none() {
-            self.music_volume_ui=m.volume;
-        }
-        if m.playing {
-            let (_, pos, _, _) = &self.media_anchor;
-            np.position = if let Some(sampled)=m.sampled_at {m.position+sampled.elapsed().as_secs_f64()}
-                else {*pos};
-            if m.duration>0.0 {np.position=np.position.min(m.duration);}
-        }
-        // 网易云的 song_id 只来自本机日志，SMTC 那一路没有；None 与 Some 之间来回不是换歌，不能每次都清空歌词重查。
-        let other_song=matches!((self.media.song_id,np.song_id),(Some(old),Some(new)) if old!=new);
-        if self.media.source != np.source || other_song { self.ly=LyricsState::default(); }
-        self.media = np;
-        // 播放器版本比已适配的旧、歌词无法同步：岛下浮出一句提示（与网易云不支持跳转的提示同一样式），同一播放器版本只提醒一次。
-        #[cfg(windows)]
-        if let Some(message)=crate::smtc::music_compat::take_update_notice() {self.say(message);self.toast_below=true;}
-        if let Some(image)=&self.media.artwork {
-            if !self.music_artwork.as_ref().is_some_and(|(old,_)|std::sync::Arc::ptr_eq(old,image)) {
-                self.music_artwork=Some((image.clone(),ctx.load_texture("music-artwork",image.clone(),egui::TextureOptions::LINEAR)));
-            }
-        } else {self.music_artwork=None;}
-    }
 
-    fn poll_lyrics(&mut self) {
-        if !self.media.is_music(){self.ly=LyricsState::default();return;}
-        if !self.show_lyrics && !self.settings.island_lyrics {self.ly=LyricsState::default();return;}
-        let np = &self.media;
-        if np.title.is_empty(){self.ly=LyricsState::default();return;}
-        let key = format!("{}|{}|{:.0}", np.title, np.artist, np.duration);
-        let id_arrived=key==self.ly.key && !self.ly.loading && self.ly.song_id.is_none() && np.song_id.is_some()
-            && !self.ly.lyrics.as_ref().is_some_and(|lyrics|lyrics.synced);
-        if key != self.ly.key {
-            let change=self.ly.song.as_ref().map_or(SongChange::Different,|song|song_change(song,np));
-            let synced=self.ly.lyrics.as_ref().is_some_and(|lyrics|lyrics.synced);
-            match change {
-                // 时长、写法补全：已有同步歌词就沿用，不清空、不重查。
-                SongChange::Same if synced=>{self.ly.key=key;self.ly.song=Some(LyricSong::of(np));}
-                // 换歌：立即切换显示状态，旧歌词和迟到的旧结果都不再显示。
-                SongChange::Different=>self.start_lyrics(key,None,false),
-                // 同一首的补全：重新查询，期间继续显示已有歌词。
-                _=>{let keep=self.ly.lyrics.take();self.start_lyrics(key,keep,false);}
-            }
-        } else if id_arrived || self.ly.retry_at.is_some_and(|at|self.t>=at) {
-            self.start_lyrics(key,None,true);
-        }
-        self.spawn_lyrics_job();
-        if let Some(rx)=&self.ly.native_rx {
-            let mut found=None;
-            while let Ok(result)=rx.try_recv(){if result.is_some(){found=result;}}
-            if let Some(lyrics)=found {
-                self.ly.lyrics=Some(lyrics);self.ly.loading=false;self.ly.error=None;
-                // 本机歌词已到：排队中的在线查询不再需要，进行中的结果也丢弃。
-                self.ly.retry_at=None;self.ly.rx=None;self.ly.native_rx=None;self.ly.pending=None;
-            }
-        }
-        if let Some(rx) = &self.ly.rx {
-            if let Ok(r) = rx.try_recv() {
-                self.ly.loading = false;
-                match r {
-                    Ok((l,waiting_native)) => {
-                        self.ly.error=None;
-                        self.ly.retry_at=None;
-                        if (waiting_native || lyrics::is_soda(&self.media.source) && !l.synced) && self.ly.attempts<NATIVE_RETRIES {self.ly.retry_at=Some(self.t+5.0);}
-                        self.ly.lyrics = Some(l);
-                    },
-                    Err(error) => {
-                        let native=lyrics::is_soda(&self.media.source) || self.media.source.to_ascii_lowercase().contains("kugou") && error==lyrics::FetchError::NotFound;
-                        if native {if self.ly.attempts<NATIVE_RETRIES{self.ly.retry_at=Some(self.t+5.0);}}
-                        else if matches!(error,lyrics::FetchError::Unavailable(_)|lyrics::FetchError::InvalidResponse(_)) && self.ly.attempts<NETWORK_RETRIES {self.ly.retry_at=Some(self.t+30.0);}
-                        self.ly.error = Some(error);
-                    },
-                }
-                self.ly.rx = None;
-            }
-        }
-    }
 
-    /// 为当前歌曲建立新的歌词状态：本机歌词轮询立即开始，在线查询交给 `spawn_lyrics_job`。
-    /// `keep`：同一首歌信息补全时继续显示的歌词；`retry`：同一首歌的定时重试或补到歌曲 ID。
-    fn start_lyrics(&mut self,key:String,keep:Option<lyrics::Lyrics>,retry:bool) {
-        let np=&self.media;
-        let kugou=np.source.to_ascii_lowercase().contains("kugou");
-        let native_only=retry && kugou && self.ly.error==Some(lyrics::FetchError::NotFound);
-        let cached=if retry && kugou {self.ly.lyrics.take()}else{None};
-        let attempts=if retry {self.ly.attempts.saturating_add(1)}else{0};
-        let manual=self.ly.manual_retry;
-        let shown=cached.clone().or(keep);
-        self.ly = LyricsState { key, loading: shown.is_none() && !native_only, lyrics:shown,
-            error:native_only.then_some(lyrics::FetchError::NotFound), song_id:np.song_id, attempts,
-            song:Some(LyricSong::of(np)), ..Default::default() };
-        let (source, title, artist, dur) = (np.source.clone(), np.title.clone(), np.artist.clone(), np.duration);
-        let song_id=np.song_id;
-        if kugou || lyrics::is_soda(&source) {
-            let (tx,rx)=std::sync::mpsc::sync_channel(1);self.ly.native_rx=Some(rx);
-            let (source,title,artist)=(source.clone(),title.clone(),artist.clone());
-            let native=crate::resources::NATIVE_LYRICS.spawn(move ||{
-                // 客户端通常在开播几秒内写好歌词：先密后疏（0.5s 起，最长 5s 一次），最多等 90 秒。
-                // 汽水的缓存文件可达 32MB，修改时间和大小都没变时不重复整份读取，但每 15 秒仍完整核对一次。
-                let started=std::time::Instant::now();
-                let mut wait=std::time::Duration::from_millis(500);
-                let mut last:Option<((std::time::SystemTime,u64),std::time::Instant)>=None;
-                let mut miss="未读取";
-                loop {
-                    let print=lyrics::native_fingerprint(&source);
-                    let unchanged=print.is_some_and(|print|last.is_some_and(|(seen,at)|seen==print && at.elapsed()<std::time::Duration::from_secs(15)));
-                    let found=if unchanged {None}else{
-                        if let Some(print)=print {last=Some((print,std::time::Instant::now()));}
-                        lyrics::read_native_detail(&source,&title,&artist,dur).map_err(|reason|miss=reason).ok()
-                    };
-                    // 找到歌词时等界面取走再结束（换歌或关闭歌词后通道断开会立即返回），不因通道暂满丢掉结果。
-                    if found.is_some() {
-                        if tx.send(found).is_ok(){lyrics::log_native(&source,&title,&artist,"命中",started.elapsed());}
-                        break;
-                    }
-                    if let Err(std::sync::mpsc::TrySendError::Disconnected(_))=tx.try_send(None){break;}
-                    if started.elapsed()>=std::time::Duration::from_secs(90){lyrics::log_native(&source,&title,&artist,&format!("放弃:{miss}"),started.elapsed());break;}
-                    std::thread::sleep(wait);
-                    wait=(wait*2).min(std::time::Duration::from_secs(5));
-                }
-            });
-            // 快速切歌时本机轮询线程已满：不留空通道，之后的定时重试会再次启动。
-            if native.is_none(){self.ly.native_rx=None;}
-        }
-        self.ly.pending=Some(LyricsJob{source,title,artist,duration:dur,song_id,cached,native_only,manual});
-    }
 
-    /// 旧请求结束后再发起排队的在线查询：歌曲信息抖动或快速切歌时不会叠加网络线程，
-    /// 也只会查询最新的那首；旧请求的结果因通道已更换而直接丢弃。
-    fn spawn_lyrics_job(&mut self) {
-        if self.ly.pending.is_none() || self.ly_worker.as_ref().is_some_and(|worker|!worker.is_finished()) {return;}
-        let Some(lease)=crate::resources::LYRICS.acquire() else {return;};
-        let Some(job)=self.ly.pending.take() else {return;};
-        let (tx, rx) = std::sync::mpsc::channel();
-        self.ly.rx = Some(rx);
-        self.ly_worker=lease.spawn(move || {
-            let LyricsJob{source,title,artist,duration,song_id,cached,native_only,manual}=job;
-            let result=if native_only {
-                lyrics::kugou_cache::read(&title,&artist,duration).map(|lyrics|(lyrics,false)).ok_or(lyrics::FetchError::NotFound)
-            }else{lyrics::fetch_for_display_with(&source, &title, &artist, duration, song_id, cached, manual)};
-            let _ = tx.send(result);
-        });
-        if self.ly_worker.is_none(){self.ly.rx=None;self.ly.loading=false;self.ly.key.clear();}
-    }
 
-    /// 外部直接提供歌词（录制演示用）。
-    pub fn set_lyrics(&mut self, title: &str, artist: &str, duration: f64, l: lyrics::Lyrics) {
-        self.ly = LyricsState { key: format!("{title}|{artist}|{duration:.0}"), lyrics: Some(l), ..Default::default() };
-    }
 
     pub fn on_drop(&mut self, files: Vec<PathBuf>) {
         if !self.settings.visible_pages[3] || files.is_empty() { return; }

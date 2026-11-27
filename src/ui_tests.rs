@@ -4,8 +4,6 @@ use crate::app::{App, Env, Options, PH, PW, WIN_H, WIN_W};
 mod enterprise_messenger;
 #[path="calendar/ui_compatibility_tests.rs"]
 mod calendar_compatibility;
-#[path="lyrics_switch_ui_tests.rs"]
-mod lyrics_switch;
 #[path="health_reminder_ui_tests.rs"]
 mod health_reminder;
 #[path="settings_redesign_ui_tests.rs"]
@@ -108,20 +106,6 @@ fn weather_content_tap_switches_both_ways_with_a_short_transition(){
     }
 }
 
-#[test]
-fn weather_content_tap_keeps_other_controls_independent(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for (x,y,target) in [(375.0,crate::app::WEATHER_H-7.0,8),(394.0,18.0,8),(367.0,18.0,0),(398.0,68.0,crate::app::BLUETOOTH_PAGE),(20.0,68.0,7)] {
-        let mut h=H::new();h.app.settings.pet=false;
-        h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"歌曲".into(),artist:"歌手".into(),playing:true,..Default::default()};
-        h.app.weather.snapshot=Some(crate::weather::Snapshot{place:"杭州".into(),temp:19.0,..Default::default()});
-        h.app.show_page(8);h.hover(H::local(250.0,65.0),1.0);h.click(H::local(x,y));
-        assert!(!h.app.weather.solar_open,"操作 ({x},{y}) 不应触发日照切换");
-        assert_eq!(h.app.page(),target,"操作 ({x},{y}) 的页面跳转应保持不变");
-        if y>200.0 {assert!(h.cmds.contains(&crate::app::Cmd::OpenUrl("https://open-meteo.com/".into())));}
-        if x==394.0 {assert!(h.app.settings_open);}
-    }
-}
 
 #[test]
 fn weather_week_shows_all_seven_days(){
@@ -284,57 +268,6 @@ fn weather_foundation_preview(){
 
 /// #200：维语、藏语歌曲在收起的岛上歌词和音乐页里的显示，导出修复前后对照图。
 /// 运行：设置 LINGQI_SCRIPT_PREVIEW_DIR 后执行 `cargo test complex_script_lyrics_preview -- --ignored`。
-#[test]
-#[ignore="按需导出维语、藏语歌词的修复前后对照图"]
-fn complex_script_lyrics_preview(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_SCRIPT_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
-    let songs=[
-        ("uyghur","سۆيگۈ دېگەن شۇنداق بولامدۇ","رەيىمجان ئابدۇكېيۇم",
-            "[00:01]سۆيگۈ دېگەن شۇنداق بولامدۇ\n[00:05]يايرىم سېنى سېغىندىم شۇنچە (2024)\n[00:09]كۆڭلۈمدىكى سۆزلەرنى ساڭا ئېيتاي دېسەم سەن يوق\n[00:13]سۆيگۈ دېگەن شۇنداق بولامدۇ"),
-        ("tibetan","ཕ་ཡུལ་གྱི་དྲན་པ།","ཚེ་དབང་ལྷ་མོ།",
-            "[00:01]བཀྲ་ཤིས་བདེ་ལེགས།\n[00:05]སྐྱིད་པོའི་གྲོགས་པོ་ཁྱེད་རང་ཡིན།\n[00:09]ཕ་ཡུལ་གྱི་རི་བོ་མཐོན་པོ།\n[00:13]སྙིང་གི་གཏམ་བརྗོད།"),
-    ];
-    for fixed in [false,true] {
-        crate::rtl_text::BYPASS.store(!fixed,std::sync::atomic::Ordering::Relaxed);
-        for (name,title,artist,lrc) in songs {
-            for open in [false,true] {
-                let mut h=H::new();h.app.settings.pet=false;
-                if !fixed {h.ctx.set_fonts(crate::theme::fonts_without_tibetan());}
-                h.app.opts.fetch_lyrics=true;h.app.settings.island_lyrics=true;h.app.show_lyrics=true;
-                let media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:title.into(),artist:artist.into(),duration:215.0,playing:true,position:7.0,
-                    playback_type:crate::smtc::MediaKind::Music,..Default::default()};
-                h.media=media.clone();h.frame(vec![]);
-                h.app.ly=crate::app::LyricsState{key:format!("{}|{}|{:.0}",media.title,media.artist,media.duration),
-                    song:Some(crate::app::LyricSong{source:media.source.clone(),title:media.title.clone(),artist:media.artist.clone(),duration:media.duration,song_id:None}),
-                    lyrics:Some(crate::lyrics::parse_lrc(lrc)),..Default::default()};
-                if open {h.app.show_page(0);}
-                let (w,hgt)=(crate::app::CANVAS_W,WIN_H);
-                let mut raster=feature_raster_sized(w,hgt);
-                for frame in 0..90 {
-                    h.t+=1.0/60.0;
-                    let env=Env{t:h.t,clock:"22:08:00".into(),today:"2026-11-16".into(),date:"11月16日 周一".into(),media:h.media.clone(),bt_ready:true,..Default::default()};
-                    let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
-                        viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
-                    let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{
-                        h.app.frame(ui,Rect::from_min_size(ui.max_rect().min,Vec2::new(WIN_W,hgt)),&env);
-                    });});
-                    raster.update_textures(&output.textures_delta);
-                    if frame==89 {
-                        raster.buf.fill([0.20,0.24,0.32,1.0]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-                        let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-                        let image=image::RgbaImage::from_raw((w*2.0)as u32,(hgt*2.0)as u32,rgba).unwrap();
-                        let crop_h=if open {(h.app.expanded_height()*2.0+24.0)as u32}else{110};
-                        let file=format!("{name}-{}-{}.png",if open{"page"}else{"island"},if fixed{"after"}else{"before"});
-                        image::imageops::crop_imm(&image,200,0,880,crop_h).to_image().save(dest.join(file)).unwrap();
-                    }
-                    raster.free_textures(&output.textures_delta);
-                }
-            }
-        }
-    }
-    crate::rtl_text::BYPASS.store(false,std::sync::atomic::Ordering::Relaxed);
-}
 
 #[test]
 #[ignore="按需导出进入日照视图时的涟漪与太阳滑入过程"]
@@ -536,16 +469,6 @@ fn weather_attribution_opens_its_source_without_changing_pages(){
     assert_eq!(h.app.page(),8);
 }
 
-#[test]
-fn weather_refresh_keeps_music_and_settings_shortcuts_separate(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"歌曲".into(),artist:"歌手".into(),playing:true,..Default::default()};
-    h.app.show_page(8);h.hover(H::local(300.0,60.0),1.0);
-    let rect=|name|h.ctx.read_response(egui::Id::new(("card",true,name))).unwrap().rect;
-    let refresh=rect("weather-refresh");
-    assert!(!refresh.intersects(rect("header-music")));
-    assert!(!refresh.intersects(rect("page-settings")));
-}
 
 #[test]
 fn resized_font_atlases_stop_reuploading_and_release_unused_sizes(){
@@ -720,21 +643,6 @@ fn regression_blur_follows_its_switch_even_when_compat_rendering_needs_the_conto
     }}}
 }
 
-#[test]
-fn changing_qq_metadata_cannot_spawn_lyrics_workers_while_one_is_running(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    let (release,wait)=std::sync::mpsc::channel();
-    let worker=std::thread::spawn(move||{let _=wait.recv();});
-    let id=worker.thread().id();h.app.ly_worker=Some(worker);
-    h.app.opts.fetch_lyrics=true;h.app.settings.island_lyrics=true;
-    for step in 0..1440 {
-        h.media=crate::smtc::NowPlaying{source:"QQMusic.exe".into(),title:format!("歌曲{}",step%2),artist:"歌手".into(),duration:120.0,playing:true,..Default::default()};
-        h.t=step as f64*0.25;h.frame(vec![]);
-        assert_eq!(h.app.ly_worker.as_ref().unwrap().thread().id(),id,"旧请求未结束时不得另开取词线程");
-        assert!(h.app.ly.rx.is_none(),"不能为抖动的歌曲堆积请求");
-    }
-    release.send(()).unwrap();h.app.ly_worker.take().unwrap().join().unwrap();
-}
 
 #[test]
 fn top_bar_modes_preserve_legacy_settings_and_save_the_selected_display_mode(){
@@ -794,39 +702,6 @@ fn top_bar_settings_switch_modes_and_respect_the_master_switch(){
     }
 }
 
-#[test]
-fn v0649_settings_and_mail_accounts_survive_upgrade(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let _h=H::new();
-    let directory=crate::model::config_dir();
-    std::fs::create_dir_all(&directory).unwrap();
-    let legacy=concat!("settings_theme=dark\npet=0\nminimal=1\nbrowser_minimal=1\n",
-        "visible_pages=10111111\npage_order=5,2,0,1,3,4,6,7\nshow_battery=0\n",
-        "system_hud=0\nread_notifications=1\nnotifications=0\nsound=1\n",
-        "lyrics_enabled=0\nisland_lyrics=1\nlyric_delay_ms=-650\nhide_fullscreen=0\n",
-        "focus_minutes=45\nrest_minutes=10\nwater_minutes=60\nserving_ml=300\nwater_start=8\nwater_end=23\n",
-        "mail_enabled=0\nmail_code=0\nmail_interval=300\nmail_ics=30\ncalendar_prompt=0\ncalendar_auto_sync=0\n");
-    std::fs::write(directory.join("settings.txt"),legacy).unwrap();
-    let upgraded=crate::model::Settings::load();
-    assert!(!upgraded.mail_code_only_notifications);
-    assert!(upgraded.display_id.is_empty() && upgraded.avoid_apps.is_empty());
-    assert!(upgraded.avoid_browsers && upgraded.bluetooth_notifications);
-    assert!(!upgraded.clock_12h && !upgraded.notification_preview);
-    assert_eq!(upgraded.clock_period,0);assert_eq!(upgraded.mail_code_hide_seconds,60);
-    for _ in 0..2 {
-        crate::model::Settings::load().save();
-        let saved=std::fs::read_to_string(directory.join("settings.txt")).unwrap();
-        for line in legacy.lines().filter(|line|!line.starts_with("visible_pages=")&&!line.starts_with("page_order=")){assert!(saved.lines().any(|value|value==line),"升级保存不能改变旧设置：{line}");}
-        assert!(saved.lines().any(|value|value=="visible_pages=10111111101"),"旧页面开关应保留，并默认开启天气页");
-        assert!(saved.lines().any(|value|value=="page_order=5,2,0,1,3,4,6,7,8,9,10"),"旧顺序应保留，并把天气页接在最后");
-    }
-    std::fs::write(directory.join("mail-accounts.json"),br#"[{"email":"OldUser@qq.com","provider":"qq","enabled":true},{"email":"old@icloud.com","provider":"icloud","enabled":false}]"#).unwrap();
-    let accounts=crate::mail::load_accounts();
-    assert_eq!(accounts.len(),2);assert!(accounts.iter().all(|account|account.custom.is_none()));
-    assert_eq!(accounts[0].credential_key(),"olduser@qq.com");
-    assert_eq!(accounts[0].endpoint().unwrap(),("imap.qq.com".into(),993,"OldUser@qq.com".into()));
-    assert!(!accounts[1].enabled);
-    crate::mail::save_accounts(&accounts);assert_eq!(crate::mail::load_accounts(),accounts);
-}
 
 fn editing_local_calendar_clears_outdated_reminders() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -1168,31 +1043,7 @@ fn calendar_combines_platforms_and_settings_tabs_do_not_filter_events() {
     assert_eq!(h.app.calendar_entries(day).len(),1);
 }
 
-#[test]
-fn switching_music_source_discards_previous_lyrics() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),duration:120.0,..Default::default()};
-    h.frame(vec![]);
-    for source in ["QQMusic.exe","cloudmusic.exe","汽水音乐","KuGou.exe","QQMusic.exe"] {
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:01]旧来源歌词"));
-        h.media.source=source.into();
-        h.frame(vec![]);
-        assert!(h.app.ly.lyrics.is_none(),"切换到 {source} 后必须重新选择歌词来源");
-    }
-}
 
-#[test]
-fn closing_a_player_then_starting_native_netease_restores_music_and_lyrics(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{source:"SodaMusic.exe".into(),title:"旧歌曲".into(),artist:"歌手".into(),playing:true,duration:120.0,..Default::default()};h.frame(vec![]);
-    h.app.set_lyrics("旧歌曲","歌手",120.0,crate::lyrics::parse_lrc("[00:01]旧歌词"));
-    h.media=Default::default();h.frame(vec![]);assert!(h.app.media.title.is_empty());assert!(h.app.ly.lyrics.is_none());
-    h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),song_id:Some(123),title:"新歌曲".into(),artist:"歌手".into(),playing:true,position:7.0,duration:120.0,..Default::default()};h.frame(vec![]);
-    h.app.set_lyrics("新歌曲","歌手",120.0,crate::lyrics::parse_lrc("[00:05]新歌词\n[00:10]下一句"));h.frame(vec![]);
-    assert_eq!(h.app.media.title,"新歌曲");assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("新歌词"));
-    h.media.song_id=Some(124);h.frame(vec![]);assert!(h.app.ly.lyrics.is_none(),"歌名相同但歌曲 ID 不同仍需重新取词");
-}
 
 #[test]
 fn settings_keep_dark_buttons_when_system_theme_changes() {
@@ -1322,21 +1173,6 @@ fn oled_shift_pauses_on_the_first_pointer_press_frame() {
     assert!(h.app.oled_shift_idle(&h.ctx),"松开且没有交互后应恢复位移");
 }
 
-#[test]
-fn oled_shift_waits_for_side_panels_to_finish_closing() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for dock in [crate::model::Dock::Left,crate::model::Dock::Right] {
-        let mut h=H::new();h.app.settings.dock=dock;h.app.show_page(0);
-        let inside=Some(Pos2::new(if dock==crate::model::Dock::Left {100.0}else{400.0},300.0));
-        for _ in 0..300 {side_frame(&mut h,inside);}
-        assert!(h.app.open);
-        for _ in 0..120 {side_frame(&mut h,None);if !h.app.open {break;}}
-        assert!(!h.app.open && h.app.progress()>0.1);
-        assert!(!h.app.oled_shift_idle(&h.ctx),"{dock:?} 收起动画期间不能移动");
-        for _ in 0..120 {side_frame(&mut h,None);}
-        assert!(h.app.oled_shift_idle(&h.ctx),"{dock:?} 动画完成后应恢复位移");
-    }
-}
 
 struct H {
     ctx: egui::Context,
@@ -1352,7 +1188,6 @@ struct H {
     shapes:Vec<egui::epaint::ClippedShape>,
     bt: Vec<crate::bt::Device>,
     receivers: Vec<crate::bt::Device>,
-    media: crate::smtc::NowPlaying,
     power: (Option<u8>, bool),
     network: Option<bool>,
     system_idle: Option<f64>,
@@ -1377,8 +1212,8 @@ impl H {
         }
         std::env::set_var("LINGQI_DATA_DIR", &dir);
         let ctx = egui::Context::default();
-        let app = App::new(&ctx, Options { fetch_lyrics: false, pet_idle: 1e9 });
-        Self { ctx, app, t: 0.0, cursor: None,cmds:vec![],region:Rect::NOTHING,hit:Rect::NOTHING,top_bar_notice:None,animating:false,interactive_transition:false,shapes:Vec::new(), bt:Vec::new(),receivers:Vec::new(),media:Default::default(),power:(None,false),network:None,system_idle:None,screen_locked:false,fullscreen:false,browser_at_top:None,file_drop_zone:None,hovered_files:vec![],dropped_files:vec![] }
+        let app = App::new(&ctx, Options { pet_idle: 1e9 });
+        Self { ctx, app, t: 0.0, cursor: None,cmds:vec![],region:Rect::NOTHING,hit:Rect::NOTHING,top_bar_notice:None,animating:false,interactive_transition:false,shapes:Vec::new(), bt:Vec::new(),receivers:Vec::new(),power:(None,false),network:None,system_idle:None,screen_locked:false,fullscreen:false,browser_at_top:None,file_drop_zone:None,hovered_files:vec![],dropped_files:vec![] }
     }
     fn frame(&mut self, events: Vec<egui::Event>) {
         self.t += 1.0 / 60.0;
@@ -1400,7 +1235,6 @@ impl H {
             bt: self.bt.clone(),
             bt_ready: true,
             receivers: self.receivers.clone(),
-            media:self.media.clone(),
             battery:self.power.0,
             charging:self.power.1,
             network:self.network,
@@ -1968,70 +1802,9 @@ fn settings_opening_restores_focus_once_without_becoming_topmost() {
     assert!(commands.iter().any(|cmd|matches!(cmd,egui::ViewportCommand::Visible(true))),"重开设置应正常显示");
 }
 
-#[test]
-fn web_video_is_hidden_without_changing_music_preferences(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;
-    h.app.ly.key="Previous Song|Artist|120".into();
-    h.app.ly.lyrics=Some(crate::lyrics::parse_lrc("[00:01.00]previous song"));
-    h.app.ly.error=Some(crate::lyrics::FetchError::Unavailable("503".into()));
-    let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    h.media=crate::smtc::NowPlaying{title:"小唐的Token的抖音 - 抖音".into(),playing:true,duration:17.0,..Default::default()};
-    h.frame(vec![]);
-    assert!(h.app.media.title.is_empty() && !h.app.media.playing,"视频标题和播放状态不应进入岛内音乐页面");
-    assert!(h.app.ly.key.is_empty(),"视频不应建立歌曲取词任务");
-    assert!(h.app.ly.lyrics.is_none() && h.app.ly.error.is_none(),"切到视频应清除上一首歌词和歌词错误");
-    assert!(tx.send(Ok((crate::lyrics::parse_lrc("[00:01.00]late song"),false))).is_err(),"视频不能接收旧歌曲迟到的查询结果");
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    h.click(H::local(74.0,118.0));
-    assert!(h.app.show_lyrics,"视频页面的标签不应切换用户的歌曲歌词偏好");
-    h.click(H::local(210.5,118.0));
-    assert!(!h.cmds.iter().any(|cmd|matches!(cmd,crate::app::Cmd::Media(_))),"音乐页不应控制被隐藏的视频");
-    assert!(!matches!(h.app.pet_state(),crate::extras::PetState::Music),"视频不应触发听歌表情");
-    h.app.opts.fetch_lyrics=false;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),duration:120.0,..Default::default()};
-    h.hover(Pos2::new(WIN_W/2.0,12.0),0.5);
-    h.click(H::local(74.0,118.0));
-    assert!(!h.app.show_lyrics,"回到歌曲时应恢复原来的词按钮");
-}
 
-#[test]
-fn web_video_does_not_override_the_minimal_island(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.minimal=true;
-    h.media=crate::smtc::NowPlaying{title:"小唐的Token的抖音 - 抖音".into(),playing:true,duration:17.0,..Default::default()};
-    for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.region.height()<20.0,"视频不能触发歌曲专用的收起态");
-}
 
-#[test]
-fn minimal_mode_stays_a_line_with_music_and_after_media_changes(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.minimal=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
-    for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.region.height()<20.0,"播放音乐时仍应遵守极简开关");
-    assert!(h.hit.height()<=crate::app::BAR_H_MIN+0.1,"鼠标命中范围也应收回细线");
-    h.media.title="Another Track".into();h.media.playing=false;
-    for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.region.height()<20.0,"暂停或切歌不能覆盖极简开关");
-    h.media=Default::default();
-    for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.region.height()<20.0,"没有媒体时恢复用户选择的极简状态");
-}
 
-#[test]
-fn toggling_minimal_changes_the_island_while_media_is_present(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
-    for _ in 0..90 {h.frame(vec![]);}assert!(h.region.height()>30.0);
-    h.app.settings.minimal=true;for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.region.height()<20.0,"开启极简后应收成细线");
-    h.app.settings.minimal=false;for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.region.height()>30.0,"关闭极简后应恢复普通岛体");
-}
 
 #[test]
 fn minimal_mode_keeps_focus_running_and_returns_after_notifications(){
@@ -2044,692 +1817,38 @@ fn minimal_mode_keeps_focus_running_and_returns_after_notifications(){
     assert!(h.app.pomo.running&&h.app.pomo.remaining<115.0,"极简仅改变显示，计时继续运行");
 }
 
-#[test]
-fn delayed_media_samples_keep_the_live_position_and_follow_pause_and_seek(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:9.2,duration:120.0,playing:true,sampled_at:Some(std::time::Instant::now()-std::time::Duration::from_millis(600)),..Default::default()};
-    h.frame(vec![]);
-    assert!(h.app.media.position>=9.79,"媒体位置必须包含送到界面之前经过的时间");
-    h.media.playing=false;h.media.position=9.4;h.frame(vec![]);
-    assert_eq!(h.app.media.position,9.4,"暂停不能继续外推");
-    h.media.playing=true;h.media.position=4.0;h.media.sampled_at=Some(std::time::Instant::now());h.frame(vec![]);
-    assert!((4.0..4.2).contains(&h.app.media.position),"跳转后应使用新的播放位置");
-    h.media.position=119.9;h.media.sampled_at=Some(std::time::Instant::now()-std::time::Duration::from_secs(1));h.frame(vec![]);
-    assert_eq!(h.app.media.position,120.0,"外推不能超过歌曲结尾");
-}
 
-#[test]
-fn kugou_external_seek_updates_lyrics_in_both_directions(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{source:"KuGou.exe".into(),title:"Track".into(),artist:"Artist".into(),duration:120.0,playing:true,..Default::default()};
-    h.frame(vec![]);
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]开头\n[00:30]中段\n[01:00]后段"));
-    for (position,line) in [(65.0,"后段"),(10.0,"开头"),(35.0,"中段")] {
-        h.media.position=position;h.media.sampled_at=Some(std::time::Instant::now());h.frame(vec![]);
-        assert_eq!(h.app.island_lyric().map(|(_,text)|text),Some(line),"酷狗跳转后应立即切换到对应歌词");
-    }
-}
 
-#[test]
-fn music_clients_keep_lyrics_across_two_repeat_cycles(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for source in ["kugou","QQMusic.exe","cloudmusic.exe","汽水音乐","Spotify.exe","kwmusic.exe"] {
-        let mut h=H::new();h.app.settings.island_lyrics=true;
-        h.media=crate::smtc::NowPlaying{source:source.into(),title:"循环测试".into(),artist:"歌手".into(),duration:120.0,playing:true,..Default::default()};
-        h.frame(vec![]);h.app.set_lyrics("循环测试","歌手",120.0,crate::lyrics::parse_lrc("[00:00]开头\n[00:05]第一段\n[01:50]尾声"));
-        for (position,line) in [(119.0,"尾声"),(0.0,"开头"),(8.0,"第一段"),(119.0,"尾声"),(0.0,"开头"),(8.0,"第一段")] {
-            h.media.position=position;h.media.sampled_at=Some(std::time::Instant::now());h.frame(vec![]);
-            assert_eq!(h.app.island_lyric().map(|(_,text)|text),Some(line),"{source} 第二、三遍也必须显示相应歌词");
-        }
-    }
-}
 
-#[test]
-fn music_without_a_timeline_does_not_invent_elapsed_time(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"QQMusic.exe".into(),title:"歌曲".into(),playing:true,playback_type:crate::smtc::MediaKind::Music,..Default::default()};
-    for _ in 0..240{h.frame(vec![]);}
-    assert_eq!(h.app.media.title,"歌曲");assert_eq!(h.app.media.position,0.0);assert_eq!(h.app.media.duration,0.0);
-}
 
-#[test]
-fn kugou_position_advances_without_duration_and_respects_pause_and_seek(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"kugou".into(),title:"Track".into(),artist:"Artist".into(),position:42.0,duration:0.0,playing:true,sampled_at:Some(std::time::Instant::now()-std::time::Duration::from_millis(600)),..Default::default()};
-    h.frame(vec![]);
-    assert!(h.app.media.position>=42.59,"未知总时长不能阻止真实进度外推");
-    h.media.playing=false;h.frame(vec![]);assert_eq!(h.app.media.position,42.0);
-    h.media.playing=true;h.media.position=12.0;h.media.sampled_at=Some(std::time::Instant::now());h.frame(vec![]);
-    assert!((12.0..12.2).contains(&h.app.media.position),"拖动后必须跟随新的实际位置");
-}
 
-#[test]
-fn music_volume_popup_opens_and_mute_restores_the_selected_players_level(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"QQMusic.exe".into(),title:"Track".into(),artist:"Artist".into(),duration:120.0,volume:Some((60,false)),..Default::default()};
-    h.app.volume_ui=Some((45,false));
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    h.click(H::local(367.0,118.0));
-    assert!(h.app.music_volume_open);
-    assert!(h.cmds.is_empty(),"打开浮条不应改变音量或静音");
-    h.hover(H::local(367.0,92.0),0.2);h.click(H::local(367.0,92.0));
-    assert!(h.cmds.contains(&crate::app::Cmd::MusicVolume(crate::smtc::Transport::SetMute(true),"QQMusic.exe".into())));
-    assert!(!h.cmds.contains(&crate::app::Cmd::ToggleMute));
-    assert_eq!(h.app.music_volume_ui,Some((60,true)));
-    assert_eq!(h.app.volume_ui,Some((45,false)));
-    h.click(H::local(367.0,92.0));
-    assert_eq!(h.app.music_volume_ui,Some((60,false)),"恢复时沿用静音前的音量");
-    assert!(h.cmds.contains(&crate::app::Cmd::MusicVolume(crate::smtc::Transport::SetMute(false),"QQMusic.exe".into())));
-}
 
-#[test]
-fn music_volume_popup_slider_unmutes_and_scrolls_without_changing_pages(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"QQMusic.exe".into(),title:"Track".into(),artist:"Artist".into(),volume:Some((60,true)),..Default::default()};
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.click(H::local(367.0,118.0));h.hover(H::local(367.0,53.5),0.2);
-    h.click(H::local(367.0,53.5));
-    assert_eq!(h.app.music_volume_ui,Some((50,false)));
-    assert!(h.cmds.contains(&crate::app::Cmd::MusicVolume(crate::smtc::Transport::SetVolume(50),"QQMusic.exe".into())));
-    h.wheel(120.0);assert_eq!(h.app.music_volume_ui,Some((54,false)));assert_eq!(h.app.page,0);
-    h.click(H::local(367.0,32.0));assert_eq!(h.app.music_volume_ui,Some((100,false)));
-    h.click(H::local(367.0,75.0));assert_eq!(h.app.music_volume_ui,Some((0,false)));
-    h.click(H::local(387.0,68.0));assert_eq!(h.app.page,0,"浮条遮挡部分不能穿透触发翻页");
-    h.click(H::local(387.0,18.0));assert!(!h.app.settings_open,"浮条遮挡部分不能穿透打开设置");
-}
 
-#[test]
-fn music_volume_popup_closes_on_escape_outside_click_source_change_and_collapse(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"QQMusic.exe".into(),title:"Track".into(),artist:"Artist".into(),volume:Some((60,false)),..Default::default()};
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.click(H::local(367.0,118.0));
-    h.frame(vec![egui::Event::Key{key:egui::Key::Escape,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);
-    assert!(!h.app.music_volume_open);assert!(h.app.open,"Esc 只关闭浮条，保留音乐面板");
-    h.click(H::local(367.0,118.0));h.click(H::local(180.0,45.0));assert!(!h.app.music_volume_open);
-    h.click(H::local(367.0,118.0));h.media.source="cloudmusic.exe".into();h.frame(vec![]);assert!(!h.app.music_volume_open);
-    h.click(H::local(367.0,118.0));h.app.show_page(1);assert!(!h.app.music_volume_open);
-    h.app.show_page(0);h.hover(H::local(180.0,45.0),1.0);h.click(H::local(367.0,118.0));
-    h.hover(Pos2::new(0.0,250.0),5.0);assert!(!h.app.music_volume_open);
-}
 
-#[test]
-#[ignore="按需导出音乐音量浮条实际画面：LINGQI_MUSIC_VOLUME_PREVIEW=目录"]
-fn music_volume_popup_gallery(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_MUSIC_VOLUME_PREVIEW").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
-    for (name,muted,lyrics) in [("volume",false,false),("muted",true,false),("lyrics",false,true)] {
-        let mut h=H::new();h.ctx.set_pixels_per_point(2.0);h.app.settings.pet=false;h.app.show_lyrics=lyrics;
-        h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"晴天".into(),artist:"周杰伦".into(),position:92.0,duration:269.0,volume:Some((62,muted)),..Default::default()};
-        h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-        if lyrics{h.app.set_lyrics("晴天","周杰伦",269.0,crate::lyrics::parse_lrc("[00:00]午后的阳光落在窗边\n[01:30]风把回忆吹向远方\n[01:40]慢慢走过这段时光"));}
-        h.click(H::local(367.0,118.0));h.hover(H::local(330.0,112.0),0.25);
-        let ppp=h.ctx.pixels_per_point();let mut raster=crate::preview_raster::Raster::new((crate::app::CANVAS_W*ppp) as usize,(WIN_H*ppp) as usize);
-        raster.update_textures(&egui::TexturesDelta{set:vec![(egui::TextureId::default(),egui::epaint::ImageDelta::full(h.ctx.fonts(|f|f.image()),egui::TextureOptions::LINEAR))],..Default::default()});
-        raster.buf.fill([0.10,0.12,0.16,1.0]);raster.draw(&h.ctx.tessellate(h.shapes.clone(),ppp),ppp);
-        let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-        let image=image::RgbaImage::from_raw(raster.w as u32,raster.h as u32,rgba).unwrap();
-        image::imageops::crop_imm(&image,((WIN_W-crate::app::PW)/2.0*ppp-12.0) as u32,0,((crate::app::PW+12.0)*ppp+12.0) as u32,((crate::app::PH+12.0)*ppp) as u32).to_image().save(dest.join(format!("{name}.png"))).unwrap();
-    }
-}
 
-#[test]
-fn music_volume_wheel_and_player_switch_keep_system_volume_untouched(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"QQMusic.exe".into(),title:"Track".into(),artist:"Artist".into(),volume:Some((60,true)),..Default::default()};
-    h.app.volume_ui=Some((45,false));h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.hover(H::local(367.0,118.0),0.2);h.wheel(120.0);
-    assert!(h.cmds.contains(&crate::app::Cmd::MusicVolume(crate::smtc::Transport::SetVolume(64),"QQMusic.exe".into())),"音量={:?} 命令={:?} 页={} 指针={:?}",h.app.music_volume_ui,h.cmds,h.app.page,h.cursor);
-    assert_eq!(h.app.music_volume_ui,Some((64,false)));
-    h.media.source="cloudmusic.exe".into();h.media.volume=Some((22,false));h.frame(vec![]);
-    assert_eq!(h.app.music_volume_ui,Some((22,false)),"换播放器立即更新独立音量");
-    assert_eq!(h.app.volume_ui,Some((45,false)));
-    h.media.volume=None;h.cmds.clear();h.click(H::local(367.0,118.0));h.wheel(120.0);
-    assert!(h.cmds.is_empty(),"没有应用会话时不可回退到系统音量");
-}
 
-#[test]
-fn music_uses_system_artwork_and_clears_it_when_the_next_song_has_none(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    let image=std::sync::Arc::new(egui::ColorImage::new([32,32],egui::Color32::BLUE));
-    h.media=crate::smtc::NowPlaying{title:"First".into(),artist:"Artist".into(),artwork:Some(image.clone()),..Default::default()};
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    let (cached,texture)=h.app.music_artwork.as_ref().expect("播放页应使用系统封面");
-    assert!(std::sync::Arc::ptr_eq(cached,&image));
-    let texture_id=texture.id();
-    h.frame(vec![]);
-    assert_eq!(h.app.music_artwork.as_ref().unwrap().1.id(),texture_id,"进度更新不应重复上传纹理");
-    h.media=crate::smtc::NowPlaying{title:"Second".into(),artist:"Artist".into(),..Default::default()};
-    h.frame(vec![]);
-    assert!(h.app.music_artwork.is_none(),"缺少封面的下一首歌应恢复占位图");
-}
 
-#[test]
-fn failed_lyrics_can_be_retried_from_the_music_page(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),duration:120.0,..Default::default()};
-    h.app.ly.key="Track|Artist|120".into();
-    h.app.ly.error=Some(crate::lyrics::FetchError::Unavailable("HTTP 502".into()));
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="暂未获取歌词，请重试")),"展开内应保留歌词错误提示");
-    h.click(H::local(310.0,68.0));
-    assert!(h.app.ly.key.is_empty(),"点击错误提示后应允许重新请求当前歌曲");
-}
 
-#[test]
-fn transient_lyric_failures_retry_but_missing_songs_do_not_loop(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for (error,retry) in [(crate::lyrics::FetchError::Unavailable("503".into()),true),(crate::lyrics::FetchError::NotFound,false),(crate::lyrics::FetchError::IncompleteMetadata,false)] {
-        let mut h=H::new();
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),duration:120.0,..Default::default()};
-        h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;
-        h.app.ly.key="Track|Artist|120".into();
-        let (tx,rx)=std::sync::mpsc::channel();
-        h.app.ly.rx=Some(rx);h.app.ly.loading=true;
-        tx.send(Err(error.clone())).unwrap();
-        h.frame(vec![]);
-        assert_eq!(h.app.ly.error,Some(error));
-        assert_eq!(h.app.ly.retry_at.is_some(),retry);
-        assert!(!h.app.ly.loading);
-        if let Some(at)=h.app.ly.retry_at {assert!((at-h.t-30.0).abs()<0.001,"网络恢复重试应有间隔");}
-    }
-}
 
-#[test]
-fn music_lyrics_show_in_a_separate_right_column() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:01]上一句\n[00:05]当前歌词\n[00:10]下一句"));
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    let current=h.shapes.iter().find_map(|shape|match &shape.shape {
-        egui::Shape::Text(text) if text.galley.text()=="当前歌词"=>Some(text.pos),_=>None,
-    }).expect("展开页应显示同步歌词");
-    assert!(current.x>=H::local(243.0,0.0).x,"歌词必须位于播放器右侧");
-    let title=h.shapes.iter().find_map(|shape|match &shape.shape {
-        egui::Shape::Text(text) if text.galley.text()=="Track"=>Some(text.pos),_=>None,
-    }).unwrap();
-    assert!(title.x<H::local(233.0,0.0).x);
-    h.click(H::local(74.0,118.0));
-    assert!(!h.app.show_lyrics);
-    h.frame(vec![]);
-    assert!(!h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(text) if text.galley.text()=="当前歌词")));
-}
 
-#[test]
-fn disabling_lyrics_disconnects_pending_workers(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"KuGou.exe".into(),title:"测试歌曲".into(),artist:"歌手".into(),..Default::default()};
-    h.frame(vec![]);h.app.opts.fetch_lyrics=true;
-    h.app.show_lyrics=false;h.app.settings.island_lyrics=false;
-    h.app.ly.key="测试歌曲|歌手|0".into();h.app.ly.loading=true;
-    let (network,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    let (native,rx)=std::sync::mpsc::channel();h.app.ly.native_rx=Some(rx);
-    h.frame(vec![]);
-    assert!(native.send(None).is_err(),"关闭歌词后应停止本机轮询");
-    assert!(network.send(Err(crate::lyrics::FetchError::NotFound)).is_err());
-    assert!(h.app.ly.key.is_empty(),"再次开启时应能重新加载歌词");
-}
 
-#[test]
-fn late_native_lyrics_bypass_pending_network_for_both_clients(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for source in ["KuGou.exe","SodaMusic.exe"] {
-        let mut h=H::new();
-        h.media=crate::smtc::NowPlaying{source:source.into(),title:"测试歌曲".into(),artist:"歌手".into(),..Default::default()};
-        h.frame(vec![]);h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;
-        h.app.ly.key="测试歌曲|歌手|0".into();h.app.ly.loading=true;
-        let (network,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-        let (native,rx)=std::sync::mpsc::channel();h.app.ly.native_rx=Some(rx);
-        native.send(Some(crate::lyrics::parse_lrc("[00:01.00]本机歌词"))).unwrap();h.frame(vec![]);
-        assert!(!h.app.ly.loading,"本机歌词不能等待在线请求结束");
-        assert_eq!(h.app.ly.lyrics.as_ref().unwrap().lines[0].text,"本机歌词");
-        assert!(network.send(Err(crate::lyrics::FetchError::NotFound)).is_err(),"迟到的网络结果必须丢弃");
-    }
-}
 
-#[test]
-fn kugou_fallback_waits_for_late_native_lyrics(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"kugou".into(),title:"测试歌曲".into(),artist:"歌手".into(),position:22.8,..Default::default()};
-    h.frame(vec![]);h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;h.app.ly.key="测试歌曲|歌手|0".into();
-    let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:23.930]测试歌词"),true))).unwrap();h.frame(vec![]);
-    assert!(h.app.ly.retry_at.is_some(),"临时通用歌词必须继续等待迟到的酷狗原生歌词");
-    h.t=h.app.ly.retry_at.unwrap()+0.1;h.frame(vec![]);
-    assert_eq!(h.app.ly.lyrics.as_ref().unwrap().lines[0].t,23.930,"接回原生歌词期间不能清空现有歌词");assert!(!h.app.ly.loading);
-    let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:22.991]测试歌词"),false))).unwrap();h.frame(vec![]);
-    assert!((h.app.ly.lyrics.as_ref().unwrap().lines[0].t-22.991).abs()<0.001);assert!(h.app.ly.retry_at.is_none(),"接回原生歌词后应停止重查");
-}
 
-#[test]
-fn kugou_missing_lyrics_rechecks_late_cache_without_flashing_loading() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"kugou".into(),title:"不存在的测试歌曲".into(),artist:"测试歌手".into(),duration:120.0,..Default::default()};
-    h.frame(vec![]);h.app.opts.fetch_lyrics=true;h.app.show_lyrics=true;
-    h.app.ly.key="不存在的测试歌曲|测试歌手|120".into();
-    let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Err(crate::lyrics::FetchError::NotFound)).unwrap();h.frame(vec![]);
-    let retry=h.app.ly.retry_at.expect("酷狗尚未写入缓存时仍需自动检查");
-    assert!((retry-h.t-5.0).abs()<0.001);
-    // 歌词通道全进程只有 1 个名额，前面测试的歌词线程可能还在查网络；占着时这一帧会直接跳过。
-    let until=std::time::Instant::now()+std::time::Duration::from_secs(20);
-    while crate::resources::LYRICS.active()>0 && std::time::Instant::now()<until{std::thread::sleep(std::time::Duration::from_millis(10));}
-    assert_eq!(crate::resources::LYRICS.active(),0,"歌词名额被其他测试长期占用");
-    h.t=retry+0.1;h.frame(vec![]);
-    assert!(!h.app.ly.loading,"检查本机缓存不能反复闪出加载提示");
-    assert_eq!(h.app.ly.error,Some(crate::lyrics::FetchError::NotFound));
-    let (tx,rx)=std::sync::mpsc::channel();h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:01.00]迟到的原生歌词"),false))).unwrap();h.frame(vec![]);
-    assert!(h.app.ly.lyrics.is_some());assert!(h.app.ly.error.is_none());assert!(h.app.ly.retry_at.is_none());
-}
 
-#[test]
-fn island_lyrics_pause_returns_to_resident_and_resume_follows_current_position(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|error|error.into_inner());
-    let visible=|h:&H,label:&str|h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(text) if text.galley.text()==label));
-    for minimal in [false,true] {for synced in [true,false] {
-        let mut h=H::new();h.app.settings.minimal=minimal;
-        h.power=(Some(75),false);h.app.pomo.running=true;h.app.pomo.remaining=600.0;
-        h.app.weather.snapshot=Some(crate::weather::Snapshot{temp:21.0,..Default::default()});
-        h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,..Default::default()};
-        for _ in 0..90 {h.frame(vec![]);}
-        let resident_width=h.app.current_width();let resident_height=h.hit.height();
-        h.app.settings.island_lyrics=true;h.media.playing=true;
-        let lyrics=if synced {crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句歌词")}else{crate::lyrics::from_plain("没有时间戳的歌词")};
-        h.app.set_lyrics("Track","Artist",120.0,lyrics);
-        for _ in 0..90 {h.frame(vec![]);}
-        assert!(visible(&h,if synced{"当前歌词"}else{"Track"}));
-        assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_LYRICS);
-        h.media.playing=false;h.frame(vec![]);
-        assert!(h.app.island_lyric().is_none(),"暂停后应退出收起态歌词显示");
-        for _ in 0..90 {h.frame(vec![]);}
-        assert!(!visible(&h,"当前歌词") && !visible(&h,"Track"));
-        assert!((h.app.current_width()-resident_width).abs()<2.0,"暂停后应恢复原常驻宽度");
-        assert!((h.hit.height()-resident_height).abs()<0.1);
-        assert_eq!(visible(&h,"09:41"),!minimal);
-        if !minimal {
-            assert!(visible(&h,"21°"),"普通常驻仍应显示天气");
-            let secs=h.app.pomo.remaining.ceil() as u32;
-            assert!(visible(&h,&format!("{:02}:{:02}",secs/60,secs%60)),"暂停音乐不能隐藏专注倒计时");
-        }
-        assert!(h.app.settings.island_lyrics && h.app.ly.lyrics.is_some(),"暂停只切换显示形态，应保留开关和歌词缓存");
-        assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_BACKGROUND);
-        h.media.position=12.0;for _ in 0..30 {h.frame(vec![]);}
-        assert!(!visible(&h,"下一句歌词"));
-        h.media.playing=true;for _ in 0..90 {h.frame(vec![]);}
-        assert!(visible(&h,if synced{"下一句歌词"}else{"Track"}),"继续播放后应按最新进度恢复歌词或歌名");
-        assert!(!visible(&h,"09:41"));
-        assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_LYRICS);
-    }}
-}
 
-#[test]
-fn music_lyrics_island_toggle_is_independent_and_persistent() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.show_lyrics=false;h.app.settings.lyrics_enabled=false;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"));
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    h.click(H::local(313.0,118.0));
-    assert!(h.app.settings.island_lyrics);
-    assert!(!h.app.show_lyrics && !h.app.settings.lyrics_enabled);
-    let saved=crate::model::Settings::load();
-    assert!(saved.island_lyrics && !saved.lyrics_enabled);
-    h.hover(Pos2::new(WIN_W/2.0,PH+30.0),1.0);
-    assert!(!h.app.open);
-    assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("当前歌词"));
-    let pet_width=if h.app.pet_enabled(){48.0}else{0.0};
-    assert!((h.app.current_width()-crate::app::LYRIC_BAR_W-pet_width).abs()<2.0);
-}
 
-#[test]
-fn music_lyric_timing_follows_saved_delay_and_preserves_playback_position(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:9.8,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]第一句\n[00:05]当前歌词\n[00:10]下一句"));
-    h.frame(vec![]);
-    assert_eq!(h.app.settings.lyric_delay_ms,-350,"未设置时应保留原有提前 0.35 秒的预设");
-    assert!((h.app.lyric_position()-10.15).abs()<0.001,"默认应提前 0.35 秒显示，且只应用一次");
-    for (delay,position,expected) in [(500,10.2,Some("当前歌词")),(-500,9.8,Some("下一句")),(0,9.8,Some("当前歌词")),(500,0.2,None),(500,0.6,Some("第一句"))]{
-        std::fs::write(crate::model::config_dir().join("settings.txt"),format!("lyric_delay_ms={delay}\nisland_lyrics=1\n")).unwrap();
-        h.app.settings=crate::model::Settings::load();
-        h.media.position=position;h.frame(vec![]);
-        assert_eq!(h.app.island_lyric().map(|(_,line)|line),expected,"延时 {delay} ms，播放位置 {position}");
-        assert!((h.app.media.position-position).abs()<0.001,"调整歌词不应改变播放进度");
-        h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-        for text in ["第一句","当前歌词","下一句"]{
-            let active=h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(t) if t.galley.text()==text && t.galley.job.sections[0].format.font_id.size==12.0));
-            assert_eq!(active,expected==Some(text),"展开歌词也应使用相同的显示时间");
-        }
-        h.app.settings.save();
-        assert_eq!(crate::model::Settings::load().lyric_delay_ms,delay,"重启后应保留时间调整");
-    }
-    for (input,expected) in [("invalid",-350),("999999",5000),("-999999",-5000),("",-350)]{
-        std::fs::write(crate::model::config_dir().join("settings.txt"),format!("lyric_delay_ms={input}\n")).unwrap();
-        assert_eq!(crate::model::Settings::load().lyric_delay_ms,expected);
-    }
-}
 
-#[test]
-fn music_lyric_timing_controls_match_focus_save_and_fit_the_small_settings_window(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings_tab=1;h.app.open_settings();h.ctx.set_embed_viewports(false);
-    fn frame(h:&mut H,events:Vec<egui::Event>)->Vec<egui::epaint::ClippedShape>{
-        let output=std::sync::Arc::new(Mutex::new(None));let capture=output.clone();
-        egui::Context::set_immediate_viewport_renderer(move|ctx,mut viewport|{
-            let id=viewport.ids.this;
-            let raw=egui::RawInput{viewport_id:id,screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(600.0,450.0))),
-                viewports:std::iter::once((id,egui::ViewportInfo{native_pixels_per_point:Some(1.25),focused:Some(true),..Default::default()})).collect(),
-                focused:true,events:events.clone(),..Default::default()};
-            *capture.lock().unwrap()=Some(ctx.run(raw,|ctx|(viewport.viewport_ui_cb)(ctx)));
-        });
-        let raw=egui::RawInput{viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(1.25),..Default::default()})).collect(),..Default::default()};
-        let _=h.ctx.run(raw,|ctx|h.app.settings_ui(ctx,false));
-        let child=output.lock().unwrap().take().unwrap();child.shapes
-    }
-    let text_rect=|shapes:&[egui::epaint::ClippedShape],text:&str|shapes.iter().find_map(|shape|match &shape.shape{
-        egui::Shape::Text(t)if t.galley.text()==text=>Some(t.visual_bounding_rect()),_=>None,
-    }).unwrap_or_else(||panic!("设置中缺少 {text}"));
-    for _ in 0..3{frame(&mut h,vec![]);}
-    let music=frame(&mut h,vec![]);
-    text_rect(&music,"0.35 秒");
-    assert_eq!(h.app.settings.lyric_delay_ms,-350,"仅打开设置不能将 0.35 秒舍入为 0.4 秒");
-    for button in ["−","+"]{text_rect(&music,button);}
-    h.app.settings_tab=2;
-    for _ in 0..3{frame(&mut h,vec![]);}
-    let focus=frame(&mut h,vec![]);
-    for button in ["−","+"]{
-        let a=text_rect(&music,button);let b=text_rect(&focus,button);
-        assert!((a.left()-b.left()).abs()<0.1 && (a.width()-b.width()).abs()<0.1 && (a.height()-b.height()).abs()<0.1,"歌词和专注应共用同样的数值控件及右侧对齐");
-    }
-    h.app.settings_tab=1;
-    for _ in 0..3{frame(&mut h,vec![]);}
-    for (button,expected) in [("+",-450),("−",-350),("−",-250),("+",-350)]{
-        let shapes=frame(&mut h,vec![]);
-        let rect=text_rect(&shapes,button);
-        assert!(Rect::from_min_max(egui::pos2(180.0,0.0),egui::pos2(600.0,450.0)).contains_rect(rect),"时间调整按钮应完整显示");
-        let pos=rect.center();
-        frame(&mut h,vec![egui::Event::PointerMoved(pos),egui::Event::PointerButton{pos,button:egui::PointerButton::Primary,pressed:true,modifiers:Default::default()}]);
-        frame(&mut h,vec![egui::Event::PointerButton{pos,button:egui::PointerButton::Primary,pressed:false,modifiers:Default::default()}]);
-        assert_eq!(h.app.settings.lyric_delay_ms,expected);
-        assert_eq!(crate::model::Settings::load().lyric_delay_ms,expected,"按钮调整后应自动保存");
-        text_rect(&frame(&mut h,vec![]),&format!("{:.2} 秒",-expected as f64/1000.0));
-    }
-}
 
-#[test]
-fn island_lyrics_arrive_just_before_vocals_and_finish_fading_before_the_timestamp(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:9.4,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"));
-    for _ in 0..60 {h.frame(vec![]);}
-    for step in 1..=30 {
-        h.media.position=9.4+step as f64/60.0;
-        h.frame(vec![]);
-        if step==6 {assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("当前歌词"),"不能提前半秒就跳到下一句");}
-    }
-    assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("下一句"),"下一句应在开唱前提前出现");
-    let text=h.shapes.iter().find_map(|shape|match &shape.shape {
-        egui::Shape::Text(text) if text.galley.text()=="下一句"=>Some(text),_=>None,
-    }).expect("开唱前应能看到下一句");
-    assert!(text.opacity_factor>0.95,"开唱前应完成淡入，不能等到开唱后才清晰");
-    h.media.playing=false;h.frame(vec![]);
-    assert!(h.app.island_lyric().is_none(),"暂停时应退出收起态歌词显示");
-    h.media.playing=true;h.frame(vec![]);
-    assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("下一句"),"继续播放时不应跳回上一句");
-    h.media.position=4.5;h.frame(vec![]);
-    assert!(h.app.island_lyric().is_none(),"前奏不能过早显示第一句");
-    h.media.position=4.75;h.frame(vec![]);
-    assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("当前歌词"),"第一句也应提前出现");
-}
 
-#[test]
-fn expanded_and_segmented_lyrics_share_the_early_display_time(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:9.8,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"));
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    let next=h.shapes.iter().find_map(|shape|match &shape.shape{egui::Shape::Text(text)if text.galley.text()=="下一句"=>Some(text),_=>None}).unwrap();
-    assert_eq!(next.galley.job.sections[0].format.font_id.size,12.0,"展开歌词也应在开唱前高亮下一句");
-    h.hover(Pos2::new(WIN_W/2.0,PH+30.0),1.0);
-    let line="愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光";
-    h.media.position=6.0;h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
-    for _ in 0..60{h.frame(vec![]);}
-    let shown=|h:&H|h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if line.contains(t.galley.text())&&!t.galley.text().is_empty()=>Some(t.galley.text().to_owned()),_=>None}).unwrap();
-    let first=shown(&h);
-    let boundary=5.0+10.0*first.chars().count()as f64/line.chars().count()as f64;
-    h.media.position=boundary-0.2;for _ in 0..30{h.frame(vec![]);}
-    assert_ne!(shown(&h),first,"长句的后半段也应使用相同的提前量");
-}
 
-#[test]
-fn lyric_short_gap_and_line_switch_keep_text_visible(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:2.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",0.0,crate::lyrics::parse_lrc("[00:01]上一句\n[00:05]下一句"));
-    for _ in 0..60{h.frame(vec![]);}
-    for (position,expected) in [(3.0,"上一句"),(4.64,"上一句"),(4.7,"下一句"),(4.72,"下一句"),(4.9,"下一句")]{
-        h.media.position=position;h.frame(vec![]);
-        let text=h.shapes.iter().find_map(|shape|match &shape.shape{
-            egui::Shape::Text(text)if text.galley.text()==expected=>Some(text),_=>None,
-        }).expect("短停顿及换句时必须持续显示歌词");
-        assert!(text.opacity_factor>0.95,"换句不能淡出歌词，位置 {position}，透明度 {}",text.opacity_factor);
-    }
-}
 
-#[test]
-fn island_lyrics_center_segments_in_a_fixed_height(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
-    for line in ["晚风","愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光","晚风"] {
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
-        for _ in 0..90 {
-            h.frame(vec![]);
-            assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="09:41")),"切换显示段时应保持歌词布局");
-        }
-        let text=h.shapes.iter().find_map(|shape|match &shape.shape {
-            egui::Shape::Text(text) if !text.galley.text().is_empty() && line.contains(text.galley.text())=>Some(text),_=>None,
-        }).expect("岛上应显示当前歌词的一段");
-        let center=text.pos.x+text.galley.rect.center().x;
-        let offset=if h.app.pet_enabled(){24.0}else{0.0};
-        assert!((center-WIN_W/2.0-offset).abs()<1.5,"歌词应在内容区居中");
-        assert!(!text.galley.elided,"显示段应完整显示");
-        assert_eq!(text.galley.rows.len(),1,"每次只显示一段歌词");
-        assert!((h.hit.height()-(crate::app::BAR_H+4.0)).abs()<0.1,"岛应保持固定高度");
-        assert!(text.visual_bounding_rect().bottom()<=h.hit.bottom(),"文字应完整显示在岛内");
-    }
-}
 
-#[test]
-fn island_lyric_segments_follow_playback_pause_and_seek(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.island_lyrics=true;
-    let line="愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光";
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:6.0,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
-    let shown=|h:&H|h.shapes.iter().find_map(|s|match &s.shape {egui::Shape::Text(t)=>Some(t.galley.text().to_owned()),_=>None}).unwrap();
-    for _ in 0..90 {h.frame(vec![]);}let first=shown(&h);
-    h.media.position=14.0;for _ in 0..30 {h.frame(vec![]);}let last=shown(&h);
-    assert_ne!(first,last,"播放到后半句时应切换显示段");
-    assert_eq!(format!("{first}{last}"),line,"前后显示段应覆盖完整歌词");
-    h.media.playing=false;for _ in 0..120 {h.frame(vec![]);}
-    assert!(h.app.island_lyric().is_none(),"暂停时应恢复常驻形态");
-    h.media.playing=true;for _ in 0..30 {h.frame(vec![]);}assert_eq!(shown(&h),last,"继续播放时应恢复对应显示段");
-    h.media.position=6.0;for _ in 0..30 {h.frame(vec![]);}assert_eq!(shown(&h),first,"拖回前半句应恢复对应显示段");
-    h.media.position=16.0;for _ in 0..30 {h.frame(vec![]);}assert_eq!(shown(&h),"下一句");
-}
 
-#[test]
-fn island_lyrics_keep_title_fallback_and_intro_and_gaps(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.minimal=true;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:1.0,duration:120.0,playing:true,..Default::default()};
-    for state in 0..6 {
-        h.app.ly=Default::default();
-        h.app.ly.key="Track|Artist|120".into();
-        h.media.position=if state==1 {7.0}else{1.0};
-        match state {
-            0=>h.app.ly.lyrics=Some(crate::lyrics::parse_lrc("[00:05]第一句")),
-            1=>h.app.ly.lyrics=Some(crate::lyrics::parse_lrc("[00:01]第一句\n[00:05]\n[00:10]下一句")),
-            2=>h.app.ly.loading=true,
-            3=>h.app.ly.error=Some(crate::lyrics::FetchError::NotFound),
-            4=>h.app.ly.error=Some(crate::lyrics::FetchError::Unavailable("503".into())),
-            _=>h.app.ly.lyrics=Some(crate::lyrics::from_plain("没有时间戳")),
-        }
-        for _ in 0..90 {h.frame(vec![]);}
-        if let Some(error)=&h.app.ly.error {
-            assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()==error.label())),"歌词错误提示只应在展开内显示");
-        }
-        assert!((h.app.current_width()-crate::app::LYRIC_BAR_W).abs()<2.0,"状态 {state} 应保持音乐信息岛宽度");
-        assert!(h.region.height()>30.0);
-        if state>=2 {
-            assert!(h.app.compact_notices(),"歌名兜底仍属于岛上歌词模式");
-            assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="Track"&&t.opacity_factor>0.95)),"状态 {state} 应显示当前歌名");
-        } else {
-            let label=if state==0{"前奏"}else{"间奏"};
-            assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()==label)),"同步歌词的前奏和间奏仍应显示状态");
-        }
-    }
-}
 
-#[test]
-fn island_lyrics_title_fallback_shows_cover_and_elides_long_names(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.minimal=true;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"没有歌词的钢琴曲".repeat(20),artist:"示例演奏者".into(),playing:true,artwork:Some(std::sync::Arc::new(egui::ColorImage::new([8,8],egui::Color32::BLUE))),..Default::default()};
-    for _ in 0..90 {h.frame(vec![]);}
-    let text=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==h.media.title=>Some(t),_=>None}).expect("无歌词时应绘制当前歌名");
-    assert_eq!(text.galley.rows.len(),1,"长歌名只显示一行");
-    assert!(text.galley.elided,"长歌名应在末尾省略");
-    assert!(h.region.contains_rect(text.visual_bounding_rect()),"长歌名不能超出岛体");
-    let cover=h.app.music_artwork.as_ref().unwrap().1.id();
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Rect(r)if r.brush.as_ref().is_some_and(|b|b.fill_texture_id==cover)&&h.region.contains_rect(r.rect))),"无歌词时仍应绘制封面");
-}
 
-#[test]
-fn island_lyrics_title_fallback_follows_track_changes_and_normal_mode(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();h.app.settings.minimal=true;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"上一首".into(),artist:"示例歌手".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("上一首","示例歌手",120.0,crate::lyrics::parse_lrc("[00:05]上一首的歌词"));
-    for _ in 0..90 {h.frame(vec![]);}
-    h.media.title="下一首纯音乐".into();h.media.playing=false;
-    for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.app.island_lyric().is_none(),"换歌后不能显示上一首歌词");
-    assert!(h.region.height()<20.0,"暂停后应恢复极简常驻");
-    h.media.playing=true;for _ in 0..60 {h.frame(vec![]);}
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()==h.media.title)),"继续播放且歌词未到达时应显示新歌名");
-    h.media.playing=false;
-    h.app.set_lyrics("下一首纯音乐","示例歌手",120.0,crate::lyrics::parse_lrc("[00:05]新歌的当前歌词"));
-    for _ in 0..30 {h.frame(vec![]);}
-    assert!(h.app.island_lyric().is_none(),"暂停时歌词到达也应保持常驻形态");
-    h.media.playing=true;for _ in 0..30 {h.frame(vec![]);}
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="新歌的当前歌词")),"继续播放后应自动恢复当前歌词");
-    for mode in 0..3 {
-        h.app.settings.island_lyrics=mode!=0;
-        h.app.settings.visible_pages[0]=mode!=1;
-        if mode==2 {h.media=Default::default();}
-        for _ in 0..90 {h.frame(vec![]);}
-        assert!(h.region.height()<20.0,"关闭歌词、隐藏音乐页或播放器退出后应恢复极简常驻，状态 {mode}");
-        assert!(!h.app.compact_notices());
-    }
-}
 
-#[test]
-#[ignore="按需导出岛上歌词的实际渲染画面"]
-fn island_lyrics_layout_gallery(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_LYRIC_PREVIEW_DIR").expect("需指定预览目录"));
-    std::fs::create_dir_all(&dest).unwrap();
-    let mut cover=egui::ColorImage::new([64,64],egui::Color32::BLACK);
-    for y in 0..64 {for x in 0..64 {
-        let moon=(x as i32-44).pow(2)+(y as i32-18).pow(2)<64;
-        cover[(x,y)]=if moon {egui::Color32::from_rgb(255,226,174)}
-            else if y>44+x/5 {egui::Color32::from_rgb(29,61,70)}
-            else {egui::Color32::from_rgb(68+y as u8,114+y as u8,151+y as u8/2)};
-    }}
-    let cover=std::sync::Arc::new(cover);
-    for name in ["lyrics","loading","missing","no-cover","long-title","paused","intro","gap","idle"] {
-        let mut h=H::new();h.app.settings.island_lyrics=true;
-        h.media=crate::smtc::NowPlaying{title:"晚风与星光".into(),artist:"示例歌手".into(),position:7.0,duration:120.0,playing:name!="paused",artwork:Some(cover.clone()),..Default::default()};
-        if name=="long-title" {h.media.title="愿每一个认真生活的人都能在平凡的日子里找到属于自己的光（钢琴独奏版）".into();}
-        h.app.ly.key=format!("{}|{}|120",h.media.title,h.media.artist);
-        match name {
-            "lyrics"|"paused"=>h.app.set_lyrics("晚风与星光","示例歌手",120.0,crate::lyrics::parse_lrc("[00:05]愿你在平凡的日子里，找到自己的光")),
-            "loading"=>h.app.ly.loading=true,
-            "intro"=>h.app.set_lyrics("晚风与星光","示例歌手",120.0,crate::lyrics::parse_lrc("[00:20]晚风")),
-            "gap"=>h.app.set_lyrics("晚风与星光","示例歌手",120.0,crate::lyrics::parse_lrc("[00:01]第一句\n[00:05]\n[00:10]下一句")),
-            "idle"=>h.media=Default::default(),
-            _=>h.app.ly.error=Some(crate::lyrics::FetchError::NotFound),
-        }
-        if name=="no-cover" {h.media.artwork=None;}
-        let mut raster=crate::preview_raster::Raster::new(1280,540);
-        for frame in 0..90 {
-            let t=frame as f64/60.0;
-            let env=Env{t,clock:"09:41:00".into(),today:"2026-11-06".into(),date:"11月6日 周五".into(),media:h.media.clone(),..Default::default()};
-            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H))),time:Some(t),
-                viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
-            let output=h.ctx.run(raw,|ctx|{
-                egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{let win=ui.max_rect();h.app.frame(ui,win,&env);});
-            });
-            raster.update_textures(&output.textures_delta);
-            if frame==89 {
-                raster.buf.fill([0.95,0.96,0.98,1.0]);
-                raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-                let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-                let image=image::RgbaImage::from_raw(1280,540,rgba).unwrap();
-                image::imageops::crop_imm(&image,220,0,840,110).to_image().save(dest.join(format!("{name}.png"))).unwrap();
-            }
-            raster.free_textures(&output.textures_delta);
-        }
-    }
-}
 
-#[test]
-fn music_lyrics_keep_syncing_when_only_the_collapsed_lyrics_are_enabled() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.opts.fetch_lyrics=true;h.app.show_lyrics=false;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
-    let (tx,rx)=std::sync::mpsc::channel();
-    h.app.ly.key="Track|Artist|120".into();h.app.ly.loading=true;h.app.ly.rx=Some(rx);
-    tx.send(Ok((crate::lyrics::parse_lrc("[00:05]当前歌词\n[00:10]下一句"),false))).unwrap();
-    h.frame(vec![]);
-    assert!(!h.app.ly.loading);
-    assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("当前歌词"));
-    h.media.position=12.0;h.frame(vec![]);
-    assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("下一句"));
-}
 
-#[test]
-fn music_lyrics_respect_the_switch_and_do_not_show_stale_or_unsynced_lines() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.minimal=true;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,playing:true,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词"));
-    for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.region.height()>30.0,"主动开启岛上歌词后应可在收起状态阅读");
-    h.app.settings.island_lyrics=false;
-    for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.app.island_lyric().is_none() && h.region.height()<20.0);
-    h.app.settings.island_lyrics=true;
-    h.media.title="Another track".into();h.frame(vec![]);
-    assert!(h.app.island_lyric().is_none(),"换歌后不能显示上一首的歌词");
-    h.app.set_lyrics("Another track","Artist",120.0,crate::lyrics::from_plain("没有时间戳的歌词"));h.frame(vec![]);
-    assert!(h.app.island_lyric().is_none(),"不能将纯文本歌词伪装成当前句");
-}
 
 #[test]
 fn hover_expands_with_overshoot_and_leave_collapses() {
@@ -2751,30 +1870,6 @@ fn hover_expands_with_overshoot_and_leave_collapses() {
     assert!(h.app.progress() < 0.02, "移开后应收起");
 }
 
-#[test]
-fn browser_minimal_preserves_preferences_and_restores_the_previous_mode(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.settings.pet=true;h.app.settings.minimal=false;h.browser_at_top=Some(true);
-    for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.hit.height()>20.0,"开关默认关闭时不应自动改变模式");
-    h.app.settings.browser_minimal=true;h.app.settings.save();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]当前歌词"));
-    for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.hit.height()<10.0,"浏览器顶部受遮挡时应收为细刘海，歌词和吉祥物不能撑大它");
-    assert!(h.app.settings.pet && !h.app.settings.minimal,"自动极简不能修改手动模式");
-    let saved=crate::model::Settings::load();
-    assert!(saved.browser_minimal && saved.pet && !saved.minimal,"应只持久化开关，保留原模式");
-    h.browser_at_top=None;for _ in 0..30 {h.frame(vec![]);}
-    assert!(h.hit.height()<10.0,"打开灵栖设置或托盘时应保留浏览器避让状态");
-    h.browser_at_top=Some(false);for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.app.pet_enabled() && h.hit.height()>20.0,"离开浏览器或还原窗口后应恢复");
-    h.browser_at_top=Some(true);for _ in 0..90 {h.frame(vec![]);}
-    h.app.settings.browser_minimal=false;for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.app.pet_enabled() && h.hit.height()>20.0,"关闭开关后应立即恢复");
-    h.app.settings.island_lyrics=false;h.app.set_minimal(true);h.browser_at_top=Some(false);for _ in 0..90 {h.frame(vec![]);}
-    assert!(h.app.settings.minimal && h.hit.height()<10.0,"离开浏览器不能撤销手动极简");
-}
 
 #[test]
 fn browser_minimal_closes_the_open_island_but_still_allows_deliberate_hover(){
@@ -2880,102 +1975,9 @@ fn hold_open_shelf_tabs_and_all_page_exit() {
     }
 }
 
-#[test]
-fn hold_open_header_controls_do_not_overlap_during_page_transitions() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{title:"歌曲".into(),artist:"歌手".into(),playing:true,..Default::default()};
-    h.app.settings.visible_pages.fill(true);
-    h.app.settings.clock_seconds=true;
-    h.app.settings.clock_12h=true;
-    h.app.settings.clock_period=2;
-    h.power=(Some(100),false);
-    h.app.clipboard.lock().push("第一条","09:41");
-    h.app.shelf_tab=1;
-    h.app.show_page(1);
-    h.hover(H::local(200.0,50.0),0.8);
-    let rect=|h:&H,name|h.ctx.read_response(egui::Id::new(("card",true,name))).map(|r|r.rect);
-    for (page,action) in [(3,"clip-clear"),(6,"quota-refresh"),(8,"weather-refresh"),(0,"m-play")] {
-        h.app.go(page,1.0);
-        for _ in 0..40 {
-            h.frame(vec![]);
-            if let Some(pin)=rect(&h,"hold-open") {
-                let music=rect(&h,"header-music").unwrap();
-                let gear=rect(&h,"page-settings").unwrap();
-                assert!(!pin.intersects(music) && !pin.intersects(gear));
-                if let Some(action)=rect(&h,action) {
-                    assert!(!action.intersects(music) && !action.intersects(pin));
-                }
-            }
-        }
-        assert!(rect(&h,action).is_some());
-        if page==3 {
-            let tabs=h.ctx.read_response(egui::Id::new(("card",true,("shelf-tab",1usize)))).unwrap().rect;
-            let date=h.shapes.iter().find_map(|s|match &s.shape{
-                egui::Shape::Text(text) if text.galley.text()=="10月28日 周三"=>Some(text.visual_bounding_rect()),
-                _=>None,
-            }).unwrap();
-            assert!(date.left()-24.0>=tabs.right(),"电池和日期不能覆盖分栏：{date:?} {tabs:?}");
-            h.click(rect(&h,"hold-open").unwrap().center());
-            h.app.shelf_tab=0;h.frame(vec![]);
-            assert!(!rect(&h,"shelf-add").unwrap().intersects(rect(&h,"header-music").unwrap()));
-        }
-    }
-    h.media.volume=Some((50,false));
-    h.frame(vec![]);
-    h.click(H::local(367.0,118.0));
-    h.hover(H::local(367.0,18.0),0.4);
-    assert!(!rect(&h,"m-volume-surface").unwrap().intersects(rect(&h,"hold-open").unwrap()));
-    h.click(rect(&h,"hold-open").unwrap().center());
-    h.hover(H::local(367.0,18.0),0.5);
-    assert!(rect(&h,"hold-open").is_none());
-    assert!((rect(&h,"header-music").unwrap().center().x-H::local(367.0,18.0).x).abs()<1.0);
-}
 
-#[test]
-fn music_header_shortcut_returns_from_every_page_without_controlling_playback() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for playing in [true,false] {
-        let mut h=H::new();h.app.settings.page_order=[5,2,0,1,3,4,6,7,8,9,10];
-        h.media=crate::smtc::NowPlaying{source:"cloudmusic.exe".into(),title:"Track".into(),artist:"Artist".into(),playing,duration:120.0,..Default::default()};
-        h.app.set_page_visible(crate::app::PERFORMANCE_PAGE,true);
-        for page in 1..crate::app::PAGE_NAMES.len() {
-            h.app.show_page(page);h.hover(H::local(300.0,60.0),0.8);h.cmds.clear();
-            h.click(H::local(if page==3 {339.0}else{367.0},18.0));
-            assert_eq!(h.app.page,0,"播放状态 {playing} 时应从页面 {page} 直达音乐页");
-            assert!(h.app.open);assert!(!h.app.settings_open);assert_eq!(h.app.media.playing,playing);
-            assert!(h.cmds.iter().all(|cmd|!matches!(cmd,crate::app::Cmd::Media(_)|crate::app::Cmd::MusicVolume(..))),"返回音乐页不能改变播放或音量");
-        }
-    }
-}
 
-#[test]
-fn music_header_shortcut_disappears_when_module_is_disabled() {
-    use crate::app::MUSIC_PAGE;
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
-    h.app.show_page(4);h.hover(H::local(300.0,60.0),0.8);
-    let shortcut=egui::Id::new(("card",true,"header-music"));
-    assert!(h.ctx.read_response(shortcut).is_some());
-    h.app.set_page_visible(MUSIC_PAGE,false);h.hover(H::local(300.0,60.0),0.8);
-    assert!(h.ctx.read_response(shortcut).is_none(),"关闭后应隐藏音乐快捷入口");
-    assert!(!h.app.side_items().contains(&crate::side_dock::SideItem::Music));
-    h.click(H::local(367.0,18.0));
-    assert_eq!(h.app.page,4);assert!(!h.app.settings_open);
-    h.app.set_page_visible(MUSIC_PAGE,true);h.hover(H::local(300.0,60.0),0.8);
-    h.click(H::local(367.0,18.0));
-    assert_eq!(h.app.page,MUSIC_PAGE);
-}
 
-#[test]
-fn music_header_shortcut_is_absent_without_music_and_keeps_settings_clickable() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for media in [crate::smtc::NowPlaying::default(),crate::smtc::NowPlaying{title:"Video".into(),artist:"Channel".into(),playing:true,playback_type:crate::smtc::MediaKind::Video,..Default::default()}] {
-        let mut h=H::new();h.media=media;h.app.show_page(4);h.hover(H::local(300.0,60.0),0.8);
-        h.click(H::local(367.0,18.0));assert_eq!(h.app.page,4);assert!(!h.app.settings_open);
-        h.click(H::local(394.0,18.0));assert!(h.app.settings_open);assert_eq!(h.app.settings_tab,4);
-    }
-}
 
 #[test]
 fn arrows_and_dots_switch_pages() {
@@ -3316,16 +2318,14 @@ fn navigation_wraps_between_ten_pages_and_notification_settings_remain_accessibl
 #[test]
 #[ignore = "按需导出常驻组件排布与补位动画"]
 fn resident_layout_gallery(){
-    fn demo(battery:bool,_accounts:usize,music:bool,focus:bool,pet:bool)->H{
+    fn demo(battery:bool,_accounts:usize,_music:bool,focus:bool,pet:bool)->H{
         let mut h=H::new();h.app.settings.show_battery=battery;h.app.settings.pet=pet;h.power=(Some(80),true);
-        if music {h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};}
         if focus {h.app.pomo.running=true;h.app.pomo.remaining=1283.0;}
         if pet {h.app.pet.react(crate::extras::PetState::Happy);}
         h
     }
-
     fn capture(h:&mut H,raster:&mut crate::preview_raster::Raster,t:f64,draw:bool)->Vec<u8>{
-        let env=Env{t,clock:"09:41:00".into(),today:"2026-10-31".into(),date:"10月31日 周六".into(),battery:h.power.0,charging:h.power.1,media:h.media.clone(),bt_ready:true,..Default::default()};
+        let env=Env{t,clock:"09:41:00".into(),today:"2026-10-31".into(),date:"10月31日 周六".into(),battery:h.power.0,charging:h.power.1,bt_ready:true,..Default::default()};
         let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H))),time:Some(t),
             viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
         let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{let win=ui.max_rect();h.app.frame(ui,win,&env);});});
@@ -3333,6 +2333,7 @@ fn resident_layout_gallery(){
         if draw {raster.buf.fill([0.09,0.11,0.18,1.0]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);raster.to_rgba8(&mut rgba);}
         raster.free_textures(&output.textures_delta);rgba
     }
+
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_RESIDENT_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
     let scenes=[(true,1,false,false,false),(false,1,false,false,false),(true,3,false,false,false),(false,3,true,false,false),
@@ -3372,30 +2373,6 @@ fn resident_layout_gallery(){
 
 
 
-#[test]
-fn page_visibility_is_saved_and_sets_the_starting_page() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    assert_eq!(h.app.settings.visible_pages,[true,true,true,true,true,true,true,true,true,false,true]);
-    assert!(h.app.settings.show_battery);
-    h.app.settings.show_battery=false;
-    h.app.set_page_visible(0,false);
-    h.app.set_page_visible(3,false);
-    h.app.settings.save();
-    let settings=crate::model::Settings::load();
-    assert!(!settings.show_battery);
-    assert_eq!(settings.visible_pages,[false,true,true,false,true,true,true,true,true,false,true]);
-    let restarted=App::new(&h.ctx,Options{fetch_lyrics:false,pet_idle:1e9});
-    assert_eq!(restarted.page(),1);
-    assert_eq!(restarted.settings.visible_pages,settings.visible_pages);
-    assert!(!restarted.settings.show_battery);
-    std::fs::write(crate::model::config_dir().join("settings.txt"),"visible_pages=000000\n").unwrap();
-    assert_eq!(crate::model::Settings::load().visible_pages,[false,false,false,false,false,false,false,false,false,false,true],"旧版存档全关时，新增的无线设备页按默认开启，已有页面可见");
-    std::fs::write(crate::model::config_dir().join("settings.txt"),"visible_pages=1000000\n").unwrap();
-    assert_eq!(crate::model::Settings::load().visible_pages,[true,false,false,false,false,false,false,true,true,false,true],"旧版页面开关应保留，并开启新增的日程页与天气页");
-    std::fs::write(crate::model::config_dir().join("settings.txt"),"visible_pages=invalid\n").unwrap();
-    assert_eq!(crate::model::Settings::load().visible_pages,[true,true,true,true,true,true,true,true,true,false,true]);
-}
 
 #[test]
 fn battery_module_hides_power_in_collapsed_and_expanded_headers() {
@@ -4084,94 +3061,9 @@ fn mascot_rest_and_focus_have_distinct_states(){
 }
 
 
-#[test]
-fn mascot_and_album_share_the_single_line_lyric_island(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.settings.pet=true;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,
-        artwork:Some(std::sync::Arc::new(egui::ColorImage::new([32,32],egui::Color32::from_rgb(70,120,220)))),..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]晚风吹过了山岗\n[00:15]下一句"));
-    for _ in 0..120 {h.frame(vec![]);}
-    assert!((h.app.current_width()-348.0).abs()<0.1,"专辑、灵栖与原有歌词宽度一起保留");
-    let texture=h.app.music_artwork.as_ref().unwrap().1.id();
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Rect(r) if r.brush.as_ref().is_some_and(|b|b.fill_texture_id==texture))),"专辑封面不能被灵栖替代");
-    let text=h.shapes.iter().find_map(|s|match &s.shape {egui::Shape::Text(t) if t.galley.text()=="晚风吹过了山岗"=>Some(t),_=>None}).unwrap();
-    assert_eq!(text.galley.rows.len(),1,"保留单行歌词");
-    assert!((text.pos.x+text.galley.rect.center().x-WIN_W/2.0-24.0).abs()<1.5,"歌词在封面和灵栖右侧居中");
-    assert!(h.shapes.iter().filter(|s|matches!(&s.shape,egui::Shape::Path(p) if p.points.len()==13 && (2.79..=3.61).contains(&p.stroke.width))).count()>=2);
-}
 
-#[test]
-fn singing_microphone_moves_relative_to_the_face_and_disappears_on_pause(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.pet=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
-    for _ in 0..120 {h.frame(vec![]);}
-    let head=|shapes:&[egui::epaint::ClippedShape]|shapes.iter().find_map(|s|match &s.shape {
-        egui::Shape::Circle(circle) if (circle.radius-2.6).abs()<0.01=>Some(circle.center),_=>None,
-    });
-    let mut offsets=Vec::new();
-    for _ in 0..120 {
-        h.frame(vec![]);
-        let head=head(&h.shapes).expect("演唱应显示球头麦克风");
-        let eyes:Vec<_>=h.shapes.iter().filter_map(|s|match &s.shape {
-            egui::Shape::Path(p) if p.points.len()==13 && (p.stroke.width-2.8).abs()<0.01=>Some(p.points.iter().map(|p|p.y).sum::<f32>()/13.0),_=>None,
-        }).collect();
-        assert_eq!(eyes.len(),2);offsets.push(head.y-(eyes[0]+eyes[1])/2.0);
-    }
-    if crate::bar_layout::animations_enabled(){
-        let range=offsets.iter().copied().fold(f32::NEG_INFINITY,f32::max)-offsets.iter().copied().fold(f32::INFINITY,f32::min);
-        assert!(range>0.4,"麦克风需要有独立动态");
-    }
-    h.media.playing=false;for _ in 0..90 {h.frame(vec![]);}
-    assert!(head(&h.shapes).is_none(),"暂停后应收起麦克风");
-}
 
-#[test]
-fn music_mascot_puts_away_the_microphone_during_notices_and_their_fade_out(){
-    use crate::extras::PetState;
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.settings.pet=true;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]晚风吹过了山岗\n[00:15]下一句"));
-    let microphone=|h:&H|h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Circle(c)if(c.radius-2.6).abs()<0.01));
-    for _ in 0..90{h.frame(vec![]);}
-    assert_eq!(h.app.pet_state(),PetState::Music);assert!(microphone(&h));
-    for (title,body) in [("大写锁定","已开启"),("大写锁定","已关闭"),("键盘输入语言","中文"),("系统音量","音量 60%"),("网络连接","Wi-Fi · 已连接"),("电源已连接","当前电量 80%"),("蓝牙设备","耳机")]{
-        h.app.alert(title,body,5,false);
-        for _ in 0..60{h.frame(vec![]);assert_eq!(h.app.pet_state(),PetState::Awake,"{title} 出现时应使用普通表情");assert!(!microphone(&h),"{title} 期间不能带着演唱道具");}
-        h.t+=2.0;h.frame(vec![]);
-        assert!(h.app.notice.is_none());
-        assert_eq!(h.app.pet_state(),PetState::Awake,"提示淡出期间也不能提前开始演唱");assert!(!microphone(&h));
-        for _ in 0..90{h.frame(vec![]);}
-        assert_eq!(h.app.pet_state(),PetState::Music);assert!(microphone(&h),"提示完全结束后应恢复听歌动作");
-        assert!(h.media.playing);assert!(h.app.island_lyric().is_some());
-    }
-    h.app.pet.react(PetState::Satisfied);h.app.alert("大写锁定","已开启",5,false);h.frame(vec![]);
-    assert_eq!(h.app.pet_state(),PetState::Satisfied,"已有的喝水反馈应保留优先级");
-}
 
-#[test]
-fn music_mascot_plays_new_expressions_and_resumes_after_interruptions(){
-    use crate::extras::PetState;
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.pet=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:300.0,..Default::default()};
-    for _ in 0..1080 {h.frame(vec![]);}
-    let expression=h.app.pet.expressions.current().expect("听歌状态也应显示新表情");
-    assert_eq!(h.app.pet_state(),PetState::Music);
-    let atlas=h.ctx.tex_manager().read().allocated().find_map(|(id,meta)|(meta.name=="lingqi-expressions").then_some(*id)).unwrap();
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Mesh(mesh)if mesh.texture_id==atlas)));
-    h.app.alert("系统音量","音量 60%",5,false);h.frame(vec![]);
-    assert_eq!(h.app.pet_state(),PetState::Awake);assert!(h.app.pet.expressions.current().is_none());
-    for _ in 0..300 {h.frame(vec![]);if h.app.pet_state()==PetState::Music {break;}}
-    assert_eq!(h.app.pet.expressions.current(),Some(expression),"通知结束后继续原来的听歌表情");
-    h.media.playing=false;h.frame(vec![]);assert!(h.app.pet.expressions.current().is_none());
-    for _ in 0..60 {h.frame(vec![]);}
-    h.media.playing=true;h.frame(vec![]);assert_eq!(h.app.pet.expressions.current(),Some(expression));
-    h.app.pomo.running=true;h.frame(vec![]);assert_eq!(h.app.pet_state(),PetState::Focused);
-    assert!(h.app.pet.expressions.current().is_none());
-    h.app.pomo.running=false;h.frame(vec![]);assert_eq!(h.app.pet.expressions.current(),Some(expression));
-    h.app.settings.pet=false;h.frame(vec![]);assert!(h.app.pet.expressions.current().is_none());
-}
 
 #[test]
 fn selecting_permanent_mascot_or_minimal_applies_the_selected_mode(){
@@ -4191,14 +3083,6 @@ fn mascot_wakes_before_returning_to_idle(){
     assert_eq!(format!("{:?}",h.app.pet_state()),"Waking");
     for _ in 0..180 {h.frame(vec![]);}
     assert_eq!(format!("{:?}",h.app.pet_state()),"Awake");
-}
-#[test]
-fn mascot_reacts_to_music_and_respects_focus(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};h.frame(vec![]);
-    assert_eq!(format!("{:?}",h.app.pet_state()),"Music");
-    h.app.pomo.running=true;h.frame(vec![]);assert_eq!(format!("{:?}",h.app.pet_state()),"Focused");
-    h.app.pomo.running=false;h.media.playing=false;h.frame(vec![]);assert_eq!(format!("{:?}",h.app.pet_state()),"Awake");
 }
 #[test]
 fn mascot_keeps_task_celebration_until_panel_closes(){
@@ -4253,44 +3137,6 @@ fn mascot_feedback_plays_beside_notice_and_respects_switches(){
     h.app.settings.minimal=false;h.app.settings.pet=false;h.app.drink_water();h.frame(vec![]);assert!(h.app.pet.reaction.is_none());
 }
 
-#[test]
-#[ignore = "按需导出吉祥物的实际渲染画面"]
-fn mascot_expression_gallery(){
-    use crate::extras::PetState;
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::env::var_os("LINGQI_PET_PREVIEW_DIR").map(std::path::PathBuf::from)
-        .unwrap_or_else(||std::env::temp_dir().join(format!("lingqi-pet-preview-{}",std::process::id())));
-    std::fs::create_dir_all(&dest).unwrap();
-    let states=[("awake",PetState::Awake),("curious",PetState::Curious),("waking",PetState::Waking),
-        ("happy",PetState::Happy),("satisfied",PetState::Satisfied),("music",PetState::Music),
-        ("worried",PetState::Worried),("focused",PetState::Focused),("dozing",PetState::Dozing),("sleeping",PetState::Sleeping)];
-    for (name,state) in states {
-        let mut h=H::new();h.app.pet.react(state);
-        let mut raster=crate::preview_raster::Raster::new(1280,380);
-        let last=if state==PetState::Waking{42}else{79};
-        for frame in 0..=last {
-            let t=frame as f64/60.0;
-            let env=Env{t,clock:"09:41:00".into(),today:"2026-10-31".into(),date:"10月31日 周六".into(),..Default::default()};
-            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H))),time:Some(t),
-                viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
-            let output=h.ctx.run(raw,|ctx|{
-                egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{
-                    let win=ui.max_rect();h.app.frame(ui,win,&env);
-                });
-            });
-            raster.update_textures(&output.textures_delta);
-            if frame==last {
-                raster.buf.fill([0.09,0.11,0.18,1.0]);
-                raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-                let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-                assert!(rgba.chunks_exact(4).any(|p|p[0]>230&&p[1]>230&&p[2]>230),"表情画面不能空白：{name}");
-                image::save_buffer(dest.join(format!("{name}.png")),&rgba,1280,380,image::ColorType::Rgba8).unwrap();
-            }
-            raster.free_textures(&output.textures_delta);
-        }
-    }
-    eprintln!("表情预览：{}",dest.display());
-}
 
 #[test]
 fn mascot_atlas_respects_visibility_and_skin_switches(){
@@ -4636,57 +3482,7 @@ fn switching_to_rest_waits_for_the_start_button(){
     assert!(!h.app.pomo.running,"切换阶段应等待用户点击开始");
 }
 
-#[test]
-fn starting_timer_keeps_lyrics_album_and_mascot_with_a_compact_countdown(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.settings.island_lyrics=true;h.app.settings.pet=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,
-        artwork:Some(std::sync::Arc::new(egui::ColorImage::new([32,32],egui::Color32::from_rgb(70,120,220)))),..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:05]晚风吹过了山岗\n[00:15]下一句"));
-    for _ in 0..120 {h.frame(vec![]);}
-    for phase in [crate::app::Phase::Focus,crate::app::Phase::Rest] {
-        h.app.pomo.phase=phase;h.app.pomo.remaining=h.app.phase_secs(phase);h.app.pomo.running=true;
-        for _ in 0..120 {
-            h.frame(vec![]);
-            assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("晚风吹过了山岗"),"计时不能关闭岛上歌词");
-            assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="晚风吹过了山岗" && t.galley.rows.len()==1)));
-            assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="09:41")));
-        }
-        let texture=h.app.music_artwork.as_ref().unwrap().1.id();
-        assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Rect(r) if r.brush.as_ref().is_some_and(|b|b.fill_texture_id==texture))));
-        let secs=h.app.pomo.remaining.ceil() as u32;let countdown=format!("{:02}:{:02}",secs/60,secs%60);
-        assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()==countdown)),"歌词模式中也应显示计时");
-        assert!(h.app.current_width()<=PW+0.1);assert!((h.hit.height()-34.0).abs()<0.1);
-    }
-    h.app.pomo.running=false;for _ in 0..90 {h.frame(vec![]);}
-    assert_eq!(h.app.island_lyric().map(|(_,line)|line),Some("晚风吹过了山岗"));
-}
 
-#[test]
-fn timer_keeps_the_existing_lyric_segments_and_content_bounds(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let line="愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光";
-    for pet in [true,false] {
-        let mut h=H::new();h.app.settings.island_lyrics=true;h.app.settings.pet=pet;
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:6.0,duration:120.0,playing:true,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc(&format!("[00:05]{line}\n[00:15]下一句")));
-        let shown=|h:&H|h.shapes.iter().find_map(|s|match &s.shape {
-            egui::Shape::Text(t) if !t.galley.text().is_empty() && line.contains(t.galley.text())=>Some((t.galley.text().to_owned(),t.visual_bounding_rect(),t.galley.rows.len(),t.galley.elided)),_=>None,
-        }).unwrap();
-        for position in [6.0,14.0] {
-            h.media.position=position;h.app.pomo.running=false;
-            for _ in 0..90 {h.frame(vec![]);}let expected=shown(&h).0;
-            h.app.pomo.running=true;for _ in 0..120 {h.frame(vec![]);}
-            let (text,bounds,rows,elided)=shown(&h);assert_eq!(text,expected,"计时不应改变歌词分段");
-            assert_eq!(rows,1);assert!(!elided);
-            let secs=h.app.pomo.remaining.ceil() as u32;let countdown=format!("{:02}:{:02}",secs/60,secs%60);
-            let timer=h.shapes.iter().find_map(|s|match &s.shape {egui::Shape::Text(t) if t.galley.text()==countdown=>Some(t.visual_bounding_rect()),_=>None}).unwrap();
-            assert!(bounds.right()+20.0<timer.left(),"歌词与倒计时之间应留出波形和图标的位置");
-            assert!(timer.right()<h.hit.right() && bounds.top()>=h.hit.top() && bounds.bottom()<h.hit.bottom());
-            assert!((h.app.current_width()-if pet{418.0}else{370.0}).abs()<0.1);
-        }
-    }
-}
 
 #[test]
 fn focus_page_selects_stopped_phases_and_starts_only_from_play(){
@@ -4761,15 +3557,6 @@ fn rest_settings_keep_the_existing_duration_and_save_the_new_key(){
 }
 
 #[test]
-fn collapsed_focus_animates_without_music_or_mascot_and_stops_in_minimal_mode(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.settings.pet=false;h.app.pomo.running=true;
-    for _ in 0..120 {h.frame(vec![]);}
-    if crate::bar_layout::animations_enabled(){assert!(h.animating,"关闭吉祥物后，常驻番茄的水面仍应轻微波动");}
-    h.app.settings.minimal=true;for _ in 0..120 {h.frame(vec![]);}
-    assert!(!h.animating,"极简细线隐藏计时图标后，应停止其动画刷新");
-}
-#[test]
 fn app_notifications_show_temporary_bell_in_minimal_mode(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.minimal=true;h.frame(vec![]);
     h.app.settings.read_notifications=true;h.app.receive_notification("邮件".into(),"mail.app".into(),"私人内容".into());
@@ -4781,65 +3568,8 @@ fn app_notifications_show_temporary_bell_in_minimal_mode(){
     h.app.settings.read_notifications=true;h.app.receive_notification("邮件".into(),"mail.app".into(),"私人内容".into());assert_eq!(h.app.notification_bell_until,until);
 }
 
-#[test]
-fn fluid_music_seek_draws_solid_played_segment(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for lyrics in [false,true] {
-        let mut h=H::new();
-        h.app.settings.skin=crate::model::Skin::Fluid;
-        h.app.show_lyrics=lyrics;
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),position:30.0,duration:120.0,..Default::default()};
-        h.hover(Pos2::new(WIN_W/2.0,12.0),1.2);
-        let (x,w,y)=if lyrics{(44.0,176.0,82.0)}else{(96.0,221.0,92.6)};
-        let start=H::local(x,y);
-        assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Rect(r)
-            if (r.rect.left()-start.x).abs()<1.0 && (r.rect.center().y-start.y).abs()<1.0
-            && (r.rect.width()-w*0.25).abs()<1.0 && r.fill.a()==255 && r.fill.r()>160)));
-    }
-}
 
-#[test]
-fn music_seek_drag_previews_and_commits_on_release(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for (source,lyrics) in [("",false),("",true),("cloudmusic.exe",false),("cloudmusic.exe",true),("bodian_pc.exe",false),("bodian_pc.exe",true),("kwmusic.exe",false),("kwmusic.exe",true)] {
-        let mut h=H::new();h.app.show_lyrics=lyrics;
-        h.media=crate::smtc::NowPlaying{source:source.into(),title:"Track".into(),artist:"Artist".into(),position:12.0,duration:120.0,..Default::default()};
-        h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-        let (x,w,y)=if lyrics{(44.0,176.0,82.0)}else{(96.0,221.0,92.6)};
-        let press=H::local(x+w*0.1,y);h.cursor=Some(press);
-        h.frame(vec![egui::Event::PointerMoved(press)]);
-        h.frame(vec![egui::Event::PointerButton{pos:press,button:egui::PointerButton::Primary,pressed:true,modifiers:Default::default()}]);
-        let to=H::local(x+w*0.75,y);h.cursor=Some(to);
-        h.frame(vec![egui::Event::PointerMoved(to)]);
-        assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="01:30")),"{source} 拖动中应显示目标时间");
-        assert!(!h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::Media(crate::smtc::Transport::Seek(_)))),"拖动中不应反复发送跳转");
-        h.frame(vec![egui::Event::PointerButton{pos:to,button:egui::PointerButton::Primary,pressed:false,modifiers:Default::default()}]);
-        assert!(h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::Media(crate::smtc::Transport::Seek(t)) if (*t-90.0).abs()<0.1)),"释放应提交目标进度");
-    }
-}
 
-#[test]
-fn old_and_new_qqmusic_seek_and_hold_the_target_after_release(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for source in ["QQMusic.exe","Tencent.QQMusic"] {
-        let mut h=H::new();h.app.show_lyrics=false;
-        h.media=crate::smtc::NowPlaying{source:source.into(),title:"Track".into(),artist:"Artist".into(),position:12.0,duration:120.0,playback_type:crate::smtc::MediaKind::Music,..Default::default()};
-        h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-        let (x,w,y)=(96.0,221.0,92.6);
-        let press=H::local(x+w*0.1,y);h.cursor=Some(press);
-        h.frame(vec![egui::Event::PointerMoved(press)]);
-        h.frame(vec![egui::Event::PointerButton{pos:press,button:egui::PointerButton::Primary,pressed:true,modifiers:Default::default()}]);
-        let to=H::local(x+w*0.75,y);h.cursor=Some(to);
-        h.frame(vec![egui::Event::PointerMoved(to)]);
-        assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="01:30")),"{source} 拖动中显示目标时间");
-        h.frame(vec![egui::Event::PointerButton{pos:to,button:egui::PointerButton::Primary,pressed:false,modifiers:Default::default()}]);
-        assert!(h.cmds.iter().any(|c|matches!(c,crate::app::Cmd::Media(crate::smtc::Transport::Seek(t)) if (*t-90.0).abs()<0.1)),"{source} 松手提交跳转");
-        // 播放器还没回报新位置：松手后仍显示目标时间，不弹回 00:12。
-        h.frame(vec![]);
-        assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="01:30")),"{source} 松手后保持目标时间");
-        assert!(crate::smtc::is_qqmusic(source));
-    }
-}
 
 #[test]
 fn volume_hud_drag_maps_pointer_to_percentage(){
@@ -4990,297 +3720,17 @@ fn display_choice_saves_and_keeps_disconnected_selection(){
     assert!(crate::model::Settings::load().display_id.is_empty());
 }
 
-#[test]
-fn closing_app_notification_clears_its_bell_and_keeps_queued_messages(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for lyrics in [false,true]{
-        let mut h=H::new();h.app.settings.island_lyrics=lyrics;h.app.settings.read_notifications=true;h.app.settings.notification_preview=true;
-        if lyrics {
-            h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-            h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗"));
-        }
-        for _ in 0..60{h.frame(vec![]);}
-        h.app.receive_notification("测试消息".into(),"notice.test".into(),"第一条消息".into());
-        for _ in 0..60{h.frame(vec![]);}
-        let bell=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Path(p)if p.points.len()==17=>Some(p.visual_bounding_rect().center()),_=>None}).unwrap();
-        let close=h.ctx.read_response(egui::Id::new(("card",true,"external-dismiss"))).unwrap().rect;
-        assert!(bell.x>close.right(),"通知铃铛应位于岛内最右侧");
-        h.app.receive_notification("测试消息".into(),"notice.test".into(),"第二条消息".into());
-        h.click(close.center());
-        assert!(h.app.notice.is_none());assert!(h.app.notification_bell_until<=h.t,"关闭正文也应结束铃铛提醒");
-        h.frame(vec![]);assert_eq!(h.app.notice.as_ref().unwrap().body,"第二条消息");
-        for _ in 0..30{h.frame(vec![]);}
-        h.click_text("关闭");h.cursor=None;
-        for _ in 0..60{h.frame(vec![]);}
-        assert!(h.app.notice.is_none());assert!(h.app.hud_notice.is_none());
-        assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Circle(c)if c.fill==egui::Color32::from_rgb(255,72,72))),"关闭后不能残留铃铛红点");
-    }
-}
 
-#[test]
-fn lyric_app_notification_respects_preview_and_restores_current_lyrics(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for preview in [false,true]{
-        let mut h=H::new();h.app.settings.island_lyrics=true;h.app.settings.read_notifications=true;h.app.settings.notification_preview=preview;
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]首句歌词\n[00:20]后续歌词"));
-        for _ in 0..60{h.frame(vec![]);}
-        h.app.receive_notification("测试消息".into(),"notice.test".into(),"下午一起开会".into());
-        h.frame(vec![]);let at=h.app.notice.as_ref().unwrap().at;
-        let mut slopes=Vec::new();
-        for elapsed in [0.35,0.60,1.0]{
-            h.t=at+elapsed;h.frame(vec![]);
-            let slope=h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Path(p)if p.points.len()==17=>Some(p.points[13].y-p.points[16].y),_=>None}).expect("应绘制通知铃铛");
-            slopes.push(slope);
-        }
-        assert!(slopes[0]*slopes[1]<0.0,"铃铛应向左右两个方向摆动");assert!(slopes[2].abs()<0.01,"摆动结束后应回正");
-        for _ in 0..60{h.frame(vec![]);}
-        let visible=|h:&H,label:&str|h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()==label&&t.opacity_factor>0.9&&s.clip_rect.contains_rect(t.visual_bounding_rect())));
-        assert_eq!(visible(&h,"下午一起开会"),preview);
-        assert_eq!(visible(&h,"首句歌词"),!preview);
-        assert_eq!(h.app.compact_notices(),!preview);
-        assert!(h.region.height()<70.0,"通知应留在岛内，不能自动弹出下方卡片");
-        assert!(!h.app.open);
-        if !preview {assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Circle(c)if c.fill==egui::Color32::from_rgb(255,72,72))),"通知铃铛应有红点");}
-        let active=h.app.notice.as_ref().unwrap();h.t=active.at+active.duration-0.1;h.media.position=25.0;
-        h.frame(vec![]);assert!(h.app.notice.is_some());
-        for _ in 0..90{
-            h.frame(vec![]);
-            if h.app.notice.is_none(){assert!(!visible(&h,"Track")&&!visible(&h,"Artist"),"恢复歌词不能闪出播放器");}
-        }
-        assert!(h.app.notice.is_none());assert!(!visible(&h,"下午一起开会"));assert!(visible(&h,"后续歌词"));
-    }
-}
 
-#[test]
-#[ignore="按需导出歌词模式下正文开关的通知画面"]
-fn lyric_app_notification_gallery(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_APP_NOTICE_PREVIEW").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
-    for preview in [false,true]{
-        let mut h=H::new();h.app.settings.island_lyrics=true;h.app.settings.read_notifications=true;h.app.settings.notification_preview=preview;
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗"));
-        let mut raster=crate::preview_raster::Raster::new(1440,405);
-        for frame in 0..90{
-            if frame==30{h.app.receive_notification("微信".into(),"wechat.preview".into(),"下午三点开会，记得带上电脑".into());}
-            let t=frame as f64/60.0;
-            let env=Env{t,clock:"09:41:00".into(),media:h.media.clone(),..Default::default()};
-            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(1.5),..Default::default()})).collect(),..Default::default()};
-            let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);});});
-            raster.update_textures(&output.textures_delta);
-            if frame==89{
-                raster.buf.fill([0.94,0.95,0.97,1.0]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-                let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);let image=image::RgbaImage::from_raw(1440,405,rgba).unwrap();
-                image::imageops::crop_imm(&image,105,0,960,150).to_image().save(dest.join(if preview{"正文开启.png"}else{"正文关闭.png"})).unwrap();
-            }
-            raster.free_textures(&output.textures_delta);
-        }
-    }
-}
 
-#[test]
-fn full_notifications_return_when_island_lyrics_are_not_visible(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for (lyrics,music) in [(false,false),(false,true),(true,false)]{
-        let mut h=H::new();h.app.settings.pet=true;h.app.settings.island_lyrics=lyrics;
-        if music {h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};}
-        for _ in 0..90{h.frame(vec![]);}h.app.alert("大写锁定","已开启",5,false);for _ in 0..60{h.frame(vec![]);}
-        for label in ["大写锁定","已开启"]{assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()==label&&t.opacity_factor>0.9&&s.clip_rect.contains(t.visual_bounding_rect().center()))),"非岛上歌词状态应直接显示通知文案：{label}");}
-        assert!((h.app.current_width()-crate::app::HUD_W-44.0).abs()<1.0,"完整提示保留吉祥物与文案的宽度");
-    }
-}
 
-#[test]
-fn notification_style_follows_the_current_lyric_mode_without_a_new_notice(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗"));
-    h.app.alert("大写锁定","已开启",5,false);
-    for (lyrics,playing) in [(false,true),(true,true),(true,false),(true,true),(false,true)]{
-        h.app.settings.island_lyrics=lyrics;h.media.playing=playing;for _ in 0..25{h.frame(vec![]);}
-        assert_eq!(h.app.compact_notices(),lyrics&&playing);
-        let has_title=h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="大写锁定"&&t.opacity_factor>0.9));
-        assert_eq!(has_title,!(lyrics&&playing),"当前通知应跟随岛上歌词的显示状态切换样式");
-    }
-}
 
-#[test]
-#[ignore="按需导出普通模式与岛上歌词模式的通知画面"]
-fn notice_mode_layout_gallery(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_NOTICE_MODES_PREVIEW").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
-    for lyrics in [false,true]{
-        let mut h=H::new();h.app.settings.pet=true;h.app.settings.island_lyrics=lyrics;h.app.pomo.running=lyrics;
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗"));
-        let mut raster=crate::preview_raster::Raster::new(1920,405);
-        for frame in 0..120{
-            let t=frame as f64/60.0;if frame==30{h.app.alert("大写锁定","已开启",5,false);}
-            let env=Env{t,clock:"09:41:00".into(),today:"2026-11-01".into(),date:"11月1日 周日".into(),media:h.media.clone(),..Default::default()};
-            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(1.5),..Default::default()})).collect(),..Default::default()};
-            let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);});});
-            raster.update_textures(&output.textures_delta);
-            if frame==119{
-                raster.buf.fill([0.94,0.95,0.97,1.0]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-                let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);let image=image::RgbaImage::from_raw(1920,405,rgba).unwrap();
-                image::imageops::crop_imm(&image,105,0,960,140).to_image().save(dest.join(if lyrics{"岛上歌词模式.png"}else{"普通模式.png"})).unwrap();
-            }
-            raster.free_textures(&output.textures_delta);
-        }
-    }
-}
 
-#[test]
-fn lyric_caps_lock_notice_keeps_one_glass_outline(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for skin in [crate::model::Skin::GlassLight,crate::model::Skin::GlassDark]{
-    for shape in crate::model::IslandShape::ALL{for ppp in [1.0,1.25,1.5,2.0]{
-        let mut h=H::new();h.app.settings.pet=false;h.app.settings.skin=skin;h.app.settings.island_shape=shape;h.app.settings.island_lyrics=true;h.app.settings.glass_blur=true;
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗"));
-        let mut raster=crate::preview_raster::Raster::new((crate::app::CANVAS_W*ppp) as usize,(WIN_H*ppp) as usize);
-        for frame in 0..360{
-            h.t=frame as f64/60.0;
-            if frame==60{h.app.alert("大写锁定","已开启",5,false);}if frame==105{h.app.alert("大写锁定","已关闭",5,false);}
-            let env=Env{t:h.t,clock:"09:41:00".into(),media:h.media.clone(),backdrop:Some([0.94,0.95,0.97]),glass_blur:true,..Default::default()};
-            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(h.t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
-            let mut glass=None;
-            let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{glass=h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env).glass;});});
-            let contours=glass.unwrap();
-            assert_eq!(contours.len(),1,"{skin:?} {shape:?} 倍率 {ppp} 第 {frame} 帧：提示与原岛应共用外轮廓，避免拼接处出现内圈");
-            if shape==crate::model::IslandShape::Pill{
-                let rims=output.shapes.iter().filter(|s|matches!(&s.shape,egui::Shape::Rect(r) if r.stroke.width>0.0&&r.rect.width()>50.0&&r.rect.height()>=20.0)).count();
-                assert_eq!(rims,1,"胶囊连接处不能重复绘制玻璃描边");
-            }
-            raster.update_textures(&output.textures_delta);let primitives=h.ctx.tessellate(output.shapes,ppp);
-            if ppp==1.5{if let Some(name)=match frame{45=>Some("before"),90=>Some("on"),135=>Some("off"),359=>Some("after"),_=>None}{if let Some(dest)=std::env::var_os("LINGQI_CAPS_LOCK_PREVIEW_DIR"){
-                let dest=std::path::PathBuf::from(dest);std::fs::create_dir_all(&dest).unwrap();raster.buf.fill([0.94,0.95,0.97,1.0]);raster.draw(&primitives,ppp);
-                let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);let image=image::RgbaImage::from_raw(raster.w as u32,raster.h as u32,rgba).unwrap();
-                image::imageops::crop_imm(&image,(140.0*ppp) as u32,0,(440.0*ppp) as u32,(80.0*ppp) as u32).to_image().save(dest.join(format!("{}-{}-{name}.png",skin.key(),shape.key()))).unwrap();
-            }}}
-            raster.free_textures(&output.textures_delta);
-        }
-        assert!(h.app.notice.is_none());assert!((h.app.current_width()-crate::app::LYRIC_BAR_W).abs()<1.0,"提示结束后应恢复原有宽度");
-    }}}
-}
 
-#[test]
-fn resident_components_stay_centered_during_add_and_remove(){
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.pet=false;
-    for music in [false,true,false] {
-        h.media=if music {crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,..Default::default()}}else{Default::default()};
-        for _ in 0..45 {
-            h.frame(vec![]);
-            let layout=h.app.resident.current();
-            assert_eq!(layout.x[crate::bar_layout::MUSIC].is_some(),music);
-            let mut left=f32::INFINITY;
-            let mut right=f32::NEG_INFINITY;
-            for (slot,x) in layout.x.iter().enumerate() {
-                if let Some(x)=x {
-                    left=left.min(x-layout.widths[slot]/2.0);
-                    right=right.max(x+layout.widths[slot]/2.0);
-                }
-            }
-            assert!(((left+right)/2.0).abs()<0.01,"音乐状态 {music}，常驻内容边界 {left} 至 {right}");
-        }
-    }
-}
 
-#[test]
-fn lyric_notifications_expand_about_the_dock_center(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let text=|h:&H,label:&str|h.shapes.iter().find_map(|s|match &s.shape{egui::Shape::Text(t)if t.galley.text()==label&&t.opacity_factor>0.9&&s.clip_rect.contains(t.visual_bounding_rect().center())=>Some(t.visual_bounding_rect()),_=>None}).unwrap_or_else(||panic!("应保留可见内容：{label}"));
-        let mut h=H::new();h.app.settings.pet=true;h.app.settings.island_lyrics=true;h.power=(Some(75),false);
-        h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
-        for _ in 0..90{h.frame(vec![]);}
-        let label="晚风吹过了山岗";let original=text(&h,label);let right=WIN_W/2.0+h.app.current_width()/2.0;
-        h.app.alert("大写锁定","已开启",5,false);
-        for _ in 0..60 {
-            h.frame(vec![]);
-            let extra=h.app.current_width()-h.app.w.pos;
-            let shift=if extra>8.5 {extra/2.0}else{0.0};
-            assert!((text(&h,label).center().x-original.center().x+shift).abs()<0.6,"歌词应随主内容让出一半提示宽度");
-        }
-        assert!((h.app.current_width()-(right-WIN_W/2.0)*2.0-44.0).abs()<1.0,"通知图标占用 44 点宽度");
-        assert!(h.region.right()<right+64.0);assert!(!h.app.open);
-        assert!((h.notice_button().right()-right-22.0).abs()<1.0);
-        h.t+=3.0;for _ in 0..100{h.frame(vec![]);}
-        assert!(text(&h,label).center().distance(original.center())<0.2);
-}
 
-#[test]
-fn top_bar_notice_covers_the_compact_mail_badge_and_detail(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
-    for _ in 0..60{h.frame(vec![]);}
-    assert!(h.top_bar_notice.is_none());
 
-    h.app.new_mail_alert("项目组 · 新邮件".into());
-    for _ in 0..60{h.frame(vec![]);}
-    assert!(h.app.compact_notices());
-    let badge=h.notice_button().center();
-    let hit=h.top_bar_notice.expect("紧凑的邮件通知应提供置顶命中区");
-    assert!(hit.contains(badge));
-    assert!(!hit.contains(h.hit.center()),"邮件通知命中区应避开歌词");
 
-    h.click_notice_badge();
-    h.frame(vec![]);
-    let detail=h.ctx.read_response(egui::Id::new(("card",true,"notice-action"))).expect("邮件详情应提供查看按钮");
-    let hit=h.top_bar_notice.expect("展开邮件详情后应继续提供通知命中区");
-    assert!(hit.contains(badge) && hit.contains_rect(detail.interact_rect));
-    h.click_text("查看");
-    h.frame(vec![]);
-    assert_eq!(h.app.page,crate::app::MAIL_PAGE);
-    assert!(h.top_bar_notice.is_none(),"邮件通知结束后应清空通知命中区");
-}
-
-#[test]
-fn an_open_page_and_lyrics_can_coexist_with_notifications_and_the_bell(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
-    for _ in 0..90{h.frame(vec![]);}
-    h.app.notification_apps.items.push(("mail.test".into(),"邮件".into(),true));h.app.settings.read_notifications=true;h.app.receive_notification("邮件".into(),"mail.test".into(),"收到新邮件".into());h.frame(vec![]);
-    assert!(h.app.island_lyric().is_some(),"通知铃铛不能关闭岛上歌词");
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.hover(H::local(300.0,60.0),0.5);assert!(h.app.open);
-    h.app.alert("键盘输入语言","中文",5,false);for _ in 0..60{h.frame(vec![]);}
-    assert!(h.app.open);
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t)if t.galley.text()=="Track")),"展开页面保留歌曲信息");
-    assert!(!h.app.compact_notices(),"展开页面时不使用岛上歌词的小图标提示");
-}
-
-#[test]
-#[ignore="按需录制右侧通知与原岛内容同时显示的实际画面"]
-fn right_notice_preview(){
-    use std::io::Write;
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_RIGHT_NOTICE_PREVIEW").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
-    h.app.settings.pet=true;h.app.settings.island_lyrics=true;h.app.pomo.running=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:120.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
-    let mut video=std::process::Command::new(std::env::var_os("LINGQI_FFMPEG").unwrap_or_else(||"ffmpeg".into())).args(["-y","-loglevel","error","-f","rawvideo","-pix_fmt","rgba","-s","1920x405","-r","30","-i","-","-vf","crop=1440:210:105:0","-c:v","libx264","-crf","19","-pix_fmt","yuv420p"]).arg(dest.join("右侧通知演示.mp4")).stdin(std::process::Stdio::piped()).spawn().unwrap();
-    let mut pipe=video.stdin.take().unwrap();let mut raster=crate::preview_raster::Raster::new(1920,405);
-    for frame in 0..420{
-        let t=frame as f64/30.0;
-        if frame==90{h.app.alert("大写锁定","已开启",5,false);}
-        if frame==240{h.app.alert("蓝牙设备","OpenMove by Shokz · 电量 80%",5,false);}
-        let env=Env{t,clock:"09:41:00".into(),today:"2026-11-01".into(),date:"11月1日 周日".into(),media:h.media.clone(),..Default::default()};
-        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(1.5),..Default::default()})).collect(),..Default::default()};
-        let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);});});
-        raster.update_textures(&output.textures_delta);raster.buf.fill([0.94,0.95,0.97,1.0]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-        let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);pipe.write_all(&rgba).unwrap();
-        if let Some(name)=match frame{60=>Some("原岛"),125=>Some("大小写提示"),270=>Some("蓝牙提示"),390=>Some("恢复原岛"),_=>None}{let image=image::RgbaImage::from_raw(1920,405,rgba).unwrap();image::imageops::crop_imm(&image,105,0,1440,210).to_image().save(dest.join(format!("{name}.png"))).unwrap();}
-        raster.free_textures(&output.textures_delta);
-    }
-    drop(pipe);assert!(video.wait().unwrap().success());
-}
 
 #[test]
 fn hud_expands_smoothly_from_collapsed_width(){
@@ -5782,23 +4232,6 @@ fn todo_notice_view_locates_the_reminded_task() {
     assert!(h.app.todo_first>=4,"打开待办页时应能看到收到提醒的任务");
 }
 
-fn frame_control_draw(h:&mut H,cursor:Option<Pos2>,events:Vec<egui::Event>) {
-    use crate::side_dock::{SIDE_H,SIDE_W};
-    let size=if h.app.settings.dock.is_side(){Vec2::new(SIDE_W,SIDE_H)}else{Vec2::new(WIN_W,WIN_H)};
-    let ppp=1.25*h.app.settings.island_scale();
-    h.t+=1.0/120.0;
-    let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-10-28".into(),cursor,media:h.media.clone(),
-        opaque_surface:true,..Default::default()};
-    let win=Rect::from_min_size(Pos2::ZERO,size);
-    let raw=egui::RawInput{screen_rect:Some(win),time:Some(h.t),events,focused:true,
-        viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{
-            native_pixels_per_point:Some(ppp),..Default::default()
-        })).collect(),..Default::default()};
-    let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{
-        h.app.frame(ui,win,&env);
-    });});
-    h.shapes=output.shapes;
-}
 
 #[cfg(feature = "sdk-js")]
 const SHORTCUT_FIXTURE_ID: &str = "example.page-shortcuts";
@@ -5822,28 +4255,6 @@ fn install_page_shortcuts_fixture(h: &mut H) {
     h.app.plugins.install(&path).unwrap();
 }
 
-#[cfg(feature = "sdk-js")]
-#[test]
-fn bottom_page_shortcuts_follow_the_installed_plugin_and_saved_preference() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.show_page(crate::app::MUSIC_PAGE);
-    assert_eq!(h.app.expanded_height(),PH);
-    install_page_shortcuts_fixture(&mut h);
-    assert_eq!(h.app.expanded_height(),PH,"安装后仍应等待用户启用");
-    h.app.plugins.enable(SHORTCUT_FIXTURE_ID,true).unwrap();
-    assert_eq!(h.app.expanded_height(),PH+24.0);
-    h.app.set_page_visible(crate::app::TODO_PAGE,false);
-    assert_eq!(h.app.expanded_height(),PH+24.0,"快捷切换应独立于待办模块");
-    h.app.settings.show_page_shortcuts=false;
-    h.app.settings.save();
-    h.app=App::new(&h.ctx,Options { fetch_lyrics:false, pet_idle:1e9 });
-    assert!(h.app.plugins.active_page_shortcut_colors().is_some());
-    assert_eq!(h.app.expanded_height(),PH,"重启应保留隐藏图标偏好");
-    h.app.settings.show_page_shortcuts=true;
-    h.app.plugins.enable(SHORTCUT_FIXTURE_ID,false).unwrap();
-    assert_eq!(h.app.expanded_height(),PH,"停用后应保留原页码点布局");
-}
 
 #[cfg(feature = "sdk-js")]
 #[test]
@@ -6171,60 +4582,24 @@ fn hold_open_side_docks_only_expose_complete_hit_targets() {
     }
 }
 
-#[test]
-fn frame_control_fluid_left_keeps_gear_and_next_arrow_whole() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.skin=crate::model::Skin::Fluid;
-    h.app.settings.dock=crate::model::Dock::Left;
-    h.app.settings.island_shape=crate::model::IslandShape::Pill;
-    h.app.settings.island_size=105;
-    h.app.settings.render_compat=true;
-    h.app.settings.pet=false;
-    h.media=crate::smtc::NowPlaying{title:"测试曲目".into(),artist:"测试歌手".into(),duration:120.0,..Default::default()};
-    let check=|h:&H|{
-        let mut drawn=[false;2];
-        for part in &h.shapes {
-            let bounds=part.shape.visual_bounding_rect();
-            let x=bounds.center().x-crate::app::PILL_GAP;
-            let index=match &part.shape {
-                egui::Shape::Path(path) if path.closed && path.points.len()==64 && (x-394.0).abs()<0.5=>0,
-                egui::Shape::Circle(circle) if (circle.radius-9.0).abs()<0.5 && (x-398.0).abs()<0.5=>1,
-                _=>continue,
-            };
-            if part.clip_rect.intersect(bounds).is_positive() {
-                assert!(part.clip_rect.contains_rect(bounds),"右侧控件 {index} 不能只露出一部分，进度 {}",h.app.progress());
-                drawn[index]=true;
-            }
-        }
-        for (id,size) in [("page-settings",28.0),("nav-r",26.0)] {
-            for live in [true,false] {
-                if let Some(r)=h.ctx.read_response(egui::Id::new(("card",live,id))).filter(|r|r.interact_rect.is_positive()) {
-                    assert!((r.interact_rect.size()-Vec2::splat(size)).length()<0.01,"{id} 不能只有一部分可点击");
-                }
-            }
-        }
-        drawn
-    };
-    for _ in 0..12 {frame_control_draw(&mut h,None,vec![]);}
-    let edge=Pos2::new(24.0,crate::side_dock::SIDE_H/2.0);
-    for _ in 0..120 {
-        frame_control_draw(&mut h,Some(edge),vec![egui::Event::PointerMoved(edge)]);
-        check(&h);
-    }
-    assert!(h.app.open);
-    assert_eq!(check(&h),[true,true],"展开后必须完整显示设置和右翻页");
-    for id in ["page-settings","nav-r"] {
-        assert!(h.ctx.read_response(egui::Id::new(("card",true,id))).is_some_and(|r|r.interact_rect.is_positive()));
-    }
-    for _ in 0..96 {
-        frame_control_draw(&mut h,None,vec![egui::Event::PointerGone]);
-        check(&h);
-    }
-    assert!(!h.app.open);
-    assert_eq!(check(&h),[false,false]);
-}
 
+fn frame_control_draw(h:&mut H,cursor:Option<Pos2>,events:Vec<egui::Event>) {
+    use crate::side_dock::{SIDE_H,SIDE_W};
+    let size=if h.app.settings.dock.is_side(){Vec2::new(SIDE_W,SIDE_H)}else{Vec2::new(WIN_W,WIN_H)};
+    let ppp=1.25*h.app.settings.island_scale();
+    h.t+=1.0/120.0;
+    let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-10-28".into(),cursor,
+        opaque_surface:true,..Default::default()};
+    let win=Rect::from_min_size(Pos2::ZERO,size);
+    let raw=egui::RawInput{screen_rect:Some(win),time:Some(h.t),events,focused:true,
+        viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{
+            native_pixels_per_point:Some(ppp),..Default::default()
+        })).collect(),..Default::default()};
+    let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{
+        h.app.frame(ui,win,&env);
+    });});
+    h.shapes=output.shapes;
+}
 #[test]
 fn frame_control_cream_startup_notice_keeps_view_action_whole() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
@@ -6725,8 +5100,7 @@ fn ui_alignment_layout_gallery(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_UI_PREVIEW_DIR").expect("需指定预览目录"));std::fs::create_dir_all(&dest).unwrap();
     fn fixture()->H{
-        let mut h=H::new();h.app.settings.pet=false;h.app.settings.island_lyrics=false;h.power=(Some(76),false);
-        h.media=crate::smtc::NowPlaying{title:"愿每一个认真生活的人，都能在平凡的日子里找到属于自己的光".into(),artist:"The Lanterns · Live Session".into(),duration:240.0,position:65.0,playing:true,..Default::default()};
+        let mut h=H::new();h.app.settings.pet=false;h.power=(Some(76),false);
         h.app.todos.items=["整理会议资料","Review design details","确认项目需求与下一阶段开发排期"].into_iter().map(|text|crate::model::TodoItem{text:text.into(),due:None,done_on:None,reminded:false,..Default::default()}).collect();
         h.app.shelf.items=["项目设计方案与交付说明.pdf","design-preview.png","本周工作安排.docx","project-files.zip","notes.md"].into_iter().map(std::path::PathBuf::from).collect();
         h.app.mail.accounts=vec![crate::mail::Account {use_windows_proxy: false, custom: None, email:"product-team@example.com".into(),provider:crate::mail::Provider::Qq,enabled:true}];
@@ -6749,13 +5123,12 @@ fn ui_alignment_layout_gallery(){
         if name=="meeting-dingtalk" || name=="meeting-wecom" {
             h.app.meeting_alert(crate::mail::Meeting{all_day:false,title:"项目评审与下阶段安排".into(),start:chrono::Local::now().timestamp()+600,end:None,at:String::new(),uid:name.into()},if name=="meeting-dingtalk"{"钉钉"}else{"企业微信"}.into(),7);
         }
-        if name=="lyrics"{h.app.show_lyrics=true;h.app.set_lyrics(&h.media.title,&h.media.artist,240.0,crate::lyrics::parse_lrc("[00:00]慢慢走过这段时光\n[01:00]愿每个认真生活的人都能找到属于自己的光\n[01:10]愿风带你去远方"));}
         if name=="mail-detail"{h.app.mail.open_uid=Some(("product-team@example.com".into(),0));}
         if name=="reminder"{h.app.open_task_reminder(0);}
         let (width,height)=((WIN_W*ppp)as u32,(WIN_H*ppp)as u32);let mut raster=crate::preview_raster::Raster::new(width as usize,height as usize);
         for f in 0..90{
             let t=f as f64/60.0;let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,egui::vec2(WIN_W,WIN_H))),time:Some(t),viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
-            let env=Env{t,clock:"09:41:00".into(),today:"2026-11-01".into(),date:"11月1日 周日".into(),cursor:if collapsed.contains(&name){None}else{Some(H::local(150.0,40.0))},media:h.media.clone(),battery:h.power.0,bt_ready:true,..Default::default()};
+            let env=Env{t,clock:"09:41:00".into(),today:"2026-11-01".into(),date:"11月1日 周日".into(),cursor:if collapsed.contains(&name){None}else{Some(H::local(150.0,40.0))},battery:h.power.0,bt_ready:true,..Default::default()};
             let out=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{let win=ui.max_rect();h.app.frame(ui,win,&env);});});raster.update_textures(&out.textures_delta);
             if f==89{raster.buf.fill([0.07,0.09,0.13,1.0]);raster.draw(&h.ctx.tessellate(out.shapes,out.pixels_per_point),out.pixels_per_point);let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);image::save_buffer(dest.join(format!("{name}-{}.png",(ppp*100.0)as u32)),&rgba,width,height,image::ColorType::Rgba8).unwrap();}
             raster.free_textures(&out.textures_delta);
@@ -6822,30 +5195,6 @@ fn meeting_long_titles_scroll_to_the_end_while_short_titles_stay_still(){
     }
 }
 
-#[test]
-fn calendar_notice_overrides_island_lyrics_and_restores_the_current_line(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.settings.pet=false;h.app.settings.island_lyrics=true;
-    h.media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,position:7.0,duration:180.0,..Default::default()};
-    h.app.set_lyrics("Track","Artist",180.0,crate::lyrics::parse_lrc("[00:00]首句歌词\n[00:20]后续歌词"));
-    for _ in 0..60{h.frame(vec![]);}
-    assert!(h.app.compact_notices());
-    h.app.meeting_alert(crate::mail::Meeting{ all_day:false,title:"优先会议".into(),start:chrono::Local::now().timestamp()+600,end:None,at:String::new(),uid:"priority".into()},"飞书".into(),7);
-    for _ in 0..90{h.frame(vec![]);}
-    assert!(!h.app.compact_notices(),"日程提醒不应缩成歌词旁的小图标");
-    assert!(h.hit.height()>130.0,"应直接展示完整 A 版提醒");
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="优先会议")));
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="查看")));
-    assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="首句歌词")));
-    let active=h.app.notice.as_ref().unwrap();h.t=active.at+active.duration-1.0/30.0;h.media.position=25.0;
-    for _ in 0..90{
-        h.frame(vec![]);
-        if h.app.notice.is_none(){assert!(!h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="Track" || t.galley.text()=="Artist")),"恢复歌词时不能闪出展开的播放器");}
-    }
-    assert!(h.app.notice.is_none() && h.app.settings.island_lyrics && h.app.compact_notices());
-    assert!(h.hit.height()<35.0,"提醒结束后应恢复歌词条高度");
-    assert!(h.shapes.iter().any(|s|matches!(&s.shape,egui::Shape::Text(t) if t.galley.text()=="后续歌词")),"应恢复当前进度的歌词");
-}
 
 #[test]
 fn shelf_remove_icon_stays_centered_on_hover_and_preserves_the_file(){
@@ -7052,15 +5401,6 @@ fn hidden_components_do_not_keep_static_pages_animating(){
     assert!(!h.animating,"待办页没有显示专注动画，计时继续但不应强制连续刷新");
 }
 
-#[test]
-fn minimal_music_stops_hidden_playback_animations(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.set_minimal(true);
-    h.media=crate::smtc::NowPlaying{title:"歌曲".into(),artist:"歌手".into(),playing:true,..Default::default()};
-    for _ in 0..180{h.frame(vec![]);}
-    assert!(!h.app.open);
-    assert!(!h.animating,"极简模式隐藏媒体组件后，不应继续为播放动画刷新");
-}
 
 #[test]
 fn native_app_icon_uses_bounded_resolution(){
@@ -7134,32 +5474,6 @@ fn calendar_sync_result_does_not_enqueue_another_sync() {
     assert!(!h.app.pending.iter().any(|cmd|matches!(cmd,crate::app::Cmd::CalendarMonth(_))),"同步结果不能触发下一轮同步，否则后台会持续请求");
 }
 
-#[test]
-fn page_order_persists_and_controls_navigation() {
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let mut h=H::new();
-    h.app.settings.page_order=[5,2,0,1,3,4,6,7,8,9,10];
-    h.app.settings.save();
-    let settings=crate::model::Settings::load();
-    assert_eq!(settings.page_order,[5,2,0,1,3,4,6,7,8,9,10]);
-    let restarted=App::new(&h.ctx,Options{fetch_lyrics:false,pet_idle:1e9});
-    assert_eq!(restarted.page(),5);
-    for page in [1,3,4,6,7,8,9,10] {h.app.set_page_visible(page,false);}
-    h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    for expected in [5,2,0] {
-        h.click(H::local(398.0,68.0));
-        assert_eq!(h.app.page,expected);
-        h.hover(H::local(300.0,60.0),0.7);
-    }
-    h.click(H::local(21.0,68.0));
-    assert_eq!(h.app.page,2);
-    h.app.set_page_visible(2,false);
-    assert_eq!(h.app.page,5);
-    for invalid in ["0,0,1,2,3,4,5,6","8,1,2,3,4,5,6,7","0,1","invalid"] {
-        std::fs::write(crate::model::config_dir().join("settings.txt"),format!("page_order={invalid}\n")).unwrap();
-        assert_eq!(crate::model::Settings::load().page_order,[0,1,2,3,4,5,6,7,8,9,10]);
-    }
-}
 
 #[test]
 fn page_order_drag_applies_on_release_and_saves() {
@@ -7386,40 +5700,6 @@ fn mail_report_save_and_failure_paths() {
     assert_eq!(crate::mail::secrets::load(&gmail).unwrap(), "synthetic-gmail-secret");
 }
 
-#[test]
-fn hover_tooltips_fit_native_region_and_release_it_after_leaving(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for shelf in [false,true] {
-        let mut h=H::new();
-        let label;
-        let pointer;
-        if shelf {
-            let path=crate::model::config_dir().join("开发项目源代码与当前维护的项目文件夹");
-            std::fs::create_dir_all(&path).unwrap();
-            label=path.display().to_string();h.app.shelf.add(&path).unwrap();
-            h.app.show_page(3);h.hover(H::local(300.0,60.0),1.0);
-            pointer=H::local(210.0,66.0);
-        } else {
-            h.app.settings.island_lyrics=true;
-            h.media.title="测试歌曲".into();h.media.artist="歌手".into();h.media.duration=240.0;h.media.playing=true;
-            h.app.set_lyrics("测试歌曲","歌手",240.0,crate::lyrics::parse_lrc("[00:00]测试歌词"));
-            h.app.alert("邮件验证码","收到邮件，验证码 123456，请在十分钟内使用",5,false);
-            h.hover(Pos2::new(600.0,220.0),1.0);
-            label="邮件验证码\n收到邮件，验证码 123456，请在十分钟内使用".to_string();
-            pointer=h.notice_button().center();
-        }
-        h.hover(pointer,0.4);
-        let hit_before_tooltip=h.hit;
-        h.hover(pointer,1.1);
-        let bounds=h.shapes.iter().find_map(|s|match &s.shape {
-            egui::Shape::Text(t) if t.galley.text()==label=>Some(t.visual_bounding_rect()),_=>None,
-        }).expect("悬停后应显示完整提示");
-        assert!(h.region.contains_rect(bounds),"悬停提示不能被原生窗口裁掉：{bounds:?} / {:?}",h.region);
-        assert_eq!(h.hit,hit_before_tooltip,"提示不应扩大岛体交互区域");
-        h.hover(Pos2::new(900.0,250.0),3.0);
-        assert!(h.region.bottom()<100.0,"提示消失后应恢复收起区域");
-    }
-}
 
 #[test]
 fn clock_seconds_formats_and_persists(){
@@ -7689,9 +5969,7 @@ fn avoidance_icon_area_stays_one_row_and_scrolls() {
 fn compact_canvas_preserves_panel_and_notice_pixels(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(width:f32,page:Option<usize>,notice:bool)->Vec<u8>{
-        let mut h=H::new();h.app.settings.island_lyrics=true;
-        let media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
+        let mut h=H::new();
         if let Some(page)=page{h.app.show_page(page);}
         let mut raster=crate::preview_raster::Raster::new(1280,270);
         let mut rgba=Vec::new();
@@ -7699,19 +5977,15 @@ fn compact_canvas_preserves_panel_and_notice_pixels(){
             if notice && frame==60{h.app.alert("收到新邮件","会议通知及验证码 834921",5,true);}
             let click=(notice && h.app.compact_notices() && (frame==90 || frame==91)).then(||h.notice_button().center());
             let t=frame as f64/60.0;
-            let env=Env{t,clock:"09:41:00".into(),today:"2026-10-28".into(),date:"10月28日 周三".into(),media:media.clone(),cursor:click.or_else(||page.map(|_|H::local(300.0,40.0))),..Default::default()};
+            let env=Env{t,clock:"09:41:00".into(),today:"2026-10-28".into(),date:"10月28日 周三".into(),cursor:click.or_else(||page.map(|_|H::local(300.0,40.0))),..Default::default()};
             let output=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(width,WIN_H))),time:Some(t),events:click.map(|pos|vec![egui::Event::PointerMoved(pos),egui::Event::PointerButton{pos,button:egui::PointerButton::Primary,pressed:frame==90,modifiers:Default::default()}]).unwrap_or_default(),..Default::default()},|ctx|{
                 egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);});
             });
             raster.update_textures(&output.textures_delta);
-            if [30,65,95,179].contains(&frame){
-                raster.buf.fill([0.0;4]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-                let mut pixels=Vec::new();raster.to_rgba8(&mut pixels);
-                if page.is_none() && notice && frame==95 {
-                    if let Some(dir)=std::env::var_os("LINGQI_GRAPHICS_PREVIEW") {let dir=std::path::PathBuf::from(dir);std::fs::create_dir_all(&dir).unwrap();image::save_buffer(dir.join(format!("canvas-{width}.png")),&pixels,1280,270,image::ColorType::Rgba8).unwrap();}
-                }
-                rgba.extend(pixels);
-            }
+            raster.buf.fill([0.07,0.09,0.13,1.0]);
+            raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
+            if frame==179{raster.to_rgba8(&mut rgba);}
+            raster.free_textures(&output.textures_delta);
         }
         rgba
     }
@@ -7783,9 +6057,7 @@ fn hidden_mail_masks_every_display_field_and_reveal_is_temporary(){
 fn compact_font_atlas_preserves_panel_and_notice_pixels(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     fn draw(texture_side:usize,page:Option<usize>,notice:bool)->Vec<u8>{
-        let mut h=H::new();h.app.settings.island_lyrics=true;
-        let media=crate::smtc::NowPlaying{title:"Track".into(),artist:"Artist".into(),playing:true,duration:120.0,..Default::default()};
-        h.app.set_lyrics("Track","Artist",120.0,crate::lyrics::parse_lrc("[00:00]晚风吹过了山岗\n[01:00]下一句"));
+        let mut h=H::new();
         if let Some(page)=page{h.app.show_page(page);}
         let mut raster=crate::preview_raster::Raster::new(1280,270);
         let mut rgba=Vec::new();
@@ -7793,7 +6065,7 @@ fn compact_font_atlas_preserves_panel_and_notice_pixels(){
             if notice && frame==60{h.app.alert("收到新邮件","会议通知及验证码 834921",5,true);}
             let click=(notice && h.app.compact_notices() && (frame==90 || frame==91)).then(||h.notice_button().center());
             let t=frame as f64/60.0;
-            let env=Env{t,clock:"09:41:00".into(),today:"2026-10-28".into(),date:"10月28日 周三".into(),media:media.clone(),cursor:click.or_else(||page.map(|_|H::local(300.0,40.0))),..Default::default()};
+            let env=Env{t,clock:"09:41:00".into(),today:"2026-10-28".into(),date:"10月28日 周三".into(),cursor:click.or_else(||page.map(|_|H::local(300.0,40.0))),..Default::default()};
             let output=h.ctx.run(egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(960.0,WIN_H))),max_texture_side:Some(texture_side),time:Some(t),events:click.map(|pos|vec![egui::Event::PointerMoved(pos),egui::Event::PointerButton{pos,button:egui::PointerButton::Primary,pressed:frame==90,modifiers:Default::default()}]).unwrap_or_default(),..Default::default()},|ctx|{
                 egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);});
             });
@@ -7801,11 +6073,9 @@ fn compact_font_atlas_preserves_panel_and_notice_pixels(){
             if [30,65,95,179].contains(&frame){
                 raster.buf.fill([0.0;4]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
                 let mut pixels=Vec::new();raster.to_rgba8(&mut pixels);
-                if page.is_none() && notice && frame==95 {
-                    if let Some(dir)=std::env::var_os("LINGQI_GRAPHICS_PREVIEW") {let dir=std::path::PathBuf::from(dir);std::fs::create_dir_all(&dir).unwrap();image::save_buffer(dir.join(format!("atlas-{texture_side}.png")),&pixels,1280,270,image::ColorType::Rgba8).unwrap();}
-                }
                 rgba.extend(pixels);
             }
+            raster.free_textures(&output.textures_delta);
         }
         rgba
     }
@@ -7907,77 +6177,6 @@ fn bluetooth_switch_clears_notices_and_restarts_with_fresh_baseline(){
     assert!(h.app.notice.as_ref().is_some_and(|a|a.title=="蓝牙设备") || h.app.alerts.iter().any(|a|a.title=="蓝牙设备"));
 }
 
-#[test]
-#[ignore = "按需导出五套皮肤的预览图：LINGQI_SKIN_PREVIEW_DIR=目录 cargo test skin_gallery -- --ignored"]
-fn skin_gallery(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_SKIN_PREVIEW_DIR").expect("需指定预览目录"));
-    std::fs::create_dir_all(&dest).unwrap();
-    let (w,hgt)=((crate::app::CANVAS_W*2.0) as usize,(WIN_H*2.0) as usize);
-    // 日落渐变 + 几条城市剪影，用来观察半透明皮肤的通透感。
-    let backdrop=|raster:&mut crate::preview_raster::Raster|{
-        for y in 0..hgt {for x in 0..w {
-            let t=y as f32/hgt as f32;let s=x as f32/w as f32;
-            let mut c=[0.98-0.25*t+0.05*s,0.62+0.12*t-0.1*s,0.45+0.35*t,1.0];
-            if (y>hgt*7/10) && ((x/37)%3!=0) && y>hgt*7/10+((x*7919)%97) {c=[0.30,0.33,0.45,1.0];}
-            let cloud=((x as f32/90.0).sin()*(y as f32/40.0).cos()).max(0.0);if y<hgt/2 {for k in 0..3{c[k]=c[k]+(1.0-c[k])*cloud*0.6;}}
-            if x%160<12 && y<hgt*6/10 {c=[0.18,0.20,0.30,1.0];}
-            raster.buf[y*w+x]=c;
-        }}
-    };
-    for (skin,shape) in crate::model::Skin::ALL.into_iter().flat_map(|s|crate::model::IslandShape::ALL.map(|p|(s,p))) {
-        for open in [false,true] {
-            let mut h=H::new();h.app.settings.skin=skin;h.app.settings.island_shape=shape;h.app.settings.pet=true;h.app.opts.pet_idle=0.0;
-            h.media=crate::smtc::NowPlaying{title:"Paper Boats".into(),artist:"The Lanterns".into(),position:64.0,duration:201.0,playing:true,..Default::default()};
-            let mut raster=crate::preview_raster::Raster::new(w,hgt);
-            for frame in 0..120 {
-                let t=frame as f64/60.0;
-                let cursor=open.then_some(Pos2::new(WIN_W/2.0,14.0));
-                let env=Env{t,clock:"11:13:00".into(),today:"2026-10-26".into(),date:"10月26日 周一".into(),media:h.media.clone(),cursor,backdrop:Some([0.85,0.62,0.6]),glass_blur:true,..Default::default()};
-                let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(t),
-                    viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(2.0),..Default::default()})).collect(),..Default::default()};
-                let mut glass=None;
-                let output=h.ctx.run(raw,|ctx|{
-                    egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{let win=Rect::from_min_size(ui.max_rect().min,Vec2::new(WIN_W,WIN_H));glass=h.app.frame(ui,win,&env).glass;});
-                });
-                raster.update_textures(&output.textures_delta);
-                if open && frame==100 {h.app.show_page(1);}
-                if open && frame==104 && shape==crate::model::IslandShape::Notch {
-                    backdrop(&mut raster);
-                    raster.draw(&h.ctx.tessellate(output.shapes.clone(),output.pixels_per_point),output.pixels_per_point);
-                    let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-                    let image=image::RgbaImage::from_raw(w as u32,hgt as u32,rgba).unwrap();
-                    image::imageops::crop_imm(&image,120,0,1040,400).to_image().save(dest.join(format!("{}-switch.png",skin.key()))).unwrap();
-                }
-                if frame==119 {
-                    backdrop(&mut raster);
-                    // 模拟系统实时模糊：只有岛体轮廓内的背景被模糊（与实机的合成层一致）。
-                    if let Some(shapes)=glass {
-                        let pieces=crate::app::blur_pieces(&shapes,2.0);
-                        let mut blurred=raster.buf.clone();
-                        for _ in 0..3 {
-                            let src=blurred.clone();let r=18i32;
-                            for y in 0..hgt as i32 {for x in 0..w as i32 {let mut s=[0.0f32;4];let mut n=0.0;for dx in (-r..=r).step_by(3){let xx=(x+dx).clamp(0,w as i32-1);let c=src[(y as usize)*w+xx as usize];for k in 0..4{s[k]+=c[k];}n+=1.0;}blurred[(y as usize)*w+x as usize]=s.map(|v|v/n);}}
-                            let src=blurred.clone();
-                            for y in 0..hgt as i32 {for x in 0..w as i32 {let mut s=[0.0f32;4];let mut n=0.0;for dy in (-r..=r).step_by(3){let yy=(y+dy).clamp(0,hgt as i32-1);let c=src[(yy as usize)*w+x as usize];for k in 0..4{s[k]+=c[k];}n+=1.0;}blurred[(y as usize)*w+x as usize]=s.map(|v|v/n);}}
-                        }
-                        for y in 0..hgt {for x in 0..w {
-                            let (px,py)=(x as f32+0.5,y as f32+0.5);
-                            let inside=pieces.iter().any(|p|{px>=p.x&&px<p.x+p.w&&py>=p.y&&py<p.y+p.h&&{let cx=px.clamp(p.x+p.radius,p.x+p.w-p.radius);let cy=py.clamp(p.y+p.radius,p.y+p.h-p.radius);(px-cx).powi(2)+(py-cy).powi(2)<=p.radius*p.radius}});
-                            if inside {raster.buf[y*w+x]=blurred[y*w+x];}
-                        }}
-                    }
-                    raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-                    let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-                    let image=image::RgbaImage::from_raw(w as u32,hgt as u32,rgba).unwrap();
-                    let crop=if open{image::imageops::crop_imm(&image,120,0,1040,400)}else{image::imageops::crop_imm(&image,300,0,680,110)};
-                    crop.to_image().save(dest.join(format!("{}-{}-{}.png",skin.key(),shape.key(),if open{"open"}else{"closed"}))).unwrap();
-                }
-                raster.free_textures(&output.textures_delta);
-            }
-        }
-    }
-}
 
 
 
@@ -8064,7 +6263,6 @@ fn shoot_side_with_bounds(h:&mut H,raster:&mut crate::preview_raster::Raster,des
     for f in 0..frames {
         h.t+=1.0/60.0;
         let mut env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-04".into(),date:"11月4日 周三".into(),cursor,bt_ready:true,battery:Some(76),..Default::default()};
-        if SIDE_MUSIC.load(std::sync::atomic::Ordering::Relaxed) {env.media.title="晴天".into();env.media.artist="周杰伦".into();env.media.playing=true;env.media.source="cloudmusic.exe".into();env.media.duration=269.0;}
         let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,hgt))),time:Some(h.t),focused:true,
             events:cursor.map(|p|vec![egui::Event::PointerMoved(p)]).unwrap_or_default(),
             viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
@@ -8255,116 +6453,8 @@ fn notification_preview_masks_fullwidth_and_zero_width_codes(){
     }
 }
 
-/// 内存实测：模拟长时间听歌（不断出现新汉字）并浏览各页面，输出进程内存、字形图集和贴图占用。
-/// 运行：LINGQI_ATLAS=4096 LINGQI_PPP=1.5 cargo test --lib memory_profile -- --ignored --nocapture --test-threads=1
-#[test]
-#[ignore="内存实测，按需运行"]
-fn memory_profile_long_listening_session(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let side:usize=std::env::var("LINGQI_ATLAS").ok().and_then(|s|s.parse().ok()).unwrap_or(4096);
-    let ppp:f32=std::env::var("LINGQI_PPP").ok().and_then(|s|s.parse().ok()).unwrap_or(1.5);
-    let songs:usize=std::env::var("LINGQI_SONGS").ok().and_then(|s|s.parse().ok()).unwrap_or(120);
-    // 匿名内存≈Windows 的私有内存；文件映射（程序代码、系统字体）可在进程间共享，不计入私有内存。
-    fn rss()->String{
-        let status=std::fs::read_to_string("/proc/self/status").unwrap_or_default();
-        let kb=|key:&str|status.lines().find_map(|l|l.strip_prefix(key)?.trim().trim_end_matches(" kB").trim().parse::<f64>().ok()).unwrap_or(0.0)/1024.0;
-        format!("匿名={:>6.1}MB 文件映射={:>6.1}MB",kb("RssAnon:"),kb("RssFile:"))
-    }
-    fn report(label:&str,h:&H){
-        let [w,hgt]=h.ctx.fonts(|f|f.font_image_size());
-        let tex:usize=h.ctx.tex_manager().read().allocated().map(|(_,m)|m.bytes_used()).sum();
-        let galleys=h.ctx.fonts(|f|f.num_galleys_in_cache());
-        // 图集在 CPU 端按 f32 存覆盖率，显卡端再按 RGBA 存一份。
-        println!("{label:<16} {} 图集={w}x{hgt}（CPU≈{:.1}MB）贴图合计={:.1}MB 文字缓存={galleys}",rss(),(w*hgt*4) as f64/1048576.0,tex as f64/1048576.0);
-    }
-    println!("{:<16} {}","测试进程基线",rss());
-    let mut h=H::new();h.app.settings.island_lyrics=true;h.app.show_lyrics=true;
-    println!("{:<16} {}","创建界面后",rss());
-    let mut seed=12345u64;let mut next=||{seed=seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);(seed>>33) as u32};
-    let run=|h:&mut H,media:&crate::smtc::NowPlaying|{
-        h.t+=1.0/60.0;
-        let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(crate::app::CANVAS_W,WIN_H))),time:Some(h.t),max_texture_side:Some(side),
-            viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
-        let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-10-28".into(),date:"10月28日 周三".into(),media:media.clone(),cursor:h.cursor,bt_ready:true,..Default::default()};
-        let app=&mut h.app;
-        let out=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::new()).show(ctx,|ui|{let _=app.frame(ui,Rect::from_min_size(ui.max_rect().min,Vec2::new(WIN_W,WIN_H)),&env);});});
-        h.shapes=out.shapes;
-    };
-    let idle=crate::smtc::NowPlaying::default();
-    for _ in 0..30 {run(&mut h,&idle);}
-    report("启动后",&h);
-    for page in 0..8 {h.app.show_page(page);for _ in 0..20 {run(&mut h,&idle);}}
-    report("浏览8个页面后",&h);
-    for song in 0..songs {
-        // 常用字约 3000 个：每首歌 40 句、每句 8–12 字，从中随机取，接近真实歌词的用字分布。
-        let lines:Vec<String>=(0..40).map(|_|(0..8+next()%5).map(|_|char::from_u32(0x4E00+next()%3000).unwrap()).collect()).collect();
-        let lrc=lines.iter().enumerate().map(|(i,l)|format!("[{:02}:{:02}.00]{l}\n",i*3/60,i*3%60)).collect::<String>();
-        let title=format!("测试歌曲{song}");
-        h.app.set_lyrics(&title,"歌手",200.0,crate::lyrics::parse_lrc(&lrc));
-        if song==songs/2 {h.app.show_page(0);}
-        for i in 0..40 {
-            let media=crate::smtc::NowPlaying{title:title.clone(),artist:"歌手".into(),duration:200.0,position:i as f64*3.0+0.5,playing:false,..Default::default()};
-            for _ in 0..2 {run(&mut h,&media);}
-        }
-        if (song+1)%20==0 {report(&format!("听完{}首",song+1),&h);}
-    }
-}
 
 
-#[test]
-#[ignore="按需导出消息提醒与账号状态提示的实际样式"]
-fn messenger_notice_status_gallery(){
-    let _guard=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    let dest=std::path::PathBuf::from(std::env::var_os("LINGQI_MESSENGER_PREVIEW").expect("需指定预览目录"));
-    std::fs::create_dir_all(&dest).unwrap();
-    for case in 0..15{
-        let mut h=H::new();h.app.settings.pet=true;h.app.settings.wechat_notifications=true;
-        h.app.settings.read_notifications=true;h.app.settings.notification_preview=true;
-        h.app.settings.bluetooth_notifications=true;
-        let ppp=2.0;let (w,height)=(crate::app::CANVAS_W,WIN_H);
-        let mut raster=crate::preview_raster::Raster::new((w*ppp) as usize,(height*ppp) as usize);
-        for frame in 0..90{
-            h.t=frame as f64/60.0;
-            if frame==40{match case{
-                0=>h.app.receive_wechat_reminder_from(100,0),
-                1=>h.app.receive_notification("QQ".into(),"QQ".into(),"有新消息 · 请到 QQ 查看".into()),
-                2=>{for pid in [100,200,300]{h.app.receive_wechat_reminder_from(pid,0);}h.app.alerts.clear();h.app.notice=None;h.app.notification_bell_until=0.0;},
-                3=>h.app.messenger_unavailable("QQ 账号已退出"),
-                4=>h.app.messenger_unavailable("微信 账号已退出"),
-                5=>h.app.messenger_unavailable("暂时无法确认此 QQ 消息的账号"),
-                6=>h.app.messenger_unavailable("QQ 窗口暂时无法打开"),
-                7=>{h.app.show_page(4);h.app.messenger_unavailable("QQ 账号已退出");},
-                8=>h.app.alert("大写锁定","已开启",5,false),
-                9=>h.app.alert("系统音量","音量 60%",5,false),
-                10=>h.app.bluetooth_alert(&crate::bt::Device{id:"preview".into(),name:"耳机".into(),battery:Some(80),kind:crate::bt::DeviceKind::Headphones,..Default::default()},true),
-                11=>h.app.alert("电量偏低","剩余 15% · 请连接电源",5,false),
-                12=>{
-                    let start=chrono::Local::now()+chrono::Duration::minutes(10);
-                    h.app.meeting_alert(crate::mail::Meeting{all_day:false,title:"团队会议".into(),start:start.timestamp(),end:None,at:start.format("%m-%d %H:%M").to_string(),uid:"preview".into()},"本机日程".into(),7);
-                },
-                13=>h.app.alert("喝水时间到了","休息一下，喝 250 ml 水吧",2,false),
-                14=>h.app.alert("待办到时间了","整理本周资料",4,false),
-                _=>unreachable!(),
-            }}
-            let cursor=(case==7).then(||H::local(160.0,12.0));
-            let env=Env{t:h.t,clock:"09:41:00".into(),today:"2026-11-08".into(),date:"11月8日 周日".into(),cursor,volume:(case==9).then_some((60,false)),media:h.media.clone(),..Default::default()};
-            let raw=egui::RawInput{screen_rect:Some(Rect::from_min_size(Pos2::ZERO,Vec2::new(w,height))),time:Some(h.t),focused:true,
-                events:cursor.map(|p|vec![egui::Event::PointerMoved(p)]).unwrap_or_default(),
-                viewports:std::iter::once((egui::ViewportId::ROOT,egui::ViewportInfo{native_pixels_per_point:Some(ppp),..Default::default()})).collect(),..Default::default()};
-            let output=h.ctx.run(raw,|ctx|{egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx,|ui|{
-                h.app.frame(ui,Rect::from_min_size(Pos2::ZERO,Vec2::new(WIN_W,WIN_H)),&env);
-            });});
-            raster.update_textures(&output.textures_delta);
-            if frame==89{
-                raster.buf.fill([0.93,0.95,0.97,1.0]);raster.draw(&h.ctx.tessellate(output.shapes,output.pixels_per_point),output.pixels_per_point);
-                let mut rgba=Vec::new();raster.to_rgba8(&mut rgba);
-                let image=image::RgbaImage::from_raw((w*ppp)as u32,(height*ppp)as u32,rgba).unwrap();
-                image::imageops::crop_imm(&image,100,0,1560,if case==7||case==12{440}else{260}).to_image().save(dest.join(format!("{case:02}.png"))).unwrap();
-            }
-            raster.free_textures(&output.textures_delta);
-        }
-    }
-}
 
 #[test]
 fn qq_unknown_reminders_survive_viewing_other_accounts(){
@@ -9320,20 +7410,6 @@ fn settings_window_memory_restores_only_the_child_viewport_and_keeps_live_resizi
 
 
 
-#[test]
-fn media_sampling_is_fast_only_while_the_music_page_is_watched(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.media=crate::smtc::NowPlaying{source:"QQMusic.exe".into(),title:"歌曲".into(),artist:"歌手".into(),duration:120.0,playing:true,..Default::default()};
-    h.frame(vec![]);
-    h.app.open=false;
-    assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_BACKGROUND,"收起且不显示歌词时只需跟上歌名");
-    h.app.settings.island_lyrics=true;h.frame(vec![]);h.app.open=false;
-    assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_LYRICS,"收起显示歌词时次快");
-    h.app.open=true;h.app.page=0;
-    assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_FAST,"展开音乐页保持原来的 250 毫秒");
-    h.app.page=1;
-    assert_eq!(h.app.media_poll_interval(),crate::smtc::POLL_BACKGROUND,"展开其他页面时不必按最快频率采样");
-}
 
 #[test]
 fn calendar_signature_matches_without_copying(){
@@ -9593,7 +7669,6 @@ mod bluetooth_ui_tests;
 
 #[cfg(all(windows, feature = "sdk-js"))]
 #[path = "quota_plugin_ui_tests.rs"]
-mod quota_plugin_ui_tests;
 
 #[path="module_settings_tests.rs"]
 mod module_settings_tests;

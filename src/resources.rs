@@ -21,12 +21,9 @@ impl Lease {
 }
 impl Drop for Lease {fn drop(&mut self){self.0.active.fetch_sub(1,Ordering::Release);}}
 
-pub static POLLER:Lane=Lane::new("lingqi-media",1);
 // 允许旧实例正在退出与新实例短暂交接；阻塞任务跨缓存重建仍受此上限约束。
 pub static ARTWORK:Lane=Lane::new("lingqi-artwork",2);
 pub static COVER:Lane=Lane::new("lingqi-cover",2);
-pub static LYRICS:Lane=Lane::new("lingqi-lyrics",1);
-pub static NATIVE_LYRICS:Lane=Lane::new("lingqi-native-lyrics",2);
 pub static CONTROL:Lane=Lane::new("lingqi-control",1);
 /// 音量混合器读写；驱动卡住时最多占住这一个线程。
 pub static VOLUME:Lane=Lane::new("lingqi-volume",1);
@@ -143,7 +140,7 @@ fn record(value:Snapshot)->String {
     let since=LAST.lock().unwrap_or_else(|e|e.into_inner()).replace(Instant::now()).map(|at|at.elapsed().as_secs_f64());
     let frames=FRAMES.swap(0,Ordering::Relaxed);
     let _=write!(line," fps={}",since.filter(|s|*s>0.5).map_or("-".into(),|s|format!("{:.1}",frames as f64/s)));
-    for lane in [&POLLER,&ARTWORK,&COVER,&LYRICS,&NATIVE_LYRICS,&CONTROL,&VOLUME,&ASYNC,&ASYNC_ARTWORK,&MONITOR] {
+    for lane in [&ARTWORK,&COVER,&CONTROL,&VOLUME,&ASYNC,&ASYNC_ARTWORK,&MONITOR] {
         let _=write!(line," {}={}/{}/{}/{}",lane.name,lane.active(),lane.limit,lane.started.load(Ordering::Relaxed),lane.denied.load(Ordering::Relaxed));
     }
     line.push('\n');line

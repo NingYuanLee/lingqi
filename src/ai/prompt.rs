@@ -47,7 +47,6 @@ pub fn action_arguments(intent: Intent) -> &'static str {
         Intent::SetReminder => "time（必填）、timezone（可选）、text（可选）",
         Intent::SummarizeClipboard => "length（可选）",
         Intent::Translate => "text（可选，缺省用剪贴板）、target（必填，如「英文」）",
-        Intent::QueryMusic => "无",
         Intent::QueryBattery => "无",
         Intent::QueryPerformance => "metric（可选）",
         Intent::OpenPage => "page（必填，页名或页号）",

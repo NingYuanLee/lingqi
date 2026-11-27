@@ -276,7 +276,7 @@ fn wake_route(source:Messenger,visible:bool,iconic:bool)->WakeRoute {
 /// 启动提醒窗口所属进程自己的程序（单实例：不会多开，飞书把已有主窗口显示出来），再等窗口出现。
 unsafe fn relaunch(target:Target,paths:&[String])->Result<Target,OpenError>{
     let pid=target.unread.pid;
-    let Some(path)=crate::smtc::player_process::image_path(pid) else{wake_step("无法读取客户端程序路径");return Err(OpenError::Unavailable);};
+    let Some(path)=crate::exe_info::image_path(pid) else{wake_step("无法读取客户端程序路径");return Err(OpenError::Unavailable);};
     if !path_allowed(&normalized(&path),paths) {wake_step("客户端程序不在已知安装路径中");return Err(OpenError::Unavailable);}
     super::trust::launch_feishu(std::path::Path::new(&path),pid).map_err(|reason|{
         wake_step(reason);OpenError::Failed(reason.into())

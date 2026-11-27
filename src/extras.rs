@@ -278,8 +278,6 @@ impl App {
             PetState::Focused
         } else if self.pet.worried {
             PetState::Worried
-        } else if self.media.playing && self.media.is_music() {
-            if self.notice.is_some() || self.hud_notice.is_some() {PetState::Awake}else{PetState::Music}
         } else if self.pet.hovered {
             PetState::Curious
         } else if self.idle_for() >= 180.0 {
@@ -1407,7 +1405,6 @@ fn settings_toggle_chip(ui:&mut egui::Ui,text:&str,on:bool)->egui::Response{
 fn settings_page_icon(page:usize)->egui::ImageSource<'static>{
     use crate::app::*;
     let (name,bytes):(&str,&'static [u8])=match page {
-        MUSIC_PAGE=>("music",include_bytes!("../assets/settings-icons/system/music.svg")),
         FOCUS_PAGE=>("focus",include_bytes!("../assets/settings-icons/system/focus.svg")),
         WATER_PAGE=>("health",include_bytes!("../assets/settings-icons/system/health.svg")),
         SHELF_PAGE=>("shelf",include_bytes!("../assets/settings-icons/system/shelf.svg")),
@@ -1430,7 +1427,7 @@ fn paint_wireless_settings_icon(ui:&egui::Ui,rect:egui::Rect,icon:egui::ImageSou
 #[cfg_attr(not(test),allow(dead_code))]
 pub(crate) fn settings_tab_module(tab:usize)->Option<usize>{
     use crate::app::*;
-    match tab {1=>Some(MUSIC_PAGE),2=>Some(FOCUS_PAGE),3=>Some(WATER_PAGE),4=>Some(TODO_PAGE),5=>Some(SHELF_PAGE),7=>Some(MAIL_PAGE),8=>Some(CALENDAR_PAGE),12=>Some(WEATHER_PAGE),15=>Some(PERFORMANCE_PAGE),SETTINGS_TAB_WIRELESS=>Some(BLUETOOTH_PAGE),_=>None}
+    match tab {2=>Some(FOCUS_PAGE),3=>Some(WATER_PAGE),4=>Some(TODO_PAGE),5=>Some(SHELF_PAGE),7=>Some(MAIL_PAGE),8=>Some(CALENDAR_PAGE),12=>Some(WEATHER_PAGE),15=>Some(PERFORMANCE_PAGE),SETTINGS_TAB_WIRELESS=>Some(BLUETOOTH_PAGE),_=>None}
 }
 
 pub(crate) fn settings_label(ui:&mut egui::Ui,text:&str){
@@ -1607,8 +1604,7 @@ impl App {
             SETTINGS_TAB_WIRELESS=>egui::include_image!("../assets/device-icons/bluetooth-linear.svg"),
             0=>egui::include_image!("../assets/settings-icons/system/general.svg"),
                 10=>egui::include_image!("../assets/settings-icons/system/pages.svg"),
-            1=>egui::include_image!("../assets/settings-icons/system/music.svg"),
-            2=>egui::include_image!("../assets/settings-icons/system/focus.svg"),
+                2=>egui::include_image!("../assets/settings-icons/system/focus.svg"),
             4=>egui::include_image!("../assets/settings-icons/system/tasks.svg"),
             6=>egui::include_image!("../assets/settings-icons/system/notifications.svg"),
             15=>egui::include_image!("../assets/settings-icons/system/performance.svg"),
@@ -2257,22 +2253,6 @@ impl App {
                                     settings_hint(ui,&if reserved>0 {format!("已检测到顶栏，岛体下移 {reserved} 像素。")}else{"未检测到顶栏；没有向系统登记的顶栏可尝试“灵栖置顶”。".to_string()});
                                 }
                             }
-                        });
-                    }
-                    1=>{
-                        let on=self.settings_feature_header(ui,crate::app::MUSIC_PAGE,"播放控制与同步歌词",|_,_|{});
-                        ui.add_enabled_ui(on,|ui|{
-                            settings_label(ui,"歌词");
-                            settings_card(ui,|ui|{
-                                setting_row(ui,"岛上歌词","播放时收起的岛显示当前句，其他常驻图标暂时隐藏；无同步歌词时显示封面和歌名",&mut self.settings.island_lyrics);
-                                ui.separator();
-                                setting_row(ui,"展开时显示歌词","在播放器右侧同步滚动",&mut self.settings.lyrics_enabled);
-                                self.show_lyrics=self.settings.lyrics_enabled;
-                                ui.separator();
-                                let mut advance=-self.settings.lyric_delay_ms as f64/1000.0;
-                                if setting_number(ui,"时间偏移",&mut advance,-5.0,5.0," 秒",0.1){self.settings.lyric_delay_ms=(-advance*1000.0).round()as i32;}
-                                settings_hint(ui,"歌词和歌声对不上时调整：正数提前，负数延后；默认提前 0.35 秒。");
-                            });
                         });
                     }
                     2=>{

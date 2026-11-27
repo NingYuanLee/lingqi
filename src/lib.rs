@@ -9,6 +9,7 @@
 #[path="../spike/mod.rs"]
 pub mod sdk_spike;
 pub mod display_layout;
+pub mod exe_info;
 pub mod diagnostics_tool;
 pub mod rtl_text;
 mod mail_privacy;
@@ -43,7 +44,6 @@ pub mod glass;
 pub mod skin_paint;
 pub mod icons;
 pub mod input;
-pub mod lyrics;
 pub mod mail;
 pub mod mail_format;
 mod mail_reader;
@@ -92,8 +92,6 @@ pub mod system;
 pub mod paint;
 pub mod shape;
 mod fluid;
-pub mod smtc;
-pub mod music_volume;
 pub mod theme;
 pub mod settings_theme;
 mod updates;
@@ -114,5 +112,4 @@ pub mod tray;
 #[cfg(test)]
 mod ui_tests;
 #[cfg(test)]
-#[path = "bin/lingqi-record/raster.rs"]
 mod preview_raster;

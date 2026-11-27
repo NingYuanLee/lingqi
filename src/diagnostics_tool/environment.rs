@@ -27,7 +27,7 @@ use windows_sys::Win32::System::{
 };
 
 use crate::messenger::windows::{company_name, registry_string};
-use crate::smtc::{music_log, player_process};
+use crate::exe_info;
 
 const MESSENGERS: &[&str] = &["weixin", "wechat", "wxwork", "feishu", "dingtalk", "qq"];
 const PLAYERS: &[&str] = &["cloudmusic", "qqmusic", "kugou", "sodamusic", "kwmusic", "bodian_pc", "spotify", "applemusic"];
@@ -60,15 +60,6 @@ pub(super) fn collect() -> Map<String, Value> {
     })).collect();
     info.insert("Screens".into(), json!(screens));
     process_details(&mut info);
-    let (send, receive) = std::sync::mpsc::sync_channel(1);
-    let media = std::thread::Builder::new().spawn(move || {
-        let _ = send.send(crate::smtc::diagnostic_sessions());
-    });
-    if let Some(sessions) = media.ok().and_then(|_| receive.recv_timeout(std::time::Duration::from_secs(5)).ok()).flatten() {
-        info.insert("MediaSessions".into(), json!(sessions));
-    } else {
-        info.insert("MediaQuery".into(), json!("无法读取系统媒体会话"));
-    }
     recent_events(&mut info);
     info
 }
@@ -115,7 +106,7 @@ fn process_details(info: &mut Map<String, Value>) {
             let name = exe.strip_suffix(".exe").unwrap_or(&exe);
             let pid = entry.th32ProcessID;
             // 核对快照中的 PID 仍属于目标应用，仅查询文件版本与进程计数。
-            let path = || player_process::image_path(pid)
+            let path = || exe_info::image_path(pid)
                 .filter(|path| path.rsplit(['\\', '/']).next().is_some_and(|file| file.eq_ignore_ascii_case(&exe)));
             if name == "lingqi" {
                 if let Some(path) = path() {
@@ -125,13 +116,13 @@ fn process_details(info: &mut Map<String, Value>) {
                 if let Some(path) = path() {
                     messenger_ids.push(pid);
                     messengers.push(json!({"Name": name, "Id": pid, "Parent": entry.th32ParentProcessID,
-                        "Company": company_name(&path), "Version": music_log::file_version(&path)}));
+                        "Company": company_name(&path), "Version": exe_info::file_version(&path)}));
                 }
             } else if PLAYERS.contains(&name) {
                 let player = players.entry(name.to_owned()).or_default();
                 player.0 += 1;
                 if player.1.is_none() {
-                    player.1 = path().map(|p| music_log::file_version(&p));
+                    player.1 = path().map(|p| exe_info::file_version(&p));
                 }
             }
             more = Process32NextW(snapshot, &mut entry).is_ok();
@@ -155,7 +146,7 @@ fn filetime(ticks: u64) -> Option<String> {
 }
 
 fn island_process(pid: u32, threads: u32, path: &str) -> Value {
-    let mut row = json!({"Id": pid, "Threads": threads, "Version": music_log::file_version(path)});
+    let mut row = json!({"Id": pid, "Threads": threads, "Version": exe_info::file_version(path)});
     unsafe {
         let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return row };
         let mut started = FILETIME::default();

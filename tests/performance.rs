@@ -24,14 +24,12 @@ fn sample()->(f64,usize,usize){unsafe{
 fn background_service_sample(){
     let service=std::env::var("LINGQI_PERF_SERVICE").unwrap_or_else(|_|"idle".into());
     let context=eframe::egui::Context::default();
-    let media=lingqi::smtc::shared();
     let(mut bluetooth,mut system,mut notifications)=(None,None,None);
     let mut mail=None;
     let mut mail_events=Vec::new();
     let mut calendar=None;
     let mut calendar_events=Vec::new();
     match service.as_str(){
-        "media"=>{lingqi::smtc::spawn_poller(media.clone(),context);},
         "bluetooth"=>bluetooth=Some(lingqi::bt::spawn()),
         "system"=>system=Some(lingqi::system::observe(context,Default::default(),None)),
         "notifications"=>notifications=Some(lingqi::system::connect(context,lingqi::messenger::NotificationFilter::All).expect("已有通知权限")),
