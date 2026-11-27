@@ -44,13 +44,11 @@ wgpu-hal = { path = "vendor/wgpu-hal" }
 ureq = { path = "vendor/ureq" }
 
 [dependencies]
-ab_glyph = { version = "0.2", optional = true }
 eframe = { version = "0.31", default-features = false, features = ["glow", "wgpu", "default_fonts", "direct-composition"] }
 egui_extras = { version = "0.31", default-features = false, features = ["svg", "image"] }
 # 绘制内核：精灵与后续自研渲染器直接用它，不经过 egui 的 UI 框架。
 # 版本必须与 egui 0.31 依赖的 epaint 一致，否则类型对不上。
 epaint = "=0.31.1"
-svgtypes = { version = "0.13", optional = true }
 ureq = { version = "2.12", default-features = false, features = ["tls", "gzip", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -63,9 +61,6 @@ regex = "1"
 url = "2"
 chrono = "0.4"
 chrono-tz = { version = "0.10", features = ["serde"] }
-iana-time-zone = { version = "0.1", optional = true }
-rquickjs = { version = "0.8", optional = true }
-wasmi = { version = "=0.46.0", optional = true, default-features = false, features = ["std"] }
 
 # Linux 下 winit 至少要一个后端才能编译（只用于开发/录制，正式目标是 Windows）。
 [target.'cfg(target_os = "linux")'.dependencies]
