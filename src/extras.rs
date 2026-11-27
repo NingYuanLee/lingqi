@@ -1700,7 +1700,6 @@ impl App {
         if !self.settings_open{
             // 关闭时记账：下次打开要重新恢复子视口的位置与大小。
             self.window_layout().close();
-            self.weather_source.close();
         }
         self.updates.poll(ctx);
         self.updates.dialog_ui(ctx);
@@ -2851,8 +2850,6 @@ impl App {
             ctx.set_style(original_style);
         });
         if !self.settings_open {self.window_layout().close();}
-        if self.settings_open&&self.module_on(crate::app::WEATHER_PAGE) {self.weather_tutorial_ui(ctx);}
-        else {self.weather_source.close();}
     }
 }
 

@@ -14,13 +14,12 @@ fn disabled_module_settings_dismiss_existing_popups_and_allow_reenabling() {
             MAIL_PAGE=>h.app.mail.form.open=true,
             CALENDAR_PAGE=>h.app.calendar.form.open=true,
             QUOTA_PAGE=>h.app.quota.connect_open=true,
-            WEATHER_PAGE=>h.app.weather_source.tutorial_open=true,
             _=>unreachable!(),
         }
 
         for _ in 0..3 {draw_page_management(&mut h,vec![]);}
         assert!(!h.app.mail.form.open && !h.app.calendar.form.open
-            && !h.app.quota.connect_open && !h.app.weather_source.tutorial_open,
+            && !h.app.quota.connect_open,
             "关闭的模块应收起旧设置弹窗：{page}");
         let enable=h.shapes.iter().find_map(|shape|match &shape.shape {
             egui::Shape::Text(text) if text.galley.text()=="开启" =>Some(text.visual_bounding_rect().center()),

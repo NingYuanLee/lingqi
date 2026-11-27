@@ -6,8 +6,6 @@ mod enterprise_messenger;
 mod calendar_compatibility;
 #[path="doubao_ui_tests.rs"]
 mod doubao;
-#[path="weather_source_ui_tests.rs"]
-mod weather_source;
 #[path="lyrics_switch_ui_tests.rs"]
 mod lyrics_switch;
 #[path="health_reminder_ui_tests.rs"]
