@@ -25,6 +25,7 @@ pub mod anim;
 #[cfg(windows)]
 pub mod dcomp;
 pub mod net;
+pub mod render;
 pub mod sprite;
 pub mod worldclock;
 pub mod oled_shift;

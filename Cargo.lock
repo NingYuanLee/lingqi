@@ -1412,6 +1412,7 @@ dependencies = [
  "chrono-tz",
  "clipboard-win",
  "eframe",
+ "egui-wgpu",
  "egui_extras",
  "epaint",
  "flate2",
