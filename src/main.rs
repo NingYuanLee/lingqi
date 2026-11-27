@@ -545,6 +545,7 @@ impl eframe::App for Shell {
         lingqi::resources::FRAMES.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
         let frame_start=Instant::now();
         let mut marks:Vec<(&str,Duration)>=Vec::with_capacity(10);
+        // 诊断用：这一帧里各处请求重绘的等待时长。
         macro_rules! mark {($name:expr)=>{marks.push(($name,frame_start.elapsed()));}}
         if self.resource_at.ready(Duration::from_secs(30)){
             let (count,bytes)={let textures=ctx.tex_manager();let textures=textures.read();(textures.num_allocated(),textures.allocated().map(|(_,info)|info.bytes_used()).sum())};
@@ -566,11 +567,8 @@ impl eframe::App for Shell {
             // 再按帧间隔睡一次会错过下一次屏幕刷新，切页等动画掉到 30 帧；节奏已由交互截图的截止时间控制。
             self.frame_at=Instant::now();
         } else {
-            // 用帧间隔限制刷新，绕过部分 Intel 驱动在垂直同步中的忙等待。
-            // 岛体安静下来时按实际需要等待（上限 50ms，保证指针响应跟手）。
-            let step=self.repaint_hint.min(Duration::from_millis(50)).max(Duration::from_millis(4));
-            let delay=step.saturating_sub(self.frame_at.elapsed());
-            if !delay.is_zero(){std::thread::sleep(delay);}
+            // 节奏交给 eframe：它按应用请求的重绘时间点等待，并在有输入时立刻唤醒。
+            // 这里再睡一次只会拖慢每一帧（动画帧率被腰斩），而且挡不住指针响应。
             self.frame_at=Instant::now();
         }
         mark!("帧间隔等待");
@@ -884,7 +882,7 @@ impl eframe::App for Shell {
                             } else {Default::default()};
                             ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(data));
                         }
-                        Some(wait)=>ctx.request_repaint_after(wait),
+Some(wait)=>ctx.request_repaint_after(wait),
                     }
                 }
             }
@@ -907,6 +905,7 @@ impl eframe::App for Shell {
             native.request_crop(tight,out.geometry_transitioning);
             let native_start=Instant::now();
             if let Some(wait)=native.update(region, hit, if self.hidden{None}else{out.notice_hit.map(r)},if self.hidden{None}else{out.file_drop_zone.map(r)},glass,out.blur,ppp, out.editing && !self.hidden, !self.hidden && out.expanded,if self.hidden {None}else{out.resident_clip.as_deref()}) {
+
                 ctx.request_repaint_after(wait);
             }
             let pill_hover=(!self.hidden && out.resident_clip.is_some()
@@ -1064,7 +1063,7 @@ impl eframe::App for Shell {
             if std::env::var_os("LINGQI_FRAME_TRACE").is_some() {
                 let (page,open)=self.app.debug_state();
                 lingqi::resources::append_log(&lingqi::model::config_dir().join("diagnostics"),"frames",
-                    &format!("间隔 {:.0} ms｜页面 {}｜展开 {}｜上帧逻辑 {:.1}（前置 {:.1}、设置窗口 {:.1}、其余 {:.1}、材质与提醒 {:.1}）｜逻辑之外 {:.1}｜本帧岛体 {:.1}（插件 {:.1}）｜窗口 {:.1}｜本帧前置：{}｜过渡 {} 交互起点 {} 兼容 {}",
+&format!("间隔 {:.0} ms｜页面 {}｜展开 {}｜上帧逻辑 {:.1}（前置 {:.1}、设置窗口 {:.1}、其余 {:.1}、材质与提醒 {:.1}）｜逻辑之外 {:.1}｜本帧岛体 {:.1}（插件 {:.1}）｜窗口 {:.1}｜本帧前置：{}｜过渡 {} 交互起点 {} 兼容 {}",
                         interval.as_secs_f64()*1000.0,page,open,logic.as_secs_f64()*1000.0,
                         parts[0].as_secs_f64()*1000.0,parts[1].as_secs_f64()*1000.0,parts[2].as_secs_f64()*1000.0,parts[3].as_secs_f64()*1000.0,
                         interval.saturating_sub(logic).as_secs_f64()*1000.0,draw_cost.as_secs_f64()*1000.0,

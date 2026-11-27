@@ -2435,6 +2435,7 @@ fn mascot_system_idle_wakes_once_then_follows_pointer(){
 fn mascot_feedback_plays_beside_notice_and_respects_switches(){
     use crate::extras::PetState;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
+    h.app.settings.pet_style=crate::model::PetStyle::Atlas;
     h.app.drink_water();h.app.alert("待办到时间了","测试提醒",4,false);
     for _ in 0..60 {h.frame(vec![]);}assert_eq!(h.app.pet_state(),PetState::Satisfied);
     assert!(h.app.notice.is_some());
@@ -2451,7 +2452,7 @@ fn mascot_feedback_plays_beside_notice_and_respects_switches(){
 fn mascot_atlas_respects_visibility_and_skin_switches(){
     use crate::pet_expressions::Expression;
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
-    h.app.settings.pet=true;h.app.settings.minimal=false;
+    h.app.settings.pet=true;h.app.settings.minimal=false;h.app.settings.pet_style=crate::model::PetStyle::Atlas;
     for _ in 0..90 {h.frame(vec![]);}
     for skin in [crate::model::Skin::Classic,crate::model::Skin::Cream,crate::model::Skin::GlassLight] {
         h.app.settings.skin=skin;

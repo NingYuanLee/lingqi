@@ -460,6 +460,8 @@ pub struct FrameOut {
     /// 展开、收起、翻页或内容滚动仍有画面需要逐帧交付。
     pub interactive_transition: bool,
     pub repaint_after: std::time::Duration,
+    /// 诊断：形变判定的各项状态（仅诊断用）。
+    /// 诊断：宠物的关键状态（仅诊断用）。
     pub cmds: Vec<Cmd>,
 }
 
@@ -704,7 +706,7 @@ pub struct App {
     /// 程序生成的精灵状态（与图集吉祥物二选一）。
     pub(crate) sprite: crate::sprite::SpriteState,
     /// 程序生成的精灵当前是否还在动。静止时岛体可以少刷新几帧。
-    pub(crate) sprite_moving: bool,
+    pub sprite_moving: bool,
     /// AI 助手状态。
     pub(crate) ai: crate::ai::State,
     /// 设置页里正在输入的 API Key（掩码显示，写盘后立刻清空）。
@@ -2113,6 +2115,7 @@ impl App {
         // 程序生成的精灵静止时（长时间无交互）不再算作连续动画。
         let sprite_resting=self.settings.pet_style==model::PetStyle::Generated&&!self.sprite_moving;
         let animating=transitioning || ambient || canvas_animating || pet_visible && !sprite_resting && self.pet.state!=PetState::Sleeping;
+        // 诊断：形变判定的每一项，方便定位是哪一项不收敛。
         // 交互形变保持 60 帧，媒体 30 帧；小表情 20 帧，睡眠 10 帧；
         // 程序生成的精灵安静下来后降到 2 帧，静态界面每秒核对提醒。
         let repaint_after=std::time::Duration::from_secs_f64(if transitioning{1.0/60.0}else if ambient{1.0/30.0}else if pet_visible{if sprite_resting{0.5}else if self.pet.state==PetState::Sleeping{0.1}else{0.05}}else{1.0})
@@ -2167,6 +2170,8 @@ impl App {
             water_view_transition,
             interactive_transition:interactive_transition || canvas_animating,
             repaint_after,
+
+
             cmds,
         }
     }
