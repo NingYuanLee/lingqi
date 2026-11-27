@@ -145,6 +145,18 @@
 - 图形安装包（NSIS）暂缺：构建机拿不到 NSIS（choco/winget 都需要管理员权限），
   先以 ZIP + `安装灵栖.cmd` 便携安装脚本代替。
 
+## 5.1.1 分发：图形安装包与更新通道
+
+- **图形安装包**：`installer/Lingqi.nsi`（NSIS 3）→ `Lingqi-Setup-v0.1.4.exe`（5.6 MB）。
+  装到 `%LOCALAPPDATA%\Programs\Lingqi`，不需要管理员权限；桌面与开始菜单快捷方式；
+  Windows「应用」里可卸载。已做过静默安装与静默卸载的实测：文件、快捷方式、卸载登记项
+  都按预期处理。
+- **构建机没有 NSIS 怎么办**：NSIS 的二进制可以从 NuGet 的 `NSIS-Tool` 包拿到
+  （`makensis.exe` 随包），解压即用、免管理员。`tools/package-nsis.ps1` 负责调用；
+  `tools/package-lingqi.ps1` 在有 makensis 时会顺带编出安装包，没有就只出便携包。
+- **更新通道**：应用内「检查更新」走 GitHub Releases 的 `/releases/latest`，
+  按资产名匹配并校验 sha256 摘要；每一版发布后都做过端到端验收。
+
 ## 5.2 瘦身进度（去掉用不上的业务）
 
 目标是把用不上的业务整块切掉：邮件/日历同步、AI 额度、音乐、蓝牙、消息、插件市集，
