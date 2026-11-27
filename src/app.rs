@@ -84,7 +84,7 @@ fn pill_shadow(painter:&egui::Painter,rect:Rect,radius:f32,strength:f32){
 }
 pub(crate) const PAGE_NAMES: [&str; 11] = ["音乐", "专注", "健康", "置物架", "待办", "邮箱", "AI 额度", "日程", "天气", "系统性能", "无线设备"];
 pub(crate) const PAGE_SHORTCUT_KEYS: [&str; PAGE_NAMES.len()] = [
-    "music", "focus", "health", "shelf", "tasks", "mail", "quota", "calendar", "weather",
+    "music", "focus", "health", "shelf", "tasks", "mail", "", "calendar", "weather",
     "performance", "wireless",
 ];
 pub(crate) const PAGE_SETTINGS_TABS: [usize; 11] = [1,2,3,5,4,7,11,8,12,15,crate::extras::SETTINGS_TAB_WIRELESS];
@@ -213,9 +213,6 @@ pub enum Cmd {
     ToggleAutostart,
     AddFiles,
     DragFile(PathBuf),
-    QuotaRefresh,
-    QuotaConnected,
-    QuotaChooseFile,
     /// 把系统主音量设为 0..100（v0.5.4 音量条）。
     SetVolume(u32),
     /// 切换系统静音。
@@ -1015,7 +1012,6 @@ pub struct App {
     mail_lines_cache: Vec<(std::sync::Arc<str>, std::sync::Arc<str>, u32, std::sync::Arc<Vec<crate::mail_format::Line>>)>,
     /// v0.5.6：日历（CalDAV）配置、未来 24 小时事件与设置表单。
     pub(crate) calendar: CalendarState,
-    pub(crate) quota: crate::quota_ui::State,
     /// 天气页的当前数据与后台拉取状态。
     pub(crate) weather: crate::weather::State,
     pub(crate) updates: crate::updates::State,
@@ -1182,8 +1178,7 @@ impl App {
             mail: MailState { accounts: mail::load_accounts(), ..Default::default() },
             mail_lines_cache: Vec::new(),
             calendar: CalendarState::load(),
-            quota: crate::quota_ui::State::load(),
-            weather,
+                weather,
             updates: crate::updates::State::load(model::config_dir().join("update-check.json")),
             performance: Default::default(), resident: Default::default(), resident_power:(None,false),
         }
@@ -1829,7 +1824,6 @@ impl App {
     /// 剪贴板监听是否应运行：置物架模块开启且打开了「记录剪贴板」。
     pub fn clipboard_active(&self)->bool {self.module_on(SHELF_PAGE) && self.settings.clipboard_history}
     /// 额度查询是否应运行：AI 额度模块开启且打开了「开启 AI 额度」。
-    pub fn quota_active(&self)->bool {self.module_on(QUOTA_PAGE) && self.quota.config.enabled}
     /// 旧版设置页里「新邮件提醒」「开启 AI 额度」与页面管理的模块开关是两层开关。
     /// 合并后只保留模块开关：旧的内部开关关着时，迁移为模块关闭，内部开关恢复为开。
     /// 只剩这一个页面、模块关不掉时保持原样，不改变已有行为。
@@ -1839,9 +1833,7 @@ impl App {
             self.set_page_visible(MAIL_PAGE,false);
             if !self.settings.visible_pages[MAIL_PAGE] {self.settings.mail_enabled=true;settings_changed=true;}
         }
-        if !self.quota.config.enabled {
-            self.set_page_visible(QUOTA_PAGE,false);
-            if !self.settings.visible_pages[QUOTA_PAGE] {self.quota.config.enabled=true;self.quota.config.save();settings_changed=true;}
+        if false {
         }
         if settings_changed {self.settings.save();}
     }
@@ -1855,8 +1847,7 @@ impl App {
             match page {
                 TODO_PAGE=>self.plugins.pause_owner("tasks"),
                 CALENDAR_PAGE=>self.plugins.pause_owner("calendar"),
-                QUOTA_PAGE=>self.plugins.pause_owner("quota"),
-                _=>{}
+                    _=>{}
             }
         }
         if page==SHELF_PAGE {self.clipboard.set_enabled(self.clipboard_active());}
@@ -2357,7 +2348,6 @@ impl App {
         self.last_t = Some(env.t);
         self.t = env.t;
         self.fullscreen_hidden=env.fullscreen_hidden;
-        self.quota_tick();
         self.weather_tick();
         self.current_hour=env.hour();
         self.system_idle=env.idle_seconds;
@@ -2412,7 +2402,7 @@ impl App {
         self.update_media(env,&ctx);
         let bell=self.notification_bell().is_some()&&!self.compact_notices();
         self.resident_power=(env.battery,env.charging);
-        let mut layout=Layout::new(self.settings.show_battery&&env.battery.is_some(),self.quota_bar_indices().len(),self.media.is_music()&&!bell,self.pomo.running,bell,self.pet_enabled(),self.weather_pill().is_some());
+        let mut layout=Layout::new(self.settings.show_battery&&env.battery.is_some(),self.media.is_music()&&!bell,self.pomo.running,bell,self.pet_enabled(),self.weather_pill().is_some());
         let performance_bar=self.performance_on_bar();
         let performance_visible=!env.fullscreen_hidden && !env.screen_locked &&
             (if self.open {self.page==PERFORMANCE_PAGE} else {performance_bar && self.notice.is_none() && !self.island_lyrics_active()});
@@ -2422,7 +2412,6 @@ impl App {
         if self.page!=PERFORMANCE_PAGE {self.performance.view=None;}
         if performance_bar {layout.add_performance(self.settings.performance_bar.width(self.settings.performance_metrics));}
         layout.reorder(&self.settings.resident_order);
-        for (position,extra) in self.quota_balance_layout(&ctx){layout.balance_tail(position,extra);}
         let resident_day=if self.settings.resident_date==model::ResidentDate::Off {None}else{
             chrono::NaiveDate::parse_from_str(&env.today,"%Y-%m-%d").ok()
                 .and_then(|today|ResidentDay::new(self.settings.resident_date,today))
@@ -2787,7 +2776,7 @@ impl App {
                     paint::bell(&c.scaled(18.0,15.0,0.85),18.0,15.0,theme::WHITE,paint::bell_swing(self.t-a.at));
                     c.circle(22.0,10.5,2.0,Color32::from_rgb(255,72,72));
                 }else{crate::extras::notice_badge(&c,18.0,15.0,&a);}
-                let button=crate::quota_ui::bar_tooltip(c.hit(0.0,0.0,36.0,BAR_H,"notice-badge"),format!("{}\n{}",a.title,a.body));
+                let button=crate::paint::bar_tooltip(c.hit(0.0,0.0,36.0,BAR_H,"notice-badge"),format!("{}\n{}",a.title,a.body));
                 if interactive {top_bar_notice=Some(button.interact_rect);}
                 if button.clicked(){if let Some(kind)=a.health(){self.confirm_health_reminder(kind);}else{self.notice_details=!self.notice_details;}}
             }else if let Some(at)=self.notification_bell(){
@@ -3220,7 +3209,7 @@ impl App {
             if cy< -slot || cy>height+slot {continue;}
             kind.icon(&inner,x,cy,0.8);
             inner.circle(x+10.0,cy-9.0,2.6,Color32::from_rgb(255,59,48));
-            let button=crate::quota_ui::bar_tooltip(inner.hit(0.0,cy-slot/2.0,UNREAD_W,slot,kind.id().to_string()),format!("{} · 点击确认，重新计时",kind.label()));
+            let button=crate::paint::bar_tooltip(inner.hit(0.0,cy-slot/2.0,UNREAD_W,slot,kind.id().to_string()),format!("{} · 点击确认，重新计时",kind.label()));
             if button.clicked(){self.confirm_health_reminder(kind);}
         }
         if max_scroll>0.0 {
@@ -3268,7 +3257,7 @@ impl App {
             let start=if k==0{0.0}else{(if horizontal{x}else{y})-step/2.0};
             let end=if k+1==icons{length}else{(if horizontal{x}else{y})+step/2.0};
             let button=if horizontal{c.hit(start,0.0,end-start,BAR_H,kind.id().to_string())}else{c.hit(0.0,start,32.0,end-start,kind.id().to_string())};
-            if crate::quota_ui::bar_tooltip(button,format!("{} · 点击确认，重新计时",kind.label())).clicked(){self.confirm_health_reminder(kind);}
+            if crate::paint::bar_tooltip(button,format!("{} · 点击确认，重新计时",kind.label())).clicked(){self.confirm_health_reminder(kind);}
         }
     }
     /// 展开面板，让旁边的未读胶囊露出来。
@@ -3937,7 +3926,6 @@ impl App {
         }
         if compact_alpha>0.004 {
             let c=base.faded(compact_alpha);let c=if compact_alpha<0.8{c.ghost()}else{c};
-            self.draw_quota_bar(&c,local_cx,&layout);
             if let Some(x)=layout.x[bar::PERFORMANCE] {self.performance_bar(&c,local_cx+x);}
             self.draw_wireless_bar(&c,local_cx,&layout);
             self.draw_worldclock(&c,local_cx,&layout);
@@ -4321,7 +4309,7 @@ impl App {
                 }
             }
             5 => self.page_mail(c, env, cmds),
-            6 => self.page_quota(c,&actions),
+            6 => {}
             PERFORMANCE_PAGE => self.page_performance(c),
             8 => self.page_weather(c,&actions,env,cmds),
             BLUETOOTH_PAGE => self.page_wireless(c,env),
@@ -4407,7 +4395,7 @@ impl App {
         {
             let plugin_start=std::time::Instant::now();
             let calendar_on=self.module_on(CALENDAR_PAGE);
-            let quota_on=self.quota_active();
+            let quota_on=false;
             self.plugins.tick_features(todo_on,calendar_on,quota_on,&env.today);
             if let Some(minutes)=focus_finished {
                 self.plugins.focus_finished(chrono::Utc::now().timestamp(),minutes,todo_on,calendar_on,quota_on);

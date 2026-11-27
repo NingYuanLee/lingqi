@@ -743,7 +743,7 @@ impl App {
     pub(crate) fn performance_bar(&mut self, c: &Card, x: f32) {
         self.paint_performance_bar(c, x);
         let width = self.settings.performance_bar.width(self.settings.performance_metrics);
-        if crate::quota_ui::bar_tooltip(c.hit(x - width / 2., 0., width, 30., "performance-open"), "打开系统性能".into())
+        if crate::paint::bar_tooltip(c.hit(x - width / 2., 0., width, 30., "performance-open"), "打开系统性能".into())
             .clicked()
         {
             // 点常驻指标是重新打开：从设置里的起始页开始。
@@ -824,7 +824,7 @@ impl App {
             }
             BarStyle::Network => pair(c, top + 11., Metric::RATE_PAIRS[0].map(Some)),
         }
-        if crate::quota_ui::bar_tooltip(c.hit(x - 16., y - height / 2., 32., height, "side-performance"), "打开系统性能".into())
+        if crate::paint::bar_tooltip(c.hit(x - 16., y - height / 2., 32., height, "side-performance"), "打开系统性能".into())
             .clicked()
         {
             // 点常驻指标是重新打开：从设置里的起始页开始。

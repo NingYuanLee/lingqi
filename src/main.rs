@@ -109,9 +109,6 @@ struct Shell {
     cal_sig: Option<(Vec<lingqi::calendar::Config>, bool)>,
     /// 置物架模块开启且记录剪贴板时才监听系统剪贴板。
     clipboard_watch: Option<lingqi::clipboard::Watcher>,
-    quota: lingqi::quota::Service,
-    quota_sig: Option<(bool,Vec<lingqi::quota::Account>)>,
-    quota_at: PollClock,
 }
 
 const MODULE_OFF:&str="该功能已在「页面管理」中关闭";
@@ -260,10 +257,8 @@ impl Shell {
         #[cfg(all(windows, feature = "sdk-material"))]
         let material_debug = lingqi::material::debug_requested();
         app.render_compat_running=running_compat;
-        #[cfg(feature="record")] let quota_demo=std::env::var("LINGQI_QUOTA_DEMO").is_ok();
-        #[cfg(not(feature="record"))] let quota_demo=false;
         diagnostics::startup("迁移配置");
-        if !quota_demo{app.migrate_merged_switches();}
+        app.migrate_merged_switches();
         diagnostics::startup("启动剪贴板记录");
         if std::env::args().any(|arg|arg=="--settings"){app.open_settings();}
         if std::env::args().any(|arg|arg=="--calendar"){app.open_calendar(None);}
@@ -271,8 +266,6 @@ impl Shell {
         if std::env::var("LINGQI_MAIL_DEMO").is_ok(){app.mail_demo();}
         #[cfg(feature="record")]
         if std::env::var("LINGQI_CAL_DEMO").is_ok(){app.calendar_demo();}
-        #[cfg(feature="record")]
-        if let Ok(mode)=std::env::var("LINGQI_QUOTA_DEMO"){app.quota_demo(&mode);}
         diagnostics::startup("初始化媒体和托盘");
         let media = smtc::shared();
         let media_enabled=smtc::spawn_poller(media.clone(),cc.egui_ctx.clone());
@@ -421,8 +414,7 @@ impl Shell {
             cal: None,
             cal_sig: None,
             clipboard_watch: None,
-            quota: lingqi::quota::Service::start(), quota_sig: None, quota_at: PollClock::default(),
-        }
+            }
     }
 
     #[cfg(windows)]
@@ -883,18 +875,7 @@ impl eframe::App for Shell {
             }
             while let Some(ev)=service.try_recv(){self.app.calendar_event(ev);}
         }
-        #[cfg(feature="record")] let quota_demo=std::env::var("LINGQI_QUOTA_DEMO").is_ok();
-        #[cfg(not(feature="record"))] let quota_demo=false;
-        if !quota_demo {
-            let (active,config)=(self.app.quota_active(),self.app.quota_config());
-            if !self.quota_sig.as_ref().is_some_and(|known|quota_sig_matches(known,active,config)) || self.quota_at.ready(Duration::from_secs(180)){
-                let sig=quota_sig(active,config);
-                let accounts:Vec<_>=sig.1.iter().filter(|a|sig.0 && a.enabled).cloned().collect();
-                if self.quota.refresh(accounts.clone()){self.app.quota_pending(&accounts);self.quota_sig=Some(sig);self.quota_at=PollClock::now();}
-            }
-            while let Some(ev)=self.quota.try_recv(self.app.quota_config()){self.app.quota_event(ev);}
-        }
-        mark!("邮件日程额度");
+        mark!("邮件日程");
         let mut out = None;
         let pre_cost=frame_start.elapsed();
         let pre_parts={let mut last=Duration::ZERO;marks.iter().filter_map(|(name,at)|{let part=at.saturating_sub(last);last=*at;(part>=Duration::from_micros(500)).then(||format!("{name} {:.1}",part.as_secs_f64()*1000.0))}).collect::<Vec<_>>().join("、")};
@@ -1141,16 +1122,6 @@ impl eframe::App for Shell {
                 },
                 Cmd::DisconnectNotifications=>{#[cfg(windows)]{self.incoming=None;self.app.settings.read_notifications=false;self.app.settings.save();self.app.listener_status="已断开，不再读取 Windows 通知".into();}},
                 Cmd::Reveal(p)=>{let _=lingqi::child_process::spawn(std::process::Command::new("explorer.exe").arg(format!("/select,{}",p.display())));},
-                Cmd::QuotaChooseFile=>{
-                    #[cfg(windows)] match lingqi::system::pick_files_for("选择 AI 账号的登录 JSON 文件",false){Ok(files)=>if let Some(path)=files.into_iter().next(){self.app.quota_set_source(path);},Err(_)=>self.app.say("无法选择登录文件")}
-                },
-                Cmd::QuotaRefresh=>{
-                    if self.quota_at.ready(Duration::from_secs(15)) {
-                        let (active,config)=(self.app.quota_active(),self.app.quota_config());let accounts:Vec<_>=config.accounts.iter().filter(|a|active && a.enabled).cloned().collect();
-                        if self.quota.refresh(accounts.clone()){self.app.quota_pending(&accounts);self.quota_at=PollClock::now();}
-                    }else{self.app.say("请稍后再刷新");}
-                },
-                Cmd::QuotaConnected=>{self.quota_sig=None;},
                 Cmd::ToggleAutostart=>{
                     #[cfg(windows)] {let want=!self.autostart;match lingqi::tray::set_autostart(want){Ok(())=>self.autostart=want,Err(e)=>self.app.say(e)}}
                 },
@@ -1252,23 +1223,6 @@ impl eframe::App for Shell {
     }
 }
 
-// ---------------- 额度线程对齐 ----------------
-
-/// 额度线程只关心总开关和账号身份；别名、置顶只影响显示，改了不重新查询。
-/// `enabled` 是生效的开关：AI 额度模块开启且额度设置里打开。
-fn quota_sig(enabled:bool,config:&lingqi::quota::Config)->(bool,Vec<lingqi::quota::Account>){
-    (enabled,config.accounts.iter().cloned().map(|mut a|{a.alias.clear();a.pinned=false;a}).collect())
-}
-
-/// 与 `quota_sig(enabled,config)==*known` 等价，但每帧调用时不复制账号。
-fn quota_sig_matches(known:&(bool,Vec<lingqi::quota::Account>),enabled:bool,config:&lingqi::quota::Config)->bool{
-    known.0==enabled && known.1.len()==config.accounts.len() && known.1.iter().zip(&config.accounts).all(|(known,current)|{
-        // 不用 `..`：账号新增字段时这里会编译失败，提醒决定新字段是否需要重新查询。
-        let lingqi::quota::Account{id,provider,alias:_,source,slot,enabled,pinned:_}=current;
-        known.id==*id && known.provider==*provider && known.source==*source && known.slot==*slot && known.enabled==*enabled
-    })
-}
-
 #[cfg(windows)]
 fn messenger_foreground_sources(pending:&[app::Unread],changed:bool,poll_due:bool)->Vec<app::Messenger>{
     let mut sources=Vec::new();
@@ -1300,40 +1254,6 @@ mod messenger_foreground_tests {
     }
 }
 
-#[cfg(test)]
-mod quota_sig_tests {
-    use super::*;
-    use lingqi::quota::{Account,Config};
-
-    fn account(id:&str)->Account{
-        Account{id:id.into(),provider:lingqi::quota::Provider::Claude,alias:"工作".into(),source:"a.json".into(),slot:None,enabled:true,pinned:false}
-    }
-
-    #[test]
-    fn matching_without_copy_agrees_with_the_copied_signature(){
-        let mut config=Config::default();
-        config.accounts=vec![account("a"),account("b")];
-        let known=quota_sig(true,&config);
-        assert!(quota_sig_matches(&known,true,&config));
-        let mut display_only=config.clone();display_only.accounts[0].alias="改名".into();display_only.accounts[1].pinned=true;
-        assert!(quota_sig_matches(&known,true,&display_only),"改别名、置顶不应重新查询");
-        assert_eq!(quota_sig(true,&display_only),known);
-        let changes:[fn(&mut Config);6]=[
-            |c|c.enabled=false,
-            |c|c.accounts[1].enabled=false,
-            |c|c.accounts[0].source="b.json".into(),
-            |c|c.accounts[0].slot=Some("org".into()),
-            |c|{c.accounts.pop();},
-            |c|c.accounts.swap(0,1),
-        ];
-        for change in changes {
-            let mut changed=config.clone();change(&mut changed);
-            assert!(!quota_sig_matches(&known,changed.enabled,&changed));
-            assert_ne!(quota_sig(changed.enabled,&changed),known,"两种判断必须一致");
-        }
-        assert!(!quota_sig_matches(&known,false,&config),"关闭 AI 额度模块后应停止查询");
-    }
-}
 
 // ---------------- 系统信息 ----------------
 

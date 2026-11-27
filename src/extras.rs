@@ -1118,7 +1118,7 @@ fn island_number_field(c:&Card,rect:Rect,value:egui::DragValue<'_>,id:impl std::
     ui.style_mut().text_styles.insert(egui::TextStyle::Body,c.font(11.0,W::Bold));
     ui.style_mut().explanation_tooltips=false;
     ui.visuals_mut().widgets.inactive.weak_bg_fill=Color32::TRANSPARENT;
-    crate::quota_ui::bar_tooltip(ui.put(rect,value.update_while_editing(false)),"点击输入数值".into())
+    crate::paint::bar_tooltip(ui.put(rect,value.update_while_editing(false)),"点击输入数值".into())
 }
 /// 加减器：[−] 可输入数值 [+]，右缘对齐到 right。
 fn stepper(c:&Card,right:f32,y:f32,value:egui::DragValue<'_>,id:&str)->(i32,egui::Response) {
@@ -1413,7 +1413,6 @@ fn settings_page_icon(page:usize)->egui::ImageSource<'static>{
         SHELF_PAGE=>("shelf",include_bytes!("../assets/settings-icons/system/shelf.svg")),
         TODO_PAGE=>("tasks",include_bytes!("../assets/settings-icons/system/tasks.svg")),
         MAIL_PAGE=>("mail",include_bytes!("../assets/settings-icons/system/mail.svg")),
-        QUOTA_PAGE=>("quota",include_bytes!("../assets/settings-icons/system/quota.svg")),
         CALENDAR_PAGE=>("calendar",include_bytes!("../assets/settings-icons/system/calendar.svg")),
         PERFORMANCE_PAGE=>("performance",include_bytes!("../assets/settings-icons/system/performance.svg")),
         BLUETOOTH_PAGE=>("wireless",include_bytes!("../assets/device-icons/bluetooth-linear.svg")),
@@ -1431,7 +1430,7 @@ fn paint_wireless_settings_icon(ui:&egui::Ui,rect:egui::Rect,icon:egui::ImageSou
 #[cfg_attr(not(test),allow(dead_code))]
 pub(crate) fn settings_tab_module(tab:usize)->Option<usize>{
     use crate::app::*;
-    match tab {1=>Some(MUSIC_PAGE),2=>Some(FOCUS_PAGE),3=>Some(WATER_PAGE),4=>Some(TODO_PAGE),5=>Some(SHELF_PAGE),7=>Some(MAIL_PAGE),8=>Some(CALENDAR_PAGE),11=>Some(QUOTA_PAGE),12=>Some(WEATHER_PAGE),15=>Some(PERFORMANCE_PAGE),SETTINGS_TAB_WIRELESS=>Some(BLUETOOTH_PAGE),_=>None}
+    match tab {1=>Some(MUSIC_PAGE),2=>Some(FOCUS_PAGE),3=>Some(WATER_PAGE),4=>Some(TODO_PAGE),5=>Some(SHELF_PAGE),7=>Some(MAIL_PAGE),8=>Some(CALENDAR_PAGE),12=>Some(WEATHER_PAGE),15=>Some(PERFORMANCE_PAGE),SETTINGS_TAB_WIRELESS=>Some(BLUETOOTH_PAGE),_=>None}
 }
 
 pub(crate) fn settings_label(ui:&mut egui::Ui,text:&str){
@@ -1607,8 +1606,7 @@ impl App {
         let icon = match start {
             SETTINGS_TAB_WIRELESS=>egui::include_image!("../assets/device-icons/bluetooth-linear.svg"),
             0=>egui::include_image!("../assets/settings-icons/system/general.svg"),
-            11=>egui::include_image!("../assets/settings-icons/system/quota.svg"),
-            10=>egui::include_image!("../assets/settings-icons/system/pages.svg"),
+                10=>egui::include_image!("../assets/settings-icons/system/pages.svg"),
             1=>egui::include_image!("../assets/settings-icons/system/music.svg"),
             2=>egui::include_image!("../assets/settings-icons/system/focus.svg"),
             4=>egui::include_image!("../assets/settings-icons/system/tasks.svg"),
@@ -1696,7 +1694,6 @@ impl App {
         // 设置弹窗独立于页面的灰显区域。模块关掉后撤下弹窗，避免继续操作。
         if !self.module_on(crate::app::MAIL_PAGE) {self.mail.form.open=false;}
         if !self.module_on(crate::app::CALENDAR_PAGE) {self.calendar.form.open=false;}
-        if !self.module_on(crate::app::QUOTA_PAGE)&&self.quota.connect_open {self.quota_close_connection();}
         if !self.settings_open{
             // 关闭时记账：下次打开要重新恢复子视口的位置与大小。
             self.window_layout().close();
@@ -1728,7 +1725,7 @@ impl App {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
-            if ctx.input(|i|i.viewport().close_requested()){self.settings_open=false;self.quota_close_connection();}
+            if ctx.input(|i|i.viewport().close_requested()){self.settings_open=false;}
             let before=format!("{:?}",self.settings);
             #[cfg(feature="sdk-js")]
             let plugin_pages: Vec<_> = self.plugins.standalone_settings_pages()
@@ -1877,7 +1874,7 @@ impl App {
                     SETTINGS_TAB_PLUGINS=>{
                         let on=self.module_on(crate::app::TODO_PAGE);
                         let calendar_on=self.module_on(crate::app::CALENDAR_PAGE);
-                        let quota_on=self.quota_active();
+                        let quota_on=false;
                         if let Some(route)=self.plugins.manage(ui,on,calendar_on,quota_on,
                             #[cfg(all(windows,feature="sdk-material"))] self.material_active_id.as_deref().filter(|_| self.material_capture_forced),
                         ){self.apply_settings_navigation(route);}
@@ -1886,15 +1883,6 @@ impl App {
                         let on=self.settings_feature_header(ui,crate::app::WEATHER_PAGE,"当地天气与七日预报",|_,_|{});
                         ui.add_space(4.0);
                         ui.add_enabled_ui(on,|ui|self.weather_settings(ui));
-                    }
-                    11=>{
-                        let on=self.settings_feature_header(ui,crate::app::QUOTA_PAGE,"每 3 分钟自动更新剩余额度",|_,_|{});
-                        ui.add_space(4.0);
-                        ui.add_enabled_ui(on,|ui|{
-                            self.quota_settings(ui);
-                            #[cfg(feature="sdk-js")]
-                            self.plugins.settings(ui,"quota",on);
-                        });
                     }
                     SETTINGS_TAB_AI=>{
                         ui.label(egui::RichText::new("在灵动岛里用一句话办事：记待办、问天气、总结剪贴板。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
@@ -1964,10 +1952,6 @@ impl App {
                             ui.separator();
                             ui.add_enabled_ui(self.module_on(crate::app::PERFORMANCE_PAGE),|ui|setting_row(ui,"系统性能","点击常驻指标打开性能页",&mut self.settings.show_performance));
                             ui.separator();
-                            let before=self.quota.config.compact;
-                            resident_setting_row(ui,"AI 额度","常驻账号，WorkBuddy 积分在前，DeepSeek 余额在最后",
-                                self.module_on(crate::app::QUOTA_PAGE),&mut self.quota.config.compact);
-                            if before!=self.quota.config.compact {self.quota.config.save();}
                         });
                         settings_label(ui,"功能页面");
                         settings_card(ui,|ui|{

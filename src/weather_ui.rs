@@ -857,7 +857,7 @@ impl App {
         let width = layout.widths[crate::bar_layout::WEATHER];
         let tip = format!("{} · {}\n更新于 {} · {}", snapshot.place, snapshot.description(), weather::clock(snapshot.at),"Open-Meteo");
         // 用 bar_tooltip：常驻胶囊上的提示不能用 on_hover_text，悬浮层会盖住指针、抢走点击。
-        if crate::quota_ui::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, "weather-pill"), tip).clicked() {
+        if crate::paint::bar_tooltip(c.hit(x - width / 2.0, 1.0, width, 28.0, "weather-pill"), tip).clicked() {
             self.weather.solar_open=false;
             self.show_page(WEATHER_PAGE);
         }
@@ -867,7 +867,7 @@ impl App {
         let Some(snapshot)=self.weather_pill() else{return;};
         self.paint_side_weather(c,cx,cy,snapshot);
         let tip=format!("{} · {}\n更新于 {} · {}",snapshot.place,snapshot.description(),weather::clock(snapshot.at),"Open-Meteo");
-        let response=crate::quota_ui::bar_tooltip(c.hit(cx-17.0,cy-19.0,34.0,38.0,"weather-side"),tip);
+        let response=crate::paint::bar_tooltip(c.hit(cx-17.0,cy-19.0,34.0,38.0,"weather-side"),tip);
         if response.clicked(){self.weather.solar_open=false;self.show_page(WEATHER_PAGE);}
     }
 

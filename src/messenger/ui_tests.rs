@@ -92,7 +92,6 @@ fn five_client_icons_fit_collapsed_and_expand_to_their_own_click_targets(){
     let left=h.hit.center().x-h.app.w.pos/2.0;
     assert!(((left+compact.rect.right())/2.0-WIN_W/2.0).abs()<0.1,
         "主岛与五个常驻未读合并后的中心应对齐停靠点，实际偏移 {}",(left+compact.rect.right())/2.0-WIN_W/2.0);
-    h.quota_accounts(20);
     for _ in 0..90{h.frame(vec![]);}
     let stack=h.ctx.read_response(egui::Id::new(("card",true,"messenger-stack"))).unwrap().rect;
     let left=h.hit.center().x-h.app.w.pos/2.0;

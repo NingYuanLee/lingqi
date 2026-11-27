@@ -24,7 +24,7 @@ required-features = ["record"]
 
 [features]
 record = []
-sdk-js = ["dep:ab_glyph"]
+sdk-js = ["dep:ab_glyph", "dep:rquickjs", "dep:svgtypes", "dep:iana-time-zone"]
 sdk-material = [
   "dep:bytemuck", "dep:pollster",
   "eframe/direct-composition",
@@ -33,7 +33,7 @@ sdk-material = [
   "windows/Win32_Graphics_Dxgi", "windows/Win32_Graphics_Dxgi_Common",
   "windows/Win32_System_WinRT_Direct3D11", "windows/Win32_System_WinRT_Graphics_Capture",
 ]
-sdk-wasm = ["dep:wasmi"]
+sdk-wasm = ["dep:wasmi", "dep:rquickjs", "dep:svgtypes", "dep:iana-time-zone"]
 
 [patch.crates-io]
 imap = { path = "vendor/imap" }
@@ -52,13 +52,12 @@ egui_extras = { version = "0.31", default-features = false, features = ["svg", "
 # 绘制内核：精灵与后续自研渲染器直接用它，不经过 egui 的 UI 框架。
 # 版本必须与 egui 0.31 依赖的 epaint 一致，否则类型对不上。
 epaint = "=0.31.1"
-svgtypes = "0.13"
+svgtypes = { version = "0.13", optional = true }
 ureq = { version = "2.12", default-features = false, features = ["tls", "gzip", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
 flate2 = "1"
-zstd = { version = "0.13.3", default-features = false }
 ring = "0.17"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 raw-window-handle = "0.6"
@@ -69,9 +68,9 @@ roxmltree = "0.19"
 url = "2"
 chrono = "0.4"
 chrono-tz = { version = "0.10", features = ["serde"] }
-iana-time-zone = "0.1"
+iana-time-zone = { version = "0.1", optional = true }
 rrule = "0.14.0"
-rquickjs = "0.8"
+rquickjs = { version = "0.8", optional = true }
 wasmi = { version = "=0.46.0", optional = true, default-features = false, features = ["std"] }
 
 # Linux 下 winit 至少要一个后端才能编译（只用于开发/录制，正式目标是 Windows）。
@@ -83,7 +82,6 @@ bytemuck = { version = "1", features = ["derive"], optional = true }
 pollster = { version = "0.4", optional = true }
 zip = { version = "9.7", default-features = false, features = ["deflate-flate2"] }
 ureq = { version = "2.12", default-features = false, features = ["native-tls"] }
-tungstenite = { version = "0.28", default-features = false, features = ["handshake"] }
 clipboard-win = "5.4.3"
 wgpu = { version = "24", default-features = false, features = ["dx12"] }
 memmap2 = "0.9.12"

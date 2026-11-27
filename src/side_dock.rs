@@ -27,8 +27,6 @@ pub(crate) enum SideItem {
     Clock, Date(f32), Weather, Battery, Music, Focus, Bell, Wireless, Performance(f32),
     #[cfg(feature="sdk-js")]
     Pinned(usize),
-    /// AI 额度：账号下标（None 为「+N」）与高度。
-    Quota(usize, f32),
 }
 
 impl SideItem {
@@ -36,7 +34,7 @@ impl SideItem {
         match self {
             #[cfg(feature="sdk-js")]
             Self::Pinned(_) => PINNED_HEIGHT,
-            Self::Performance(h) | Self::Date(h) => h, Self::Clock => if clock_seconds {46.0}else{32.0}, Self::Weather => 40.0, Self::Wireless=>37.0, Self::Battery => 20.0, Self::Music => 18.0, Self::Focus => 22.0, Self::Bell => 22.0, Self::Quota(_, h) => h }
+            Self::Performance(h) | Self::Date(h) => h, Self::Clock => if clock_seconds {46.0}else{32.0}, Self::Weather => 40.0, Self::Wireless=>37.0, Self::Battery => 20.0, Self::Music => 18.0, Self::Focus => 22.0, Self::Bell => 22.0 }
     }
 }
 
@@ -59,7 +57,6 @@ impl App {
         if self.performance_on_bar() {items.push(SideItem::Performance(self.settings.performance_bar.side_height(self.settings.performance_metrics)));}
         if self.media.is_music() { items.push(SideItem::Music); }
         if self.pomo.running { items.push(SideItem::Focus); }
-        items.extend(self.quota_side_items().into_iter().map(|(index, h)| SideItem::Quota(index, h)));
         if self.notification_bell().is_some() { items.push(SideItem::Bell); }
         #[cfg(feature="sdk-js")]
         items.extend((0..self.pinned_displays.len()).map(SideItem::Pinned));
@@ -164,7 +161,6 @@ impl App {
                     c.text(cx, mid + 9.0, &format!("{minutes}′"), size::TINY, W::Semibold, theme::WHITE, H::Center);
                 }
                 SideItem::Performance(h) => self.side_performance(c,cx,mid,h),
-                SideItem::Quota(index, h) => self.draw_quota_side(c, cx, mid, h, index),
                 #[cfg(feature="sdk-js")]
                 SideItem::Pinned(index) => if let Some(display) = self.pinned_displays.get(index) {
                     if display.draw(c, cx, mid, display.width(width), true, self.pinned_canvas_theme()) {

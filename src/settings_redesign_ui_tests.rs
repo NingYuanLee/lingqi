@@ -15,25 +15,15 @@ fn merged_mail_switch_migrates_old_off_to_module_off(){
     assert!(h.app.mail_active(),"重新打开模块即恢复收信，不再需要第二个开关");
 }
 
-#[test]
-fn merged_quota_switch_migrates_old_off_to_module_off(){
-    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
-    h.app.settings.visible_pages[crate::app::QUOTA_PAGE]=true;h.app.quota.config.enabled=false;
-    h.app.migrate_merged_switches();
-    assert!(!h.app.settings.visible_pages[crate::app::QUOTA_PAGE]);
-    assert!(h.app.quota.config.enabled);
-    assert!(!h.app.quota_active());
-}
-
 /// 已经开着的用户不受影响。
 #[test]
 fn merged_switches_keep_enabled_users_unchanged(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();h.frame(vec![]);
     let pages=h.app.settings.visible_pages;
-    h.app.settings.mail_enabled=true;h.app.quota.config.enabled=true;
+    h.app.settings.mail_enabled=true;
     h.app.migrate_merged_switches();
     assert_eq!(h.app.settings.visible_pages,pages);
-    assert!(h.app.settings.mail_enabled && h.app.quota.config.enabled);
+    assert!(h.app.settings.mail_enabled);
 }
 
 /// 只剩邮箱一个页面时模块关不掉：保持原来的“页面在、不收信”，不改变行为。

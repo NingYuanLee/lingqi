@@ -324,7 +324,7 @@ impl App {
             if self.resident_value(device) {reading(c,left+21.0+(w-21.0)/2.0,15.5,9.5,device,fx,self.t,false,1.0,true,false);}
             let tip=format!("{} · {}",device.name,device.battery.map_or("未上报电量".into(),|b|format!("{b}%")));
             let hit=c.hit(left-2.0,2.0,w+4.0,26.0,("wireless-resident",&device.id));
-            if crate::quota_ui::bar_tooltip(hit,tip).clicked(){self.wireless_focus=Some(device.id.clone());self.show_page(BLUETOOTH_PAGE);}
+            if crate::paint::bar_tooltip(hit,tip).clicked(){self.wireless_focus=Some(device.id.clone());self.show_page(BLUETOOTH_PAGE);}
             left+=w+8.0;
         }
     }
@@ -337,7 +337,7 @@ impl App {
         ring(c,cx,ring_y,&spec,&device,fx,self.t);
         if value {reading(c,cx,y+14.0,8.5,&device,fx,self.t,false,1.0,true,false);}
         let hit=c.hit(cx-17.0,y-18.0,34.0,37.0,"wireless-side");
-        if crate::quota_ui::bar_tooltip(hit,device.name.clone()).clicked(){self.wireless_focus=Some(device.id.clone());self.show_page(BLUETOOTH_PAGE);}
+        if crate::paint::bar_tooltip(hit,device.name.clone()).clicked(){self.wireless_focus=Some(device.id.clone());self.show_page(BLUETOOTH_PAGE);}
     }
 
     pub(crate) fn page_wireless(&mut self,c:&Card,env:&Env) {

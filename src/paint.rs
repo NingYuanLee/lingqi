@@ -115,7 +115,32 @@ impl<'a> Card<'a> {
         }
     }
 
-    // ---------- 文字（y 一律是基线，跨字体对齐稳定） ----------
+
+    /// 常驻栏上的悬停提示：半秒后出现，跟随鼠标。
+    ///
+    /// 原先住在 AI 额度模块里，但蓝牙、性能、天气等都在用，放在这里更合适。
+    pub(crate) fn bar_tooltip(response: eframe::egui::Response, text: String) -> eframe::egui::Response {
+        use eframe::egui;
+        let ctx = &response.ctx;
+        let id = response.id.with("bar-tooltip");
+        if response.hovered() && !ctx.input(|i| i.pointer.any_down()) {
+            let now = ctx.input(|i| i.time);
+            let since = ctx.data_mut(|data| *data.get_temp_mut_or_insert_with(id, || now));
+            if now - since >= 0.5 {
+                egui::Area::new(id).order(egui::Order::Tooltip)
+                    .fixed_pos(response.rect.left_bottom() + egui::vec2(0.0, 4.0)).interactable(false)
+                    .show(ctx, |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| { ui.label(&text); });
+                    });
+            } else {
+                ctx.request_repaint_after_secs((0.5 - (now - since)) as f32);
+            }
+        } else {
+            ctx.data_mut(|data| data.remove::<f64>(id));
+        }
+        response
+    }
+
     pub fn font(&self, size: f32, w: W) -> FontId {
         font(size * self.s, w)
     }
@@ -703,7 +728,7 @@ pub fn note(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
 
 /// 底部快捷切换使用适合小尺寸的单色图标。
 pub(crate) fn page_shortcut_icon(c: &Card, page: usize, x: f32, y: f32, color: Color32) {
-    use crate::app::{BLUETOOTH_PAGE, CALENDAR_PAGE, FOCUS_PAGE, MAIL_PAGE, MUSIC_PAGE, PERFORMANCE_PAGE, QUOTA_PAGE, SHELF_PAGE, TODO_PAGE, WATER_PAGE, WEATHER_PAGE};
+    use crate::app::{BLUETOOTH_PAGE, CALENDAR_PAGE, FOCUS_PAGE, MAIL_PAGE, MUSIC_PAGE, PERFORMANCE_PAGE, SHELF_PAGE, TODO_PAGE, WATER_PAGE, WEATHER_PAGE};
 
     let c = c.shifted(x, y);
     let stroke = 1.15;
@@ -1246,4 +1271,10 @@ pub fn chase(c: &Card, x0: f32, head: f32, y: f32, thick: f32, tint: Color32, ho
         }
     }
     c.painter.add(egui::Shape::mesh(mesh));
+}
+
+
+/// 常驻栏悬停提示（模块级入口，内部走 Card 上的实现）。
+pub(crate) fn bar_tooltip(response: eframe::egui::Response, text: String) -> eframe::egui::Response {
+    Card::bar_tooltip(response, text)
 }
