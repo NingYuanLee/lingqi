@@ -1,6 +1,6 @@
 [package]
 name = "lingqi"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 description = "灵栖：会呼吸的桌面灵动岛与 AI 伙伴"
