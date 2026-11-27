@@ -1242,6 +1242,14 @@ impl App {
     pub(crate) fn ai_open(&self)->bool {
         self.settings.ai_enabled && self.ai.open
     }
+    /// 加一条待办（可带提醒时间）。AI 的「记一下」与提醒意图都走这里。
+    pub(crate) fn add_todo(&mut self, text: String, due: Option<String>) {
+        let mut item = model::TodoItem::new(text);
+        item.due = due;
+        self.todos.items.insert(0, item);
+        self.todos.save();
+        self.todo_pop.vel += 6.0;
+    }
     /// 采集本机状态给 AI。只在真正要发请求时调用一次，不进每帧路径。
     pub(crate) fn ai_sources(&self)->crate::ai::context::Sources {
         use crate::ai::context::{Performance,Sources,Weather};
@@ -1414,6 +1422,8 @@ impl App {
         let ctx = ui.ctx().clone();
         // 流式输出：把后台线程收到的增量取回来。
         if self.ai.poll(){ctx.request_repaint();}
+        // 一轮流式回复结束：解析计划并执行本机动作。
+        if self.ai.finished {crate::ai::ui::finish(self);}
         #[cfg(feature="sdk-js")]
         {
             self.pet.expressions.set_sheets(self.plugins.appearance_pet());

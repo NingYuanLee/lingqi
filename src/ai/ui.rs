@@ -90,7 +90,7 @@ fn submit(app: &mut App) {
     let request = crate::ai::provider::ChatRequest {
         model,
         messages,
-        json_mode: false,
+        json_mode: true,
         temperature: 0.6,
         max_tokens: 1024,
     };
@@ -99,6 +99,71 @@ fn submit(app: &mut App) {
     app.ai.error = None;
     app.ai.draft.clear();
     app.ai.push_turn(crate::ai::provider::Role::User, text);
+    app.ai.streaming = true;
+    app.ai.stream = crate::ai::provider::spawn_stream(request, key);
+}
+
+/// 一轮流式回复结束：解析成计划并执行。
+///
+/// 模型只给「意图 + 参数」，真正的动作与数据都在本机完成。
+pub fn finish(app: &mut App) {
+    let answer = app.ai.answer.trim().to_string();
+    let Some(plan) = crate::ai::intents::parse_plan(&answer) else {
+        // 不是 JSON 就当普通回答。
+        if !answer.is_empty() {
+            app.ai.push_turn(crate::ai::provider::Role::Assistant, answer);
+        }
+        return;
+    };
+    let intent = crate::ai::intents::Intent::parse(&plan.intent);
+    app.ai.plan = Some(plan.clone());
+    if intent.needs_second_round() {
+        second_round(app, intent, &plan);
+        return;
+    }
+    let reply = crate::ai::execute::execute(app, &plan);
+    app.ai.answer = reply.clone();
+    app.ai.push_turn(crate::ai::provider::Role::Assistant, reply);
+}
+
+/// 总结与翻译：把本机内容（剪贴板最近一条）再发给模型一次。
+fn second_round(app: &mut App, intent: crate::ai::intents::Intent, plan: &crate::ai::intents::Plan) {
+    let content = match app.ai_sources().clipboard {
+        Some(content) if !content.trim().is_empty() => content,
+        _ => {
+            app.ai.answer = "剪贴板里没有内容可处理。".into();
+            return;
+        }
+    };
+    let key = match crate::ai::credentials::load(crate::ai::credentials::SLOT_DEEPSEEK) {
+        Ok(key) => key,
+        Err(error) => {
+            app.ai.error = Some(error);
+            return;
+        }
+    };
+    let target = crate::ai::intents::arg_str(plan, "target").unwrap_or("英文");
+    let instruction = match intent {
+        crate::ai::intents::Intent::Translate => format!("把下面这段翻译成{target}，只给译文：\n{content}"),
+        _ => format!("用两三句总结下面这段内容：\n{content}"),
+    };
+    let messages = vec![
+        crate::ai::provider::Message::system("你在「灵栖 Lingqi」桌面助手里，回答简洁。"),
+        crate::ai::provider::Message::user(instruction),
+    ];
+    let model = if app.settings.ai_model.trim().is_empty() {
+        crate::ai::provider::DEFAULT_MODEL.to_string()
+    } else {
+        app.settings.ai_model.trim().to_string()
+    };
+    let request = crate::ai::provider::ChatRequest {
+        model,
+        messages,
+        json_mode: false,
+        temperature: 0.3,
+        max_tokens: 1024,
+    };
+    app.ai.answer.clear();
     app.ai.streaming = true;
     app.ai.stream = crate::ai::provider::spawn_stream(request, key);
 }

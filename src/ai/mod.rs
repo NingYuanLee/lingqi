@@ -4,6 +4,7 @@
 //! 避免模型把本机读数编错。总闸是设置里的开关，关掉时不产生任何开销。
 
 pub mod context;
+pub mod execute;
 pub mod credentials;
 pub mod intents;
 pub mod prompt;
@@ -39,6 +40,8 @@ pub struct State {
     pub stream: Option<provider::Stream>,
     /// 解析出来的动作计划。
     pub plan: Option<intents::Plan>,
+    /// 上一轮流式回复刚结束：调用方据此解析并执行计划。
+    pub finished: bool,
 }
 
 impl State {
@@ -58,6 +61,7 @@ impl State {
 
     /// 取出后台事件。返回是否需要重绘。
     pub fn poll(&mut self) -> bool {
+        self.finished = false;
         let Some(stream) = &self.stream else {
             return false;
         };
@@ -71,6 +75,7 @@ impl State {
                 Ok(provider::Event::Done) => {
                     self.stream = None;
                     self.streaming = false;
+                    self.finished = true;
                     changed = true;
                     break;
                 }

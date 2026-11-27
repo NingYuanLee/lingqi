@@ -35,6 +35,8 @@ pub fn system_prompt(context: &IslandContext, actions: &[Intent]) -> String {
             ));
         }
     }
+    text.push('\n');
+    text.push_str(&json_instruction());
     text
 }
 
