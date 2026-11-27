@@ -1,6 +1,6 @@
 //! 消息客户端的统一身份、通知策略和账号归属记录。
 use crate::{model::Settings,paint::Card};
-use eframe::egui;
+use eframe::egui::{self, Color32};
 use std::collections::HashMap;
 
 #[cfg(windows)]
@@ -41,6 +41,27 @@ pub struct Adapter {
     pub(crate) native:&'static windows::NativeAdapter,
 }
 
+
+/// 各消息平台的图标：原先借用日历模块的画法，日历模块下线后搬到这里自己画。
+fn platform_svg(c:&Card,x:f32,y:f32,size:f32,icon:egui::ImageSource<'static>){
+    let rect=c.rect(x,y,size,size);
+    let egui::ImageSource::Bytes{uri,bytes}=icon else{return;};
+    let pixels=(rect.width()*c.ui.ctx().pixels_per_point()).ceil() as u32;
+    let icon=egui::Image::from_bytes(format!("{uri}/{pixels}.svg"),bytes);
+    if let Ok(egui::load::TexturePoll::Ready{texture})=icon.fit_to_exact_size(rect.size()).load_for_size(c.ui.ctx(),rect.size()) {
+        c.painter.image(texture.id,rect,egui::Rect::from_min_max(egui::Pos2::ZERO,egui::pos2(1.0,1.0)),Color32::WHITE);
+    }
+}
+fn wecom_icon(c:&Card,x:f32,y:f32){
+    platform_svg(c,x-10.0,y-10.0,20.0,egui::include_image!("../assets/calendar/wecom.svg"));
+}
+fn feishu_icon(c:&Card,x:f32,y:f32){
+    platform_svg(c,x-10.0,y-10.0,20.0,egui::include_image!("../assets/calendar/feishu.svg"));
+}
+fn dingtalk_icon(c:&Card,x:f32,y:f32){
+    c.fill(x-10.0,y-10.0,20.0,20.0,20.0*5.0/24.0,Color32::from_rgb(0,127,255));
+    platform_svg(c,x-10.0,y-10.0,20.0,egui::include_image!("../assets/calendar/dingtalk.svg"));
+}
 const WECHAT:Adapter=Adapter{
     client:Messenger::Wechat,name:"微信",capture:Capture::Taskbar,notification_id:"WeChat",
     aliases:&["Weixin","Tencent.WeChat","Tencent.Weixin"],display_names:&["微信","WeChat","Weixin"],process_names:&["Weixin.exe","WeChat.exe"],publishers:&["tencent"],
@@ -60,7 +81,7 @@ const WECOM:Adapter=Adapter{
     client:Messenger::WeCom,name:"企业微信",capture:Capture::Taskbar,notification_id:"WXWork",
     aliases:&["WeCom","WeWork","Tencent.WeWork"],display_names:&["企业微信","WXWork"],process_names:&["WXWork.exe"],publishers:&["tencent"],
     keep_unidentified:true,dismiss_unread:true,icon_scale:1.0,collapsed_icon_scale:0.85,
-    enabled:|settings|settings.wecom_notifications,tray_enabled:|_|true,paint_icon:|c,x,y|crate::calendar_ui::source_icon(c,crate::calendar_ui::Source::Calendar(Some(crate::calendar::Provider::WeCom)),x-10.0,y-10.0,20.0),
+    enabled:|settings|settings.wecom_notifications,tray_enabled:|_|true,paint_icon:wecom_icon,
     #[cfg(windows)] native:&desktop::WECOM,
 };
 
@@ -68,7 +89,7 @@ const FEISHU:Adapter=Adapter{
     client:Messenger::Feishu,name:"飞书",capture:Capture::Taskbar,notification_id:"Feishu",
     aliases:&["com.electron.Feishu"],display_names:&["飞书","Feishu"],process_names:&["Feishu.exe"],publishers:&["beijing feishu technology","bytedance"],
     keep_unidentified:true,dismiss_unread:true,icon_scale:1.0,collapsed_icon_scale:0.85,
-    enabled:|settings|settings.feishu_notifications,tray_enabled:|_|true,paint_icon:|c,x,y|crate::calendar_ui::source_icon(c,crate::calendar_ui::Source::Calendar(Some(crate::calendar::Provider::Feishu)),x-10.0,y-10.0,20.0),
+    enabled:|settings|settings.feishu_notifications,tray_enabled:|_|true,paint_icon:feishu_icon,
     #[cfg(windows)] native:&desktop::FEISHU,
 };
 
@@ -76,7 +97,7 @@ const DINGTALK:Adapter=Adapter{
     client:Messenger::DingTalk,name:"钉钉",capture:Capture::Taskbar,notification_id:"DingTalk",
     aliases:&[],display_names:&["钉钉","DingTalk"],process_names:&["DingTalk.exe"],publishers:&["alibaba","dingtalk"],
     keep_unidentified:true,dismiss_unread:true,icon_scale:1.0,collapsed_icon_scale:0.85,
-    enabled:|settings|settings.dingtalk_notifications,tray_enabled:|_|true,paint_icon:|c,x,y|crate::calendar_ui::source_icon(c,crate::calendar_ui::Source::Calendar(Some(crate::calendar::Provider::DingTalk)),x-10.0,y-10.0,20.0),
+    enabled:|settings|settings.dingtalk_notifications,tray_enabled:|_|true,paint_icon:dingtalk_icon,
     #[cfg(windows)] native:&desktop::DINGTALK,
 };
 

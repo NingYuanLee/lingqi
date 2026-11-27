@@ -728,7 +728,7 @@ pub fn note(c: &Card, cx: f32, cy: f32, size: f32, color: Color32) {
 
 /// 底部快捷切换使用适合小尺寸的单色图标。
 pub(crate) fn page_shortcut_icon(c: &Card, page: usize, x: f32, y: f32, color: Color32) {
-    use crate::app::{BLUETOOTH_PAGE, CALENDAR_PAGE, FOCUS_PAGE, MAIL_PAGE, MUSIC_PAGE, PERFORMANCE_PAGE, SHELF_PAGE, TODO_PAGE, WATER_PAGE, WEATHER_PAGE};
+    use crate::app::{BLUETOOTH_PAGE, FOCUS_PAGE, MUSIC_PAGE, PERFORMANCE_PAGE, SHELF_PAGE, TODO_PAGE, WATER_PAGE, WEATHER_PAGE};
 
     let c = c.shifted(x, y);
     let stroke = 1.15;

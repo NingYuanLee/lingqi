@@ -25,20 +25,10 @@ fn background_service_sample(){
     let service=std::env::var("LINGQI_PERF_SERVICE").unwrap_or_else(|_|"idle".into());
     let context=eframe::egui::Context::default();
     let(mut bluetooth,mut system,mut notifications)=(None,None,None);
-    let mut mail=None;
-    let mut mail_events=Vec::new();
-    let mut calendar=None;
-    let mut calendar_events=Vec::new();
     match service.as_str(){
         "bluetooth"=>bluetooth=Some(lingqi::bt::spawn()),
         "system"=>system=Some(lingqi::system::observe(context,Default::default(),None)),
         "notifications"=>notifications=Some(lingqi::system::connect(context,lingqi::messenger::NotificationFilter::All).expect("已有通知权限")),
-        "mail"=>{
-            let accounts=lingqi::mail::load_accounts().into_iter().filter(|a|a.enabled).take(1).collect::<Vec<_>>();
-            assert_eq!(accounts.len(),1,"需要一个已配置邮箱");
-            let worker=lingqi::mail::Service::start();worker.sync(&accounts,120);mail=Some(worker);
-        },
-        "calendar"=>{let configs=lingqi::calendar::load_configs();println!("configured_accounts={}",configs.len());let worker=lingqi::calendar::Service::start();worker.configure(configs,true);calendar=Some(worker);},
         "idle"=>{},_=>panic!("未知采样服务"),
     }
     let before=sample();let started=Instant::now();
@@ -46,12 +36,8 @@ fn background_service_sample(){
         if let Some(service)=&bluetooth{while service.rx.try_recv().is_ok(){}}
         if let Some(rx)=&system{while rx.try_recv().is_ok(){}}
         if let Some(rx)=&notifications{while rx.try_recv().is_ok(){}}
-        if let Some(worker)=&mail{while let Some(event)=worker.try_recv(){mail_events.push(event);}}
-        if let Some(worker)=&calendar{while let Some(event)=worker.try_recv(){calendar_events.push(event);}}
         std::thread::sleep(Duration::from_millis(100));
     }
     let after=sample();
-    if calendar.is_some(){println!("successful_syncs={} failed_syncs={}",calendar_events.iter().filter(|e|matches!(e,lingqi::calendar::Event::Synced{..})).count(),calendar_events.iter().filter(|e|matches!(e,lingqi::calendar::Event::Failed{..})).count());}
-    if mail.is_some(){let count=mail_events.iter().filter(|event|matches!(event,lingqi::mail::Event::Mail{..})).count();assert!(count>0,"必须实际读到邮件才能比较占用");println!("loaded_messages={count}");}
     println!("service={service} elapsed={:.2}s cpu={:.3}s working={:.2}MiB private={:.2}MiB",started.elapsed().as_secs_f64(),after.0-before.0,after.1 as f64/1048576.0,after.2 as f64/1048576.0);
 }

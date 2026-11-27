@@ -93,14 +93,6 @@ struct Shell {
     receiver_rx: Option<lingqi::bt::Service>,
     receivers: Vec<lingqi::bt::Device>,
     volume_quiet: PollClock,
-    /// v0.5.5：邮件收信服务（工作线程），以及上次同步给它的账号/开关快照。
-    /// 邮箱模块开启时才存在；关闭后收信与整理线程随之退出。
-    mail: Option<lingqi::mail::Service>,
-    mail_sig: Option<(bool, u32, Vec<lingqi::mail::Account>)>,
-    /// v0.5.6：日程（CalDAV）服务与上次下发的配置。
-    /// 日程模块开启时才存在。
-    cal: Option<lingqi::calendar::Service>,
-    cal_sig: Option<(Vec<lingqi::calendar::Config>, bool)>,
     /// 置物架模块开启且记录剪贴板时才监听系统剪贴板。
     clipboard_watch: Option<lingqi::clipboard::Watcher>,
 }
@@ -110,10 +102,6 @@ const MODULE_OFF:&str="该功能已在「页面管理」中关闭";
 impl Shell {
     /// 按模块开关启停后台服务：关闭的模块不保留任何线程，重新开启时从头对齐配置。
     fn reconcile_modules(&mut self,ctx:&egui::Context){
-        let mail_on=self.app.module_on(app::MAIL_PAGE);
-        if mail_on!=self.mail.is_some() {self.mail=mail_on.then(lingqi::mail::Service::start);self.mail_sig=None;}
-        let cal_on=self.app.module_on(app::CALENDAR_PAGE);
-        if cal_on!=self.cal.is_some() {self.cal=cal_on.then(lingqi::calendar::Service::start);self.cal_sig=None;}
         let clipboard_on=self.app.clipboard_active();
         if clipboard_on!=self.clipboard_watch.is_some() {
             self.clipboard_watch=if clipboard_on {let ctx=ctx.clone();lingqi::clipboard::watch(self.app.clipboard.clone(),move||ctx.request_repaint())}else{None};
@@ -255,11 +243,6 @@ impl Shell {
         app.migrate_merged_switches();
         diagnostics::startup("启动剪贴板记录");
         if std::env::args().any(|arg|arg=="--settings"){app.open_settings();}
-        if std::env::args().any(|arg|arg=="--calendar"){app.open_calendar(None);}
-        #[cfg(feature="record")]
-        if std::env::var("LINGQI_MAIL_DEMO").is_ok(){app.mail_demo();}
-        #[cfg(feature="record")]
-        if std::env::var("LINGQI_CAL_DEMO").is_ok(){app.calendar_demo();}
         diagnostics::startup("初始化媒体和托盘");
                     #[cfg(windows)]
         let autostart = lingqi::tray::autostart_enabled();
@@ -395,10 +378,6 @@ impl Shell {
             receiver_rx: None,
             receivers: Vec::new(),
             volume_quiet: PollClock::default(),
-            mail: None,
-            mail_sig: None,
-            cal: None,
-            cal_sig: None,
             clipboard_watch: None,
             }
     }
@@ -411,7 +390,6 @@ impl Shell {
             match e {
                 Event::OpenSettings=>self.app.open_settings(),
                 Event::OpenAi=>self.app.open_ai(),
-                Event::OpenCalendar=>self.app.open_calendar(None),
                 Event::TogglePet => {
                     self.app.set_pet(!self.app.settings.pet);
                     self.app.say(if self.app.settings.pet { "吉祥物已打开" } else { "吉祥物已关闭" });
@@ -809,35 +787,7 @@ impl eframe::App for Shell {
         if self.native.as_ref().is_some_and(|w|w.page_scroll_cancelled()) {self.app.cancel_page_scroll();}
         self.reconcile_modules(ctx);
         mark!("模块对齐");
-        // v0.5.5 邮件：开关 / 间隔 / 账号清单变了就重新对齐收信线程，再把事件交给界面。
-        // 每帧只比较不复制，确有变化时才复制账号清单。
-        if let Some(mail)=&self.mail {
-            let (mail_enabled,mail_interval)=(self.app.mail_active(),self.app.settings.mail_interval);
-            if !self.mail_sig.as_ref().is_some_and(|known|(known.0,known.1)==(mail_enabled,mail_interval) && known.2.as_slice()==self.app.mail_accounts()){
-                let sig=(mail_enabled,mail_interval,self.app.mail_accounts().to_vec());
-                let accounts:&[lingqi::mail::Account]=if sig.0{ &sig.2 }else{ &[] };
-                mail.sync(accounts,sig.1);
-                self.mail_sig=Some(sig);
-            }
-            while let Some(ev)=mail.try_recv(){self.app.mail_event(ev);}
-        }
-        // 日程连接或自动同步开关变化时下发给工作线程。
-        // 录制/截图演示用的是假账号，别让真服务去连（会立刻失败、把状态改成红色）。
-        #[cfg(feature="record")]
-        let cal_demo=std::env::var("LINGQI_CAL_DEMO").is_ok();
-        #[cfg(not(feature="record"))]
-        let cal_demo=false;
-        if let Some(service)=&self.cal {
-            let auto_sync=self.app.settings.calendar_auto_sync;
-            let cal_same=self.cal_sig.as_ref().is_some_and(|(known,known_sync)|*known_sync==auto_sync && if cal_demo{known.is_empty()}else{self.app.calendar_configs_match(known)});
-            if !cal_same{
-                let cal=if cal_demo{Vec::new()}else{self.app.calendar_configs()};
-                service.configure(cal.clone(),auto_sync);
-                self.cal_sig=Some((cal,auto_sync));
-            }
-            while let Some(ev)=service.try_recv(){self.app.calendar_event(ev);}
-        }
-        mark!("邮件日程");
+        mark!("模块状态");
         let mut out = None;
         let pre_cost=frame_start.elapsed();
         let pre_parts={let mut last=Duration::ZERO;marks.iter().filter_map(|(name,at)|{let part=at.saturating_sub(last);last=*at;(part>=Duration::from_micros(500)).then(||format!("{name} {:.1}",part.as_secs_f64()*1000.0))}).collect::<Vec<_>>().join("、")};
@@ -1036,22 +986,7 @@ impl eframe::App for Shell {
                 }
                 Cmd::Open(p) => {if let Err(e)=open_path(&p){self.app.say(e);}},
                 Cmd::OpenUrl(url)=>{
-                    if let Some(url)=lingqi::mail::web_url(&url) {
-                        if open_path(std::path::Path::new(&url)).is_err(){self.app.say("无法打开默认浏览器，请检查 Windows 默认应用设置");}
-                    }
-                },
-                Cmd::CalendarImport=>{
-                    #[cfg(windows)] match lingqi::system::pick_files_for("选择要导入的日历文件（.ics）",true){
-                        Ok(files)=>if !files.is_empty(){
-                            let read:Vec<(String,String)>=files.iter().map(|path|{
-                                let name=path.file_name().map(|n|n.to_string_lossy().to_string()).unwrap_or_default();
-                                let text=std::fs::read(path).ok().filter(|raw|raw.len()<=20*1024*1024).map(|raw|String::from_utf8_lossy(&raw).into_owned()).unwrap_or_default();
-                                (name,text)
-                            }).collect();
-                            let note=self.app.import_ics(&read);self.app.say(note);
-                        },
-                        Err(e)=>self.app.say(format!("无法选择文件：{}",e.code())),
-                    }
+                    if open_path(std::path::Path::new(&url)).is_err(){self.app.say("无法打开默认浏览器，请检查 Windows 默认应用设置");}
                 },
                 Cmd::AddFiles=>{
                     #[cfg(windows)] match lingqi::system::pick_files(){Ok(files)=>if !files.is_empty(){self.app.on_drop(files);self.app.show_page(3);},Err(e)=>self.app.say(format!("无法选择文件：{}",e.code()))}
@@ -1084,26 +1019,6 @@ impl eframe::App for Shell {
                     #[cfg(windows)] {self.app.settings.qq_only=matches!(cmd,Cmd::RequestQqNotifications);self.app.settings.read_notifications=true;self.app.settings.save();self.incoming=None;match lingqi::system::connect_with_settings(ctx.clone(),&self.app.settings){Ok(rx)=>{self.incoming=Some(rx);self.app.listener_status="正在请求 Windows 通知权限…".into();},Err(e)=>self.app.listener_status=format!("Windows 未允许读取通知：{}。需要相应的系统权限或应用身份。",e.code())}}
                 },
                 // 模块关闭时设置项已置灰；万一仍有命令到达，只提示，不为它临时启动服务。
-                Cmd::MailSync=>if let Some(mail)=&self.mail {
-                    let enabled=self.app.mail_active();
-                    let accounts=if enabled{self.app.mail_accounts().to_vec()}else{Vec::new()};
-                    mail.sync(&accounts,self.app.settings.mail_interval);
-                    self.mail_sig=Some((enabled,self.app.settings.mail_interval,self.app.mail_accounts().to_vec()));
-                },
-                Cmd::MailTest(account,password)=>match &self.mail {Some(mail)=>mail.test(account,password),None=>self.app.say(MODULE_OFF)},
-                Cmd::MailManage(request)=>match &self.mail {Some(mail)=>mail.manage(request),None=>self.app.say(MODULE_OFF)},
-                Cmd::CalendarTest(cfg,password)=>match &self.cal {Some(cal)=>cal.test(cfg,password),None=>self.app.say(MODULE_OFF)},
-                Cmd::CalendarSync=>match &self.cal {Some(cal)=>cal.sync_now(),None=>self.app.say(MODULE_OFF)},
-                Cmd::CalendarMonth(month)=>if let Some(cal)=&self.cal {cal.view_month(month);},
-                Cmd::CalendarForget=>{
-                    if let Err(error)=lingqi::calendar::forget_config(){self.app.say(&error);continue;}
-                    if let Some(old)=self.app.forget_calendar(){lingqi::calendar::secrets::delete(&old);}
-                    if let Some(cal)=&self.cal {
-                        let configs=self.app.calendar_configs();
-                        cal.configure(configs.clone(),self.app.settings.calendar_auto_sync);
-                        self.cal_sig=Some((configs,self.app.settings.calendar_auto_sync));
-                    }
-                },
                 Cmd::Focus => ctx.send_viewport_cmd(egui::ViewportCommand::Focus),
             }
         }
@@ -1118,7 +1033,6 @@ impl eframe::App for Shell {
         if Self::sync_capture_exclusion(&mut self.app, self.native.as_mut()) {
             ctx.request_repaint();
         }
-        self.app.mail_reader_ui(ctx);
         // 交互切换以帧起点为准，扣掉本帧已经花费的时间。
         #[cfg(windows)] let repaint_after=if self.hidden {Duration::from_secs(1)}
             else if interactive_transition {out.repaint_after.saturating_sub(self.frame_at.elapsed())}
@@ -1434,7 +1348,7 @@ fn run() -> eframe::Result<()> {
     // 单实例（与原版同名互斥体）
     #[cfg(windows)]
     if !profiling_island() && !lingqi::tray::single_instance() {
-        if !lingqi::tray::activate_existing(std::env::args().any(|arg|arg=="--calendar")) {
+        if !lingqi::tray::activate_existing(false) {
             diagnostics::report("灵栖已在运行，但暂时无法打开窗口。\n请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 lingqi.exe 后重试。", "已有实例可能正在启动或已无响应。请稍后重试；若仍无法打开，请在任务管理器的“详细信息”中结束 lingqi.exe，再重新启动。");
         }
         return Ok(());

@@ -6,9 +6,7 @@
 use crate::extras::{Alert, HealthReminder, PetState};
 use crate::anim::{self, lerp, smoothstep, Spring};
 use crate::bar_layout::{self as bar, Layout};
-use crate::calendar;
 use crate::glass;
-use crate::mail;
 use crate::model;
 use crate::paint::{self, Card, H};
 use crate::resident_date::ResidentDay;
@@ -37,7 +35,6 @@ pub const WEATHER_PAGE: usize = 8;
 pub const PERFORMANCE_PAGE: usize = 9;
 pub const BLUETOOTH_PAGE: usize = 10;
 pub(crate) const WEATHER_H: f32 = 232.0;
-pub(crate) const CALENDAR_H: f32 = 216.0;
 pub const BAR_W: f32 = 163.0; // 收起药丸宽
 pub const BAR_H: f32 = 30.0; // 收起药丸高
 pub(crate) const HUD_W: f32 = 260.0;
@@ -82,7 +79,7 @@ fn pill_shadow(painter:&egui::Painter,rect:Rect,radius:f32,strength:f32){
 }
 pub(crate) const PAGE_NAMES: [&str; 11] = ["", "专注", "健康", "置物架", "待办", "邮箱", "", "日程", "天气", "系统性能", "无线设备"];
 pub(crate) const PAGE_SHORTCUT_KEYS: [&str; PAGE_NAMES.len()] = [
-    "music", "focus", "health", "shelf", "tasks", "mail", "", "calendar", "weather",
+    "music", "focus", "health", "shelf", "tasks", "", "", "", "weather",
     "performance", "wireless",
 ];
 pub(crate) const PAGE_SETTINGS_TABS: [usize; 11] = [2,2,3,5,4,7,crate::extras::SETTINGS_TAB_PAGES,8,12,15,crate::extras::SETTINGS_TAB_WIRELESS];
@@ -213,20 +210,6 @@ pub enum Cmd {
     /// 切换系统静音。
     ToggleMute,
     /// 音量命令携带点击时的播放器身份，避免切换歌曲来源后误调其他应用。
-    /// v0.5.5：账号清单变了，让外壳重新同步收信线程。
-    MailSync,
-    /// 测试某个邮箱的连接（授权码只在内存里传给工作线程）。
-    MailTest(mail::Account, String),
-    MailManage(crate::mail_manage::Request),
-    /// v0.5.6：用临时密码试连日历，成功后才允许落盘。
-    CalendarTest(calendar::Config, String),
-    /// 让外壳立即同步一次日历。
-    CalendarSync,
-    CalendarMonth(chrono::NaiveDate),
-    /// 断开并删除日历配置（凭据由界面删除）。
-    CalendarForget,
-    /// 选择 .ics 文件导入本机日程。
-    CalendarImport,
     /// 重启灵栖（切换渲染方式后生效）。
     RestartApp,
 }
@@ -512,135 +495,7 @@ impl Pomo {
 }
 
 
-/// v0.5.5：邮件面板与设置表单的界面状态。正文只在内存里过一次，不落盘。
 #[derive(Default)]
-pub(crate) struct MailState {
-    pub privacy:crate::mail_privacy::Privacy,
-    pub manage:crate::mail_manage_ui::State,
-    pub accounts: Vec<mail::Account>,
-    /// 每个账号的连接状态，键是邮箱小写。
-    pub status: HashMap<String, mail::Status>,
-    /// 最近邮件，新的在前，最多 60 封。
-    pub recent: Vec<mail::Item>,
-    /// 等当前帧确认避让状态后再决定通知样式。
-    code_alerts: Vec<(String, u32, String)>,
-    /// 设置页里「测试连接」的结果。
-    pub note: String,
-    pub testing: Option<String>,
-    pub form: MailForm,
-    /// 面板里点开的邮件（账号 + uid，避免两个账号 uid 撞车）。
-    pub open_uid: Option<(String, u32)>,
-    pub reading: Option<mail::Item>,
-    pub reader_focus: bool,
-    pub bell_at: Option<f64>,
-    /// 已经提醒过的会议，键是 `UID + DTSTART`（邮件和日历两条来源共用）。
-    pub fired: std::collections::HashSet<String>,
-}
-
-#[derive(Default)]
-pub(crate) struct MailForm {
-    pub provider: mail::Provider,
-    pub custom: mail::CustomImap,
-    pub use_windows_proxy: bool,
-    pub email: String,
-    pub password: String,
-    pub show: bool,
-    /// 设置页的「添加邮箱」弹窗是否打开。
-    pub open: bool,
-}
-
-impl MailState {
-    /// 最近一封带验证码的邮件。
-    pub fn code_item(&self) -> Option<&mail::Item> {self.recent.iter().find(|m|m.code.is_some())}
-    pub(crate) fn alert_code_item(&self, account: &str, uid: u32, now: f64, hide_seconds: u32) -> Option<&mail::Item> {
-        self.recent.iter().find(|item| {
-            item.uid == uid && item.account.eq_ignore_ascii_case(account) && item.code.is_some()
-                && !self.privacy.hidden(item, now, hide_seconds)
-        })
-    }
-    pub fn status_of(&self, email: &str) -> mail::Status {
-        self.status
-            .get(&email.to_ascii_lowercase())
-            .cloned()
-            .unwrap_or(mail::Status::Idle)
-    }
-}
-
-/// v0.5.6：日程（CalDAV）的界面状态。密码只在表单里暂存，保存后立刻清掉。
-#[derive(Default)]
-pub(crate) struct CalendarState {
-    pub local: Vec<crate::local_calendar::Entry>,
-    pub local_error: String,
-    pub draft: Option<crate::local_calendar::Draft>,
-    pub feeds: Vec<CalendarFeed>,
-    pub config: Option<calendar::Config>,
-    /// 未来 24 小时的日程（提醒也读这里）。
-    pub events: Vec<mail::Meeting>,
-    pub view: crate::calendar_ui::State,
-    pub agenda: bool,
-    pub agenda_first: usize,
-    pub connected: bool,
-    pub last_sync: String,
-    /// 连续失败次数；>= 2 才在设置页显示红字。
-    pub failures: u32,
-    pub error: String,
-    pub testing: bool,
-    /// 设置表单里的提示（成功/失败/粘贴拆分的说明）。
-    pub note: String,
-    /// `note` 是不是错误提示（界面显示成红字）。
-    pub note_error: bool,
-    pub form: CalendarForm,
-    /// 「测试并保存」用的临时密码，测试成功才落盘。
-    pub test_password: String,
-    /// 导入 .ics 文件的结果说明。
-    pub import_note: String,
-    pub warning:String,
-}
-
-pub(crate) struct CalendarFeed {
-    pub config: calendar::Config,
-    pub events: Vec<mail::Meeting>,
-    pub month: crate::calendar_ui::State,
-    pub connected: bool,
-    pub last_sync: String,
-    pub failures: u32,
-    pub error: String,
-    pub warning:String,
-}
-
-impl CalendarFeed {
-    fn new(config: calendar::Config) -> Self {
-        Self { config, events: vec![], month: Default::default(), connected: false,
-            last_sync: String::new(), failures: 0, error: String::new(), warning:String::new() }
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct CalendarForm {
-    pub provider: calendar::Provider,
-    /// 自定义 CalDAV 的服务器地址。
-    pub server: String,
-    pub username: String,
-    pub password: String,
-    pub show: bool,
-    pub guide_open: bool,
-    /// 设置页的「添加日历」弹窗是否打开。
-    pub open: bool,
-}
-
-impl CalendarState {
-    pub fn load() -> Self {
-        let config = calendar::load_config();
-        let form = CalendarForm { provider: calendar::selected_provider(),
-            username: config.as_ref().map(|cfg| cfg.username.clone()).unwrap_or_default(),
-            server: config.as_ref().filter(|cfg| cfg.provider.custom_server()).and_then(|cfg| cfg.server.clone()).unwrap_or_default(), ..Default::default() };
-        let feeds = calendar::load_configs().into_iter().map(CalendarFeed::new).collect();
-        let (local,local_error)=match crate::local_calendar::load(){Ok(events)=>(events,String::new()),Err(error)=>(vec![],error)};
-        Self { config, form, feeds, local, local_error, ..Default::default() }
-    }
-
-}
-
 struct PositionDrag {
     original_display:String,
     original_monitor:Option<String>,
@@ -904,11 +759,8 @@ pub struct App {
     pub(crate) wireless_seen_at: std::collections::HashMap<String,f64>,
     bt_initialized: bool,
     /// v0.5.5：邮件账号、最近邮件与设置表单。
-    pub(crate) mail: MailState,
     /// 岛内详情与独立阅读窗口各保留一份排版缓存。
-    mail_lines_cache: Vec<(std::sync::Arc<str>, std::sync::Arc<str>, u32, std::sync::Arc<Vec<crate::mail_format::Line>>)>,
     /// v0.5.6：日历（CalDAV）配置、未来 24 小时事件与设置表单。
-    pub(crate) calendar: CalendarState,
     /// 天气页的当前数据与后台拉取状态。
     pub(crate) weather: crate::weather::State,
     pub(crate) updates: crate::updates::State,
@@ -1064,9 +916,6 @@ impl App {
             music_restart_at: None,
             bt_shown: Vec::new(), wireless_devices:Vec::new(),wireless_offset:0,wireless_focus:None,wireless_enter_at:None,wireless_fx:Default::default(),wireless_alerted:Default::default(),wireless_seen_at:Default::default(),
             bt_initialized: false,
-            mail: MailState { accounts: mail::load_accounts(), ..Default::default() },
-            mail_lines_cache: Vec::new(),
-            calendar: CalendarState::load(),
                 weather,
             updates: crate::updates::State::load(model::config_dir().join("update-check.json")),
             performance: Default::default(), resident: Default::default(), resident_power:(None,false),
@@ -1107,497 +956,19 @@ impl App {
         self.toast_below = true;
     }
 
-    pub(crate) fn mail_code_hidden(&self,item:&mail::Item)->bool {
-        self.mail.privacy.hidden(item,self.t,self.settings.mail_code_hide_seconds)
-    }
-    pub(crate) fn reveal_mail_code(&mut self,item:&mail::Item){self.mail.privacy.reveal(item,self.t);}
-    fn update_mail_code_alerts(&mut self, env: &Env) {
-        use crate::extras::AlertSource::MailCode;
-        let enabled = self.settings.mail_code_popup && self.settings.mail_code && self.settings.notifications && self.mail_active();
-        let quiet = env.fullscreen_hidden || env.screen_locked;
-        let avoiding = self.browser_minimal_active && !self.open && !self.hold_open && self.position_drag.is_none();
-        let pending = std::mem::take(&mut self.mail.code_alerts);
-        let mail = &self.mail;
-        let now = self.t;
-        let hide_seconds = self.settings.mail_code_hide_seconds;
-        let allowed = |a: &Alert| match &a.source {
-            MailCode(account, uid) => enabled && !quiet && avoiding && now - a.at < a.duration
-                && mail.alert_code_item(account, *uid, now, hide_seconds).is_some(),
-            _ => true,
-        };
-        self.alerts.retain(&allowed);
-        if self.notice.as_ref().is_some_and(|a| !allowed(a)) { self.notice = None; }
-        if self.hud_notice.as_ref().is_some_and(|a| !allowed(a)) { self.hud_notice = None; }
-        if quiet { return; }
-        for (account, uid, body) in pending {
-            if enabled && avoiding && self.mail.alert_code_item(&account, uid, now, hide_seconds).is_some() {
-                self.mail_code_alert(account, uid, body);
-            } else {
-                self.new_mail_alert(body);
-            }
-        }
-    }
-    /// 同一封邮件、同一段正文只解析一次排版，避免每帧重复切分几百个段落。
-    pub(crate) fn mail_body_lines(&mut self, item: &mail::Item) -> std::sync::Arc<Vec<crate::mail_format::Line>> {
-        // display_mail 每帧只 clone Arc：正文与 HTML 原文的指针都不变就说明是同一封邮件，
-        // 长邮件不必每帧重新哈希几十 KB，更不必重新跑正则解析。
-        if let Some((_,_,_,lines))=self.mail_lines_cache.iter().find(|(summary, html, uid, _)|
-            *uid == item.uid
-            && std::sync::Arc::ptr_eq(summary, &item.summary)
-            && std::sync::Arc::ptr_eq(html, &item.html)){return lines.clone();}
-        let lines=std::sync::Arc::new(crate::mail_format::item_lines(item));
-        if self.mail_lines_cache.len()==2{self.mail_lines_cache.remove(0);}
-        self.mail_lines_cache.push((item.summary.clone(),item.html.clone(),item.uid,lines.clone()));lines
-    }
 
-    pub(crate) fn display_mail(&self,item:&mail::Item)->mail::Item {
-        let mut safe=item.clone();
-        if self.mail_code_hidden(item) {
-            if let Some(code)=&item.code {
-                safe.subject=crate::mail_privacy::mask(&safe.subject,code);
-                safe.from=crate::mail_privacy::mask(&safe.from,code);
-                safe.summary=self.mail.privacy.masked_body(item);
-                // HTML 原文里可能还有未遮蔽的验证码，隐藏时必须一起丢弃。
-                // 用共享的空 Arc，让排版缓存对隐藏邮件也能按指针命中，不必每帧重解析。
-                static EMPTY: std::sync::OnceLock<std::sync::Arc<str>> = std::sync::OnceLock::new();
-                safe.html=EMPTY.get_or_init(||std::sync::Arc::from("")).clone();
-                safe.links.clear(); // Avoid tooltip/URL/copy leaks while hidden.
-                if let Some(event)=&mut safe.meeting {event.title=crate::mail_privacy::mask(&event.title,code);}
-                safe.code=None;
-            }
-        }
-        safe
-    }
 
-    /// 收信服务推来的事件；历史邮件静默，新邮件进入通知队列。
-    pub fn mail_event(&mut self, ev: mail::Event) {
-        if !self.module_on(MAIL_PAGE){return;}
-        let watching=|email:&str|self.mail_active() && self.mail.accounts.iter().any(|a|a.enabled && a.email.eq_ignore_ascii_case(email));
-        match ev {
-            mail::Event::Managed(done)=>self.mail_managed(done),
-            mail::Event::Status { account, status } => {
-                if !watching(&account){return;}
-                if status==mail::Status::Ready{
-                    self.mail.manage.data.remove(&(account.to_ascii_lowercase(),crate::mail_manage::Folder::Inbox));self.mail.manage.next_refresh=0.0;
-                    if (!self.mail.manage.trash_open||!self.settings.mail_sync_operations)&&self.mail.open_uid.as_ref().is_some_and(|(a,_)|a.eq_ignore_ascii_case(&account)){
-                        self.mail.open_uid=None;self.mail.manage.auto_read=None;
-                    }
-                }
-                self.mail.status.insert(account.to_ascii_lowercase(), status);
-            }
-            mail::Event::Mail { item, new } => {
-                if !watching(&item.account){return;}
-                if !new&&self.mail.manage.data.get(&(item.account.to_ascii_lowercase(),crate::mail_manage::Folder::Inbox)).is_some_and(|s|!s.entries.iter().any(|(uid,_)|*uid==item.uid)){return;}
-                let first_new=self.mail.privacy.observe(&item,new,self.t,chrono::Utc::now().timestamp());
-                if self.mail_locally_removed(&item){
-                    self.mail.manage.trash.retain(|m|m.uid!=item.uid||!m.account.eq_ignore_ascii_case(&item.account));self.mail.manage.trash.insert(0,item);self.mail.manage.trash.truncate(60);return;
-                }
-                self.mail
-                    .recent
-                    .retain(|m| !(m.account.eq_ignore_ascii_case(&item.account) && m.uid == item.uid));
-                let notify = new && (!self.settings.mail_code_only_notifications || item.code.is_some());
-                self.mail.recent.insert(0, item);
-                self.mail.recent.truncate(60);
-                if new{self.mail.manage.next_refresh=0.0;}
-                self.mail.privacy.retain(self.mail.recent.iter().chain(&self.mail.manage.trash).chain(&self.mail.reading));
-                if notify {
-                    let item=&self.mail.recent[0];
-                    let body=format!("{} · {}",item.from,item.subject);
-                    let body=item.code.as_ref().map(|code|crate::mail_privacy::mask(&body,code)).unwrap_or(body);
-                    if item.code.is_some() && self.settings.mail_code_popup && self.settings.mail_code && self.settings.notifications {
-                        if first_new { self.mail.code_alerts.push((item.account.clone(), item.uid, body)); }
-                    } else {
-                        self.new_mail_alert(body);
-                    }
-                }
-            }
-            mail::Event::Test { account, ok, note } => {
-                self.mail.testing = None;
-                let detail = if ok { "连接成功".to_string() } else { note };
-                let detail = if detail.chars().count() > 120 {
-                    format!("{}…", detail.chars().take(120).collect::<String>())
-                } else {
-                    detail
-                };
-                self.mail.note = format!("{account}：{detail}");
-                self.say(if ok {
-                    format!("{account} 连接成功")
-                } else {
-                    format!("{account} 连接失败")
-                });
-            }
-        }
-    }
 
-    /// 设置窗口第 8 个标签页：邮件。
-    pub fn open_mail_settings(&mut self) {
-        self.settings_tab = 7;
-        // 从岛上「去添加」进来时直接打开添加邮箱弹窗。
-        self.mail.form.open = true;
-        self.open_settings();
-    }
 
-    /// v0.5.6：日历服务推来的事件。失败不弹窗，只累计次数（连续两次才显示红字）。
-    pub fn calendar_event(&mut self, ev: calendar::Event) {
-        if !self.module_on(CALENDAR_PAGE) {return;}
-        match ev {
-            calendar::Event::Test { ok, message, count, config } => {
-                self.calendar.testing = false;
-                if !ok {
-                    self.calendar.note = message;
-                    self.calendar.note_error = true;
-                    return;
-                }
-                let Some(cfg) = config else {
-                    self.calendar.note = "服务器没有返回日历地址".into();
-                    self.calendar.note_error = true;
-                    return;
-                };
-                if let Err(e) = calendar::save_connection(&cfg, &self.calendar.test_password, self.calendar.config.as_ref()) {
-                    self.calendar.note = e;
-                    self.calendar.note_error = true;
-                    return;
-                }
-                self.calendar.note = if message.is_empty(){format!("已连接 · 未来 24 小时 {count} 个日程")}else{format!("已连接 · {message}")};
-                self.calendar.note_error = false;
-                self.calendar.warning = message.clone();
-                if self.calendar.config.as_ref()!=Some(&cfg) {
-                    self.calendar.events.clear();
-                    self.calendar.last_sync.clear();
-                    self.calendar.view.events.clear();
-                    self.calendar.view.loaded=None;
-                    self.calendar.view.loading=false;
-                    self.calendar.view.error.clear();
-                }
-                if !self.calendar.feeds.iter().any(|feed| feed.config == cfg) {
-                    self.calendar.feeds.retain(|feed| feed.config.provider != cfg.provider);
-                    self.calendar.feeds.push(CalendarFeed::new(cfg.clone()));
-                }
-                if let Some(feed) = self.calendar.feeds.iter_mut().find(|feed| feed.config == cfg) {
-                    feed.connected = true;
-                    feed.failures = 0;
-                    feed.error.clear();
-                    feed.warning = message;
-                }
-                self.calendar.config = Some(cfg);
-                self.calendar.connected = true;
-                self.calendar.failures = 0;
-                self.calendar.error.clear();
-                self.calendar.test_password.clear();
-                self.calendar.form.password.clear();
-                self.pending.push(Cmd::CalendarSync);
-                self.request_calendar_month(true);
-            }
-            calendar::Event::Synced { config, events, at } => {
-                if let Some(feed)=self.calendar.feeds.iter_mut().find(|feed|feed.config==config) {
-                    feed.events=events.clone();feed.connected=true;feed.failures=0;feed.error.clear();feed.warning.clear();feed.last_sync=at.clone();
-                }
-                if self.calendar.config.as_ref()!=Some(&config){return;}
-                self.calendar.events = events;
-                self.calendar.connected = true;
-                self.calendar.failures = 0;
-                self.calendar.error.clear();
-                self.calendar.last_sync = at;
-                self.calendar.warning.clear();
-            }
-            calendar::Event::MonthLoaded { config, month, result } => {
-                if !self.calendar.feeds.is_empty() {
-                    if month!=self.calendar.view.month {return;}
-                    let Some(feed)=self.calendar.feeds.iter_mut().find(|feed|feed.config==config) else{return;};
-                    feed.month.loading=false;
-                    feed.month.warning.clear();
-                    match result {
-                        Ok(events)=>{feed.month.events=events;feed.month.loaded=Some(month);feed.month.error.clear();}
-                        Err(message)=>feed.month.error=message,
-                    }
-                    self.refresh_calendar_month_status();
-                    return;
-                }
-                let view=&mut self.calendar.view;
-                if month!=view.month || self.calendar.config.as_ref()!=Some(&config){return;}
-                view.loading=false;
-                view.warning.clear();
-                match result {
-                    Ok(events)=>{view.events=events;view.loaded=Some(month);view.error.clear();}
-                    Err(message)=>view.error=message,
-                }
-            }
-            calendar::Event::Warning{config,month,message}=>{
-                if let Some(month)=month{
-                    if month!=self.calendar.view.month{return;}
-                    if self.calendar.feeds.is_empty(){
-                        if self.calendar.config.as_ref()==Some(&config){self.calendar.view.warning=message;}
-                    }else if let Some(feed)=self.calendar.feeds.iter_mut().find(|feed|feed.config==config){
-                        feed.month.warning=message;self.refresh_calendar_month_status();
-                    }
-                }else{
-                    if let Some(feed) = self.calendar.feeds.iter_mut().find(|feed| feed.config == config) {
-                        feed.connected = true;
-                        feed.failures = 0;
-                        feed.error.clear();
-                        feed.warning = message.clone();
-                    }
-                    if self.calendar.config.as_ref() == Some(&config) {
-                        self.calendar.connected = true;
-                        self.calendar.failures = 0;
-                        self.calendar.error.clear();
-                        self.calendar.warning = message;
-                    }
-                }
-            }
-            calendar::Event::Failed { config, message } => {
-                if let Some(feed)=self.calendar.feeds.iter_mut().find(|feed|feed.config==config) {
-                    feed.connected=false;feed.failures=feed.failures.saturating_add(1);feed.error=message.clone();feed.warning.clear();
-                }
-                if self.calendar.config.as_ref()==Some(&config) {
-                    self.calendar.connected = false;
-                    self.calendar.failures = self.calendar.failures.saturating_add(1);
-                    self.calendar.error = message;
-                    self.calendar.warning.clear();
-                }
-            }
-        }
-    }
 
-    /// 所有已连接的平台都参与同步，设置标签只决定正在编辑的账号。
-    pub fn calendar_configs(&self) -> Vec<calendar::Config> {
-        if self.calendar.feeds.is_empty() {self.calendar.config.clone().into_iter().collect()}
-        else {self.calendar.feeds.iter().map(|feed|feed.config.clone()).collect()}
-    }
 
-    /// 等价于 `calendar_configs()==known`，外壳每帧调用，不复制配置。
-    pub fn calendar_configs_match(&self, known: &[calendar::Config]) -> bool {
-        if self.calendar.feeds.is_empty() {known==self.calendar.config.as_slice()}
-        else {known.len()==self.calendar.feeds.len() && known.iter().zip(&self.calendar.feeds).all(|(known,feed)|*known==feed.config)}
-    }
 
-    pub(crate) fn refresh_calendar_month_status(&mut self) {
-        let month=self.calendar.view.month;
-        self.calendar.view.loading=self.calendar.feeds.iter().any(|feed|feed.month.loading);
-        self.calendar.view.loaded=(!self.calendar.feeds.is_empty() && self.calendar.feeds.iter().all(|feed|feed.month.loaded==Some(month))).then_some(month);
-        self.calendar.view.error=self.calendar.feeds.iter().filter(|feed|!feed.month.error.is_empty())
-            .map(|feed|format!("{}：{}",feed.config.provider.label(),feed.month.error)).collect::<Vec<_>>().join("；");
-        self.calendar.view.warning=self.calendar.feeds.iter().filter(|feed|feed.month.loaded==Some(month)&&!feed.month.warning.is_empty())
-            .map(|feed|format!("{}：{}",feed.config.provider.label(),feed.month.warning)).collect::<Vec<_>>().join("；");
-    }
 
-    pub(crate) fn select_calendar_provider(&mut self, provider: calendar::Provider) {
-        if self.calendar.testing || self.calendar.form.provider == provider { return; }
-        if let Err(error) = calendar::select_provider(provider) {
-            self.calendar.note = error;
-            self.calendar.note_error = true;
-            return;
-        }
-        let feed=self.calendar.feeds.iter().find(|feed|feed.config.provider==provider);
-        self.calendar.config=feed.map(|feed|feed.config.clone());
-        self.calendar.events=feed.map(|feed|feed.events.clone()).unwrap_or_default();
-        self.calendar.connected=feed.is_some_and(|feed|feed.connected);
-        self.calendar.last_sync=feed.map(|feed|feed.last_sync.clone()).unwrap_or_default();
-        self.calendar.failures=feed.map(|feed|feed.failures).unwrap_or_default();
-        self.calendar.error=feed.map(|feed|feed.error.clone()).unwrap_or_default();
-        self.calendar.warning=feed.map(|feed|feed.warning.clone()).unwrap_or_default();
-        self.calendar.form=CalendarForm{provider,username:self.calendar.config.as_ref().map(|cfg|cfg.username.clone()).unwrap_or_default(),
-            server:self.calendar.config.as_ref().filter(|cfg|cfg.provider.custom_server()).and_then(|cfg|cfg.server.clone()).unwrap_or_default(),..Default::default()};
-        self.calendar.note.clear();self.calendar.note_error=false;
-    }
 
-    /// 只移除正在管理的平台，保留其他平台的日程与提醒。
-    pub fn forget_calendar(&mut self) -> Option<calendar::Config> {
-        let old = self.calendar.config.take();
-        if let Some(config)=&old {
-            self.calendar.feeds.retain(|feed|feed.config!=*config);
-            let is_old=|alert:&crate::extras::Alert|alert.meeting.as_ref().is_some_and(|(_,source)|source==config.provider.label());
-            self.alerts.retain(|alert|!is_old(alert));
-            if self.notice.as_ref().is_some_and(is_old){self.notice=None;}
-        }
-        self.calendar.connected = false;
-        self.calendar.events.clear();
-        self.calendar.view.events.clear();
-        self.refresh_calendar_month_status();
-        self.calendar.last_sync.clear();
-        self.calendar.failures = 0;
-        self.calendar.error.clear();
-        self.calendar.note.clear();
-        self.calendar.warning.clear();
-        old
-    }
 
-    /// 外壳同步收信线程时读账号清单（不含任何凭据）。
-    pub fn mail_accounts(&self) -> &[mail::Account] {
-        &self.mail.accounts
-    }
 
-    /// 账号增删或开关变化后：落盘并让外壳重新对齐收信线程。
-    pub(crate) fn mail_accounts_changed(&mut self) {
-        self.mail_lines_cache.clear();
-        let accounts=&self.mail.accounts;
-        let known=&self.mail.manage.identities;
-        let active=|email:&str|accounts.iter().any(|a|a.enabled && mail::key(a)==email && known.get(email).is_none_or(|old|old==a));
-        self.mail.manage.data.retain(|(email,_),_|active(email));
-        self.mail.recent.retain(|m|active(&m.account.to_ascii_lowercase()));
-        self.mail.manage.trash.retain(|m|active(&m.account.to_ascii_lowercase()));
-        if self.mail.reading.as_ref().is_some_and(|m|!active(&m.account.to_ascii_lowercase())){self.mail.reading=None;}
-        if self.mail.open_uid.as_ref().is_some_and(|(email,_)|!active(&email.to_ascii_lowercase())){self.mail.open_uid=None;self.mail.manage.auto_read=None;}
-        self.mail.manage.identities.retain(|_,old|accounts.contains(old));
-        self.mail.manage.next_refresh=0.0;
-        mail::save_accounts(accounts);
-        self.pending.push(Cmd::MailSync);
-    }
 
-    /// 录制/截图用的邮件样例（只在 `record` feature 下编译）。
-    ///
-    /// `LINGQI_MAIL_DEMO=1|code` 面板带验证码，`=list` 只列邮件，`=fail` 用假授权码走一次
-    /// 「测试连接失败」，方便在没有真实邮箱时验收失败路径。
-    #[cfg(feature = "record")]
-    pub fn mail_demo(&mut self) {
-        use mail::{Account, Item, Provider, Status};
-        let mode = std::env::var("LINGQI_MAIL_DEMO").unwrap_or_default();
-        self.settings_tab = 7;
-        if mode == "fail" {
-            self.mail.form.provider = Provider::Qq;
-            self.mail.form.email = "test@qq.com".into();
-            self.mail.form.password = "invalid-auth-code".into();
-            self.mail.note = "test@qq.com：正在测试连接…".into();
-            self.pending.push(Cmd::MailTest(
-                Account { use_windows_proxy: false, custom: None, email: "test@qq.com".into(), provider: Provider::Qq, enabled: true },
-                "invalid-auth-code".into(),
-            ));
-            return;
-        }
-        self.mail.accounts = vec![
-            Account { use_windows_proxy: false, custom: None, email: "demo@qq.com".into(), provider: Provider::Qq, enabled: false },
-            Account { use_windows_proxy: false, custom: None, email: "demo@icloud.com".into(), provider: Provider::ICloud, enabled: false },
-        ];
-        for a in &self.mail.accounts {
-            self.mail.status.insert(a.email.clone(), Status::Ready);
-        }
-        // 会议演示：开始时间设成 10 分钟后，正好落在默认 15 分钟提前量里，
-        // 启动即触发一次「会议提醒」。
-        let mstart = chrono::Local::now().timestamp() + 600;
-        let mat = chrono::DateTime::from_timestamp(mstart, 0)
-            .map(|d| d.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string())
-            .unwrap_or_default();
-        let rows = [
-            (
-                "GitHub",
-                "[GitHub] Please verify your device",
-                "09:41",
-                Some("482913"),
-                "We noticed a sign-in attempt from a new device. Enter 482913 to finish signing in. If this wasn't you, secure your account now.",
-                None,
-            ),
-            (
-                "Apple",
-                "Your Apple ID verification code",
-                "09:38",
-                None,
-                "Your Apple ID code is 573104. Don't share it with anyone. If you didn't request it, you can ignore this message.",
-                None,
-            ),
-            (
-                "腾讯企业邮",
-                "会议邀请：周五方案评审",
-                "09:12",
-                None,
-                "本周五 14:30 在三楼会议室评审 v0.5.5 方案，请提前十分钟到场。会议邀请见附件。",
-                Some((mstart, mat)),
-            ),
-            (
-                "顺丰速运",
-                "您的快件已到达菜鸟驿站",
-                "08:57",
-                None,
-                "您的快件已到达菜鸟驿站（望京 SOHO T1 店），请凭取件码 6-3-2 在 20:00 前领取。",
-                None,
-            ),
-        ];
-        let with_code = mode != "list";
-        self.mail.recent = rows
-            .iter()
-            .enumerate()
-            .map(|(i, (from, subject, time, code, summary, meeting))| Item {
-                received_unix: None, account: "demo@qq.com".into(),
-                from: (*from).into(),
-                subject: (*subject).into(),
-                time: (*time).into(),
-                code: if with_code { (*code).map(str::to_string) } else { None },
-                summary: (*summary).into(),
-                html: String::new().into(),
-                links: Vec::new(),
-                meeting: meeting.as_ref().map(|(start, at)| mail::Meeting { all_day:false, end:None, title: "周五方案评审".into(), start: *start, at: at.clone(), uid: "demo-ics-1".into() }),
-                uid: 900 - i as u32,
-            })
-            .collect();
-        self.mail.note = "demo@qq.com：连接成功".into();
-        self.page = 5;
-        self.dots_target();
-    }
 
-    /// 录制/截图用的日程样例（只在 `record` feature 下编译）。
-    ///
-    /// `LINGQI_CAL_DEMO=paste|fail|connected|alert`。
-    #[cfg(feature = "record")]
-    pub fn calendar_demo(&mut self) {
-        use calendar::Provider;
-        let mode = std::env::var("LINGQI_CAL_DEMO").unwrap_or_default();
-        self.calendar.form.provider = Provider::Feishu;
-        self.calendar.form.username = "demo***@feishu.example".into();
-        self.settings_tab = 8;
-        self.open_settings();
-        self.settings.calendar_prompt = false;
-        let later = |secs: i64| chrono::Local::now().timestamp() + secs;
-        let label = |ts: i64| {
-            chrono::DateTime::from_timestamp(ts, 0)
-                .map(|d| d.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string())
-                .unwrap_or_default()
-        };
-        let demo_cfg = calendar::Config {
-            provider: Provider::Feishu,
-            username: "demo***@feishu.example".into(),
-            href: Some("https://caldav.feishu.cn/calendars/8f3c2d7a-1111-2222-3333-444455556666/".into()),
-            server: None,
-        };
-        match mode.as_str() {
-            "paste" => {
-                self.calendar.form.username =
-                    "服务器地址：https://caldav.feishu.cn/calendars/\n用户名：demo***@feishu.example\n密码：demo-pass-123".into();
-                if let Some((u, p)) = calendar::parse_paste(&self.calendar.form.username) {
-                    self.calendar.form.username = u;
-                    self.calendar.form.password = p;
-                    self.calendar.note = "已从粘贴内容拆出用户名和密码，服务器地址已按平台填好".into();
-                }
-            }
-            "fail" => {
-                self.calendar.form.password = "demo-pass-123".into();
-                self.calendar.note = calendar::human_error(Provider::Feishu, Some(401));
-                self.calendar.note_error = true;
-            }
-            "connected" => {
-                let a = later(3600);
-                let b = later(6 * 3600);
-                self.calendar.form.password = "demo-pass-123".into();
-                self.calendar.events = vec![
-                    mail::Meeting { all_day:false, end:None, title: "产品评审".into(), start: a, at: label(a), uid: "demo-cal-1".into() },
-                    mail::Meeting { all_day:false, end:None, title: "设计周会".into(), start: b, at: label(b), uid: "demo-cal-2".into() },
-                ];
-                self.calendar.config = Some(demo_cfg.clone());
-                self.calendar.connected = true;
-                self.calendar.last_sync = calendar::now_label();
-                self.calendar.note.clear();
-                self.calendar.note_error = false;
-            }
-            "alert" => {
-                let s = later(600);
-                self.calendar.events =
-                    vec![mail::Meeting { all_day:false, end:None, title: "飞书日程：产品评审".into(), start: s, at: label(s), uid: "demo-cal-alert".into() }];
-                self.calendar.config = Some(demo_cfg.clone());
-                self.calendar.connected = true;
-                self.calendar.last_sync = calendar::now_label();
-                self.settings_open = false;
-            }
-            _ => {}
-        }
-    }
 
     /// v0.5.4：把系统音量与蓝牙设备状态同步进界面；只在连接/断开时提示一次。
     fn sync_device(&mut self, env: &Env) {
@@ -1708,8 +1079,6 @@ impl App {
     pub fn module_on(&self,page:usize)->bool {
         self.settings.visible_pages.get(page).copied().unwrap_or_else(||page-PAGE_NAMES.len()<self.status_page_count())
     }
-    /// 收信线程是否应运行：邮箱模块开启且打开了「新邮件提醒」。
-    pub fn mail_active(&self)->bool {self.module_on(MAIL_PAGE) && self.settings.mail_enabled}
     /// 剪贴板监听是否应运行：置物架模块开启且打开了「记录剪贴板」。
     pub fn clipboard_active(&self)->bool {self.module_on(SHELF_PAGE) && self.settings.clipboard_history}
     /// 额度查询是否应运行：AI 额度模块开启且打开了「开启 AI 额度」。
@@ -1718,10 +1087,6 @@ impl App {
     /// 只剩这一个页面、模块关不掉时保持原样，不改变已有行为。
     pub fn migrate_merged_switches(&mut self){
         let mut settings_changed=false;
-        if !self.settings.mail_enabled {
-            self.set_page_visible(MAIL_PAGE,false);
-            if !self.settings.visible_pages[MAIL_PAGE] {self.settings.mail_enabled=true;settings_changed=true;}
-        }
         if false {
         }
         if settings_changed {self.settings.save();}
@@ -1735,23 +1100,13 @@ impl App {
         if !visible {
             match page {
                 TODO_PAGE=>self.plugins.pause_owner("tasks"),
-                CALENDAR_PAGE=>self.plugins.pause_owner("calendar"),
-                    _=>{}
+                        _=>{}
             }
         }
         if page==SHELF_PAGE {self.clipboard.set_enabled(self.clipboard_active());}
         if !visible {
             match page {
                 FOCUS_PAGE=>self.pomo.running=false,
-                MAIL_PAGE=>self.close_mail_module(),
-                CALENDAR_PAGE=>{
-                    self.calendar.view.loading=false;
-                    for feed in &mut self.calendar.feeds {feed.month.loading=false;}
-                    self.calendar.testing=false;
-                    self.calendar.test_password.clear();
-                    self.calendar.form.open=false;
-                    self.pending.retain(|cmd|!matches!(cmd,Cmd::CalendarTest(..)|Cmd::CalendarSync|Cmd::CalendarMonth(_)|Cmd::CalendarForget|Cmd::CalendarImport));
-                }
                 BLUETOOTH_PAGE=>{
                     self.wireless_focus=None;
                     self.wireless_offset=0;
@@ -1877,7 +1232,7 @@ impl App {
     pub fn is_editing(&self) -> bool {
         #[cfg(feature="sdk-js")]
         if self.plugin_form_focused { return true; }
-        self.adding || self.editing.is_some() || self.todo_choosing || self.task_dialog.is_some() || self.calendar.draft.is_some() || self.settings_editing
+        self.adding || self.editing.is_some() || self.todo_choosing || self.task_dialog.is_some() || self.settings_editing
     }
 
     pub fn foreground_changed(&mut self,ctx:&egui::Context) {
@@ -1901,7 +1256,6 @@ impl App {
         self.page_from_elapsed = elapsed;
         self.page_from = self.page;
         self.page = page;
-        if page==CALENDAR_PAGE {self.request_calendar_month(false);}
         self.page_dir = dir;
         self.page_t0 = self.t;
         self.dots_target();
@@ -1938,7 +1292,6 @@ impl App {
         self.editing = None;
         self.todo_choosing = false;
         self.task_dialog=None;
-        self.calendar.draft=None;
         self.buf.clear();
         self.todo_input_focused=false;
     }
@@ -2035,8 +1388,7 @@ impl App {
     fn lyric_focus_space(&self)->f32 {if self.pomo.running{crate::focus_bar::LYRIC_WIDTH+10.0}else{0.0}}
     fn lyric_bar_width(&self)->f32 {LYRIC_BAR_W+if self.pet_enabled(){48.0}else{0.0}+self.lyric_focus_space()}
     fn notice_size(&self,a:&Alert)->(f32,f32) {
-        if matches!(a.source, crate::extras::AlertSource::MailCode(..)) { return (270.0,60.0); }
-        let (width,height)=if a.meeting.is_some(){(360.0,136.0)}else if a.source==crate::extras::AlertSource::Internal && a.title=="蓝牙设备"{(HUD_W,48.0)}else if a.is_hud(){(HUD_W,38.0)}else{(334.0,44.0)};
+        let (width,height)=if a.source==crate::extras::AlertSource::Internal && a.title=="蓝牙设备"{(HUD_W,48.0)}else if a.is_hud(){(HUD_W,38.0)}else{(334.0,44.0)};
         (width,height)
     }
     pub fn set_pet(&mut self,enabled:bool) {
@@ -2046,10 +1398,7 @@ impl App {
         self.settings.minimal=enabled;if enabled {self.settings.pet=false;}self.settings.save();
     }
     pub(crate) fn notification_bell(&self)->Option<f64>{
-        let mail=self.mail.bell_at.filter(|at|self.module_on(MAIL_PAGE)&&self.t<at+6.0);
-        if self.t<self.notification_bell_until {
-            Some(mail.map_or(self.notification_bell_at,|at|self.notification_bell_at.max(at)))
-        }else{mail}
+        if self.t<self.notification_bell_until {Some(self.notification_bell_at)}else{None}
     }
     fn base_size(&self) -> (f32, f32) {
         if !self.compact_notices()&&!self.open {
@@ -2138,7 +1487,7 @@ impl App {
             }
             if self.page==TODO_PAGE && self.plugins.has_card(){return PH+46.0;}
         }
-        if self.page==PERFORMANCE_PAGE {crate::performance_ui::PAGE_H}else if self.page==BLUETOOTH_PAGE {194.0}else if self.page==CALENDAR_PAGE {CALENDAR_H}else if self.page==WEATHER_PAGE {WEATHER_H}else if self.page==6{176.0}else if self.page==5&&self.mail.open_uid.is_some(){236.0}else{PH}
+        if self.page==PERFORMANCE_PAGE {crate::performance_ui::PAGE_H}else if self.page==BLUETOOTH_PAGE {194.0}else if self.page==WEATHER_PAGE {WEATHER_H}else if self.page==6{176.0}else{PH}
     }
 
     // ---------------------------------------------------------------
@@ -2192,7 +1541,6 @@ impl App {
             self.last_reminder = env.t;
             self.sit_start = env.t;
             self.page_t0 = env.t - 10.0;
-            if self.page==CALENDAR_PAGE {self.request_calendar_month(false);}
         }
         let mut cmds = Vec::new();
 
@@ -2200,7 +1548,6 @@ impl App {
         #[cfg(feature="sdk-js")]
         if self.plugins.watch_files_enabled() { ctx.request_repaint_after(std::time::Duration::from_millis(200)); }
         self.sync_device(env);
-        self.update_mail_code_alerts(env);
         self.tick_alerts();
         #[cfg(windows)]
         self.tick_plugin_notices(&ctx, env);
@@ -2362,9 +1709,7 @@ impl App {
             self.plugin_form_focused=false;
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.is_editing() {
-            if self.calendar.draft.as_mut().is_none_or(|draft|draft.picker.take().is_none()) {
-                self.cancel_edit();
-            }
+            self.cancel_edit();
         }
         if !plugin_notice_detail && (!self.is_editing() || self.todo_choosing) && page_hover && self.open && self.reveal > 0.95 {
             let (scroll, left, right, esc) = ctx.input(|i| (i.raw_scroll_delta.y, i.key_pressed(egui::Key::ArrowLeft), i.key_pressed(egui::Key::ArrowRight), i.key_pressed(egui::Key::Escape)));
@@ -2374,8 +1719,6 @@ impl App {
                 self.navigate_page(right);
             } else if scroll!=0.0 {
                 let cursor=env.cursor.unwrap()-(self.content_origin(win)+offset).to_vec2();
-                let mail_reading=inside && self.page==5 && self.mail.open_uid.is_some();
-                let mail_list=self.page==5 && !self.mail.accounts.is_empty() && self.mail.open_uid.is_none() && self.mail_list_bounds().contains(cursor);
                 let music_volume=false;
                 #[cfg(feature="sdk-js")]
                 let status_scroll=self.plugin_canvas_frame.as_ref().is_some_and(|(page, frame)| {
@@ -2389,7 +1732,7 @@ impl App {
                     }).is_some_and(|area|area.contains(cursor));
                 #[cfg(not(feature="sdk-js"))]
                 let status_scroll=false;
-                if mail_reading || mail_list || music_volume || status_scroll {self.wheel_delta=0.0;}
+                if music_volume || status_scroll {self.wheel_delta=0.0;}
                 else {
                     // 累积高精度滚轮的小幅输入；停顿或反向时丢弃上一段余量。
                     if self.t-self.wheel_at>0.18 || self.wheel_delta*scroll<0.0 {self.wheel_delta=0.0;}
@@ -2404,7 +1747,6 @@ impl App {
                         let clipboard_tab=self.page==3 && self.shelf_tab==1;
                         let clipboard_body=clipboard_tab && Rect::from_min_max(Pos2::new(42.0,31.0),Pos2::new(377.0,124.0)).contains(cursor);
                         let list=match self.page {
-                            CALENDAR_PAGE=>self.calendar_scroll(cursor,env),
                             4 if Rect::from_min_max(Pos2::new(196.0,31.0),Pos2::new(377.0,124.0)).contains(cursor)
                                 =>Some((&mut self.todo_first,self.todos.items.len().saturating_sub(3))),
                             3 if clipboard_body
@@ -2542,7 +1884,7 @@ impl App {
 
         let mut top_bar_notice=None;
         let banner=!self.compact_notices()&&self.notice.is_some()&&!self.open;
-        let restoring_lyrics=false&&self.hud_notice.as_ref().is_some_and(|a|a.meeting.is_some()||a.source!=crate::extras::AlertSource::Internal);
+        let restoring_lyrics=false&&self.hud_notice.as_ref().is_some_and(|a|a.source!=crate::extras::AlertSource::Internal);
         let fading_hud=!self.compact_notices()&&!self.open&&self.hud_notice.as_ref().is_some_and(|a|a.is_hud())&&(banner||self.hud_alpha>0.003);
         if fading_hud {
             let from=self.resident.target.width;let to=HUD_W+self.pet_space();
@@ -2605,7 +1947,7 @@ impl App {
         }
         let notice_details=self.notice_details_rect(notice_rect);
         if let Some(rect)=notice_details {
-            let radius=if self.hud_notice.as_ref().is_some_and(|a|a.meeting.is_some()){14.0}else{10.0};
+            let radius=10.0;
             let from=crate::skin_paint::shape_count(&ctx,layer);
             shape::shadow(&painter,rect,0.0,0.0,radius,0.5*shadow_k);
             painter.rect_filled(rect,radius,self.island_overlay_fill());
@@ -2645,7 +1987,7 @@ impl App {
             let c = if reveal < 0.6 { c.ghost() } else { c };
             if self.drag_departing {
                 self.drag_overlay(&c.ghost().faded(self.drag_a));
-            } else if self.calendar.draft.is_some(){self.draw_calendar_editor(&c);}else if self.task_dialog.is_some(){self.draw_task_editor(&c);}else{page_transition=self.panel_body(&c, env, &mut cmds);}
+            } else if self.task_dialog.is_some(){self.draw_task_editor(&c);}else{page_transition=self.panel_body(&c, env, &mut cmds);}
             self.draw_hold_open(&c);
             if !self.toast_below {self.toast_layer(&c,106.0);}
         }
@@ -2663,7 +2005,6 @@ impl App {
         }
 
         if !plugin_notice_detail && self.task_dialog.is_some() && reveal>0.9 {self.task_editor_inputs(ui,origin,&mut cmds);}
-        if !plugin_notice_detail && self.calendar.draft.is_some() && reveal>0.9 {self.calendar_editor_inputs(ui,origin,&mut cmds);}
 
         // ---------- 输出 ----------
         let rel = |r: Rect| r.translate(-win.min.to_vec2());
@@ -2720,8 +2061,7 @@ impl App {
             let mut shapes=vec![outline(body,flare,flare_h,radius)];
             if let Some(r)=outside_badge{shapes.push(GlassShape::Round(rel(r),r.width()/2.0));}
             if let Some(r)=notice_details {
-                let radius=if self.hud_notice.as_ref().is_some_and(|a|a.meeting.is_some()){14.0}else{10.0};
-                shapes.push(GlassShape::Round(rel(r),radius));
+                shapes.push(GlassShape::Round(rel(r),10.0));
             }
             if let Some(r)=floating_toast {shapes.push(GlassShape::Round(rel(r),11.0));}
             shapes.extend(tooltips.iter().map(|r|GlassShape::Round(rel(*r),6.0)));
@@ -2762,7 +2102,6 @@ impl App {
             || !self.notice_width.settled(1.0);
         let pet_visible=self.pet_a>0.01 && !self.open && !minimal_pill;
         let ambient=!self.glassy() && self.effective_skin()==model::Skin::Fluid && self.fluid.animating() || self.pomo.running && (self.open && self.page==1 || !self.open && !minimal_pill && self.notice.is_none() && bar::animations_enabled())
-                || self.notice.as_ref().is_some_and(|notice|notice.meeting.is_some())
             || self.wireless_animating();
         #[cfg(feature="sdk-js")]
         let (canvas_animating, canvas_scroll, canvas_repaint) = self.plugin_canvas_frame.as_ref().map_or(
@@ -2857,7 +2196,7 @@ impl App {
 
     /// 展开后未读胶囊的出现程度：面板基本展开后从面板旁淡入。
     pub(crate) fn messenger_appear(&self)->f32 {
-        if self.calendar.draft.is_some() || self.task_dialog.is_some(){return 0.0;}
+        if self.task_dialog.is_some(){return 0.0;}
         smoothstep(0.0,1.0,anim::clamp01((self.progress()-0.7)/0.3))
     }
     fn messenger_stack_appear(&self)->f32 {1.0-smoothstep(0.04,0.30,self.progress())}
@@ -2954,7 +2293,7 @@ impl App {
         // 极简刘海：横幅照常弹出，收起后只留细线，未读不常挂在线条上；展开岛体时在面板旁出现。
         if self.effective_minimal(){return None;}
         let scale=self.messenger_stack_appear();
-        if scale<0.02 || self.open && (self.calendar.draft.is_some() || self.task_dialog.is_some()){return None;}
+        if scale<0.02 || self.open && self.task_dialog.is_some(){return None;}
         let side_column=self.side() && self.notice.is_none();
         let length=self.unread_stack_len(!side_column);
         let (width,height)=if side_column {(32.0,length)}else{(length,BAR_H)};
@@ -3685,8 +3024,7 @@ impl App {
             if let (Some(at),Some(x))=(self.notification_bell(),layout.x[bar::BELL]){
                 let x=local_cx+x;paint::bell(&base.scaled(x,14.0,1.2),x,14.0,theme::WHITE,paint::bell_swing(self.t-at));
                 base.circle(x+4.0,9.5,2.0,Color32::from_rgb(255,72,72));
-                if self.module_on(MAIL_PAGE)&&base.hit(x-14.0,3.0,28.0,25.0,"bell-mail").clicked(){self.show_page(MAIL_PAGE);}
-            }
+                    }
         }
         if compact_alpha>0.004 {
             let c=base.faded(compact_alpha);let c=if compact_alpha<0.8{c.ghost()}else{c};
@@ -3771,7 +3109,7 @@ impl App {
     // 面板主体：页标题 + 页面（带切页过渡）+ 翻页箭头 + 页码豆
     // ---------------------------------------------------------------
     fn shows_hold_open(&self)->bool {
-        self.hold_open || self.page==SHELF_PAGE && self.calendar.draft.is_none() && self.task_dialog.is_none()
+        self.hold_open || self.page==SHELF_PAGE && self.task_dialog.is_none()
     }
 
     pub(crate) fn header_music_shift(&self)->f32 {
@@ -3875,7 +3213,7 @@ impl App {
             return;
         }
         let (a, b, col) = match page {
-            0 | CALENDAR_PAGE => return,
+            0 => return,
             1 => ("番茄", "专注", theme::RED_TOP),
             // 健康页的标题由页面自己画（「健康提醒」+ 喝水/久坐分段切换）。
             2 => return,
@@ -4071,12 +3409,12 @@ impl App {
                     self.open_settings();
                 }
             }
-            5 => self.page_mail(c, env, cmds),
+            5 => {},
             6 => {}
             PERFORMANCE_PAGE => self.page_performance(c),
             8 => self.page_weather(c,&actions,env,cmds),
             BLUETOOTH_PAGE => self.page_wireless(c,env),
-            CALENDAR_PAGE => self.page_calendar(c,header,env),
+            CALENDAR_PAGE => {},
             _ => self.page_settings(c),
         }
     }
@@ -4150,11 +3488,10 @@ impl App {
         #[cfg(feature="sdk-js")]
         {
             let plugin_start=std::time::Instant::now();
-            let calendar_on=self.module_on(CALENDAR_PAGE);
-            let quota_on=false;
-            self.plugins.tick_features(todo_on,calendar_on,quota_on,&env.today);
+                let quota_on=false;
+            self.plugins.tick_features(todo_on,quota_on,&env.today);
             if let Some(minutes)=focus_finished {
-                self.plugins.focus_finished(chrono::Utc::now().timestamp(),minutes,todo_on,calendar_on,quota_on);
+                self.plugins.focus_finished(chrono::Utc::now().timestamp(),minutes,todo_on,quota_on);
             }
             #[cfg(windows)]
             for notice in self.plugins.take_script_notices(self.settings.notifications,chrono::Utc::now().timestamp_millis()) {
@@ -4168,41 +3505,7 @@ impl App {
         // v0.5.5 会议提醒：.ics 里的开始时间，默认提前 15 分钟（可设 5/15/30）。
         // v0.5.6 起日历（CalDAV）事件走同一套：同一场会（UID + DTSTART）只提醒一次，
         // 邮件和日历两条来源撞上了也只弹一次。
-        let lead = self.settings.mail_ics as i64 * 60;
         let now_ts = chrono::Local::now().timestamp();
-        let mut picks = Vec::new();
-        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-        // 会议提醒点开后进入日程页；日程模块关闭时不再提醒（含邮件邀请）。
-        let calendar_on=self.module_on(CALENDAR_PAGE);
-        for entry in self.calendar.local.iter().filter(|_|calendar_on) {
-            let Some(at)=entry.reminder_at() else{continue;};
-            let key=calendar::dedupe_key(&entry.event);
-            let cutoff=if entry.event.all_day{at+60}else{entry.event.start+60};
-            if now_ts>=at && now_ts<cutoff && !self.mail.fired.contains(&key) && seen.insert(key.clone()) {
-                picks.push((key,entry.event.clone(),"本机日程".into(),CALENDAR_PAGE));
-            }
-        }
-        for (m,provider) in self.calendar_work_events(None).into_iter().filter(|_|calendar_on) {
-            let left = m.start - now_ts;
-            let key = calendar::dedupe_key(m);
-            if !m.all_day && left <= lead && left > -60 && !self.mail.fired.contains(&key) && seen.insert(key.clone()) {
-                let source=provider.map(|provider|provider.label()).unwrap_or("日历");
-                picks.push((key, m.clone(), source.to_string(), CALENDAR_PAGE));
-            }
-        }
-        if calendar_on && self.mail_active() {
-            for m in self.mail.recent.iter().filter_map(|m| m.meeting.as_ref()).filter(|m|!self.mail_event_ignored(m)) {
-                let left = m.start - now_ts;
-                let key = calendar::dedupe_key(m);
-                if !m.all_day && left <= lead && left > -60 && !self.mail.fired.contains(&key) && seen.insert(key.clone()) {
-                    picks.push((key, m.clone(), "邮件邀请".to_string(), CALENDAR_PAGE));
-                }
-            }
-        }
-        for (key, meeting, source, page) in picks {
-            self.mail.fired.insert(key);
-            self.meeting_alert(meeting, source, page);
-        }
         self.water_ring.target = self.water.percent() / 100.0;
         self.water_ring.step(dt);
         self.water_ml = anim::approach(self.water_ml, self.water.drunk_ml as f32, 9.0, dt);

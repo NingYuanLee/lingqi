@@ -12,7 +12,6 @@ pub mod display_layout;
 pub mod exe_info;
 pub mod diagnostics_tool;
 pub mod rtl_text;
-mod mail_privacy;
 #[cfg(windows)]
 mod plugin_notice;
 #[cfg(windows)]
@@ -35,20 +34,10 @@ pub mod child_process;
 mod settings_window;
 pub mod bt;
 mod bluetooth_ui;
-pub mod calendar;
-mod calendar_ui;
-mod local_calendar;
-mod lunar_calendar;
-mod calendar_editor;
 pub mod glass;
 pub mod skin_paint;
 pub mod icons;
 pub mod input;
-pub mod mail;
-pub mod mail_format;
-mod mail_reader;
-pub mod mail_manage;
-mod mail_manage_ui;
 pub mod clipboard;
 pub mod side_dock;
 mod task_picker;
@@ -56,7 +45,6 @@ pub mod model;
 pub mod renderer;
 #[cfg(all(windows, feature = "sdk-material"))]
 pub mod material;
-pub mod otp;
 #[cfg(feature = "sdk-js")]
 #[cfg(feature = "sdk-js")]
 mod plugin_canvas;
@@ -68,7 +56,8 @@ mod plugin_setting_catalog;
 mod plugin_status;
 #[cfg(feature = "sdk-js")]
 mod plugin_status_ui;
-pub mod weather;
+pub mod lunar_calendar;
+mod weather;
 mod weather_ui;
 mod pages;
 mod extras;

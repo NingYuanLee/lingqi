@@ -105,7 +105,7 @@ impl App {
                     at: self.t,
                     duration: 4.5,
                     bluetooth: None,
-                    meeting: None,
+                    
                     unread: None,
                 };
                 let source = &completion.source;

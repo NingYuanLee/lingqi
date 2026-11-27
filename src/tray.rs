@@ -84,7 +84,6 @@ impl Ctx {
 pub enum Event {
     TogglePet,
     OpenSettings,
-    OpenCalendar,
     ToggleMinimal,
     ToggleAutostart,
     /// 打开灵动岛里的 AI 抽屉。
@@ -328,7 +327,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         return LRESULT(0);
     }
     if msg == WM_APP+4 {return LRESULT(ctx.tx.send(Event::OpenSettings).is_ok() as isize);}
-    if msg == WM_APP+5 {return LRESULT(ctx.tx.send(Event::OpenCalendar).is_ok() as isize);}
     if msg == WM_TRAY_DUMP {
         if let Ok(menu) = popup_menu(ctx.state()) {
             dump_menu(hwnd, ctx, menu);
@@ -596,9 +594,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn repeated_launch_requests_settings_or_calendar() {
+    fn repeated_launch_requests_settings() {
         let tray=Tray::start(State::default()).expect("托盘应能启动");
-        for (calendar,expected) in [(false,Event::OpenSettings),(true,Event::OpenCalendar)] {
+        for (calendar,expected) in [(false,Event::OpenSettings)] {
             assert!(request_existing_window(tray.hwnd(),calendar));
             assert_eq!(tray.events.recv_timeout(Duration::from_secs(2)).unwrap(),expected);
         }

@@ -345,20 +345,9 @@ pub struct Settings {
     pub lunch_start: u32,
     pub lunch_end: u32,
     /// v0.5.5 邮件提醒：总开关、验证码高亮、轮询间隔（秒）、会议提前量（分钟）。
-    pub mail_enabled: bool,
-    pub mail_sync_operations:bool,
-    pub mail_code_only_notifications: bool,
-    pub mail_code: bool,
-    pub mail_code_popup: bool,
-    pub mail_code_hide_seconds:u32,
-    pub mail_interval: u32,
-    pub mail_ics: u32,
-    pub ignored_mail_events: Vec<String>,
-    /// v0.5.6 日程：还没配置时在岛上给一次「接入飞书日历」的提示；
+                                        /// v0.5.6 日程：还没配置时在岛上给一次「接入飞书日历」的提示；
     /// 用户点开设置或关掉后置 false，不再弹。
-    pub calendar_prompt: bool,
-    pub calendar_auto_sync: bool,
-    /// 记录最近复制的文字（最近记录与固定条目均在本机保存）。
+            /// 记录最近复制的文字（最近记录与固定条目均在本机保存）。
     pub clipboard_history: bool,
     /// 天气页要看的城市；留空表示按网络出口自动定位。
     pub weather_city: String,
@@ -374,7 +363,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, pet_style: PetStyle::Atlas, world_zones: Vec::new(), ai_enabled: false, ai_allow_actions: false, ai_context_clipboard: false, ai_model: String::new(), minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [false,true,true,true,true,true,false,true,true,false,true], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_page_shortcuts: true, show_clock: true, resident_date: ResidentDate::Off, show_battery: true, show_weather: true, show_performance: true, performance_bar: Default::default(), performance_metrics: 7, performance_view: Default::default(), clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, show_bluetooth:true, bluetooth_pinned:Vec::new(), bluetooth_resident_style:0, bluetooth_resident_custom:false, bluetooth_battery_notifications:true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, system_notify: true, sound: false, hide_fullscreen: true, exclude_from_capture: false, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, mail_enabled: true, mail_sync_operations:false, mail_code_only_notifications: false, mail_code: true, mail_code_popup: false, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
+        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, pet_style: PetStyle::Atlas, world_zones: Vec::new(), ai_enabled: false, ai_allow_actions: false, ai_context_clipboard: false, ai_model: String::new(), minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [false,true,true,true,true,true,false,false,false,false,true], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_page_shortcuts: true, show_clock: true, resident_date: ResidentDate::Off, show_battery: true, show_weather: true, show_performance: true, performance_bar: Default::default(), performance_metrics: 7, performance_view: Default::default(), clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, show_bluetooth:true, bluetooth_pinned:Vec::new(), bluetooth_resident_style:0, bluetooth_resident_custom:false, bluetooth_battery_notifications:true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, system_notify: true, sound: false, hide_fullscreen: true, exclude_from_capture: false, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
     }
 }
 
@@ -502,18 +491,7 @@ impl Settings {
                 "lunch_rest" => s.lunch_rest = v != "0",
                 "lunch_start" => s.lunch_start = v.parse::<u32>().unwrap_or(720).min(1439),
                 "lunch_end" => s.lunch_end = v.parse::<u32>().unwrap_or(810).min(1439),
-                "mail_enabled" => s.mail_enabled = v != "0",
-                "mail_sync_operations" => s.mail_sync_operations=v=="1",
-                "mail_code_only_notifications" => s.mail_code_only_notifications = v == "1",
-                "mail_code" => s.mail_code = v != "0",
-                "mail_code_popup" => s.mail_code_popup = v == "1",
-                "mail_code_hide_seconds" => s.mail_code_hide_seconds=v.parse::<u32>().unwrap_or(60).clamp(15,300),
-                "mail_interval" => s.mail_interval = match v.parse::<u32>().unwrap_or(120) { 60 => 60, 300 => 300, _ => 120 },
-                "ignored_mail_events" => s.ignored_mail_events = serde_json::from_str(&v).unwrap_or_default(),
-                "mail_ics" => s.mail_ics = match v.parse::<u32>().unwrap_or(15) { 5 => 5, 30 => 30, _ => 15 },
-                "calendar_prompt" => s.calendar_prompt = v != "0",
-                "calendar_auto_sync" => s.calendar_auto_sync = v != "0",
-                "clipboard_history" => s.clipboard_history = v != "0",
+                                                                                                        "clipboard_history" => s.clipboard_history = v != "0",
                 "weather_city" => s.weather_city = v.trim().to_string(),
                 "weather_position" => s.weather_position=serde_json::from_str::<Option<crate::weather::Position>>(&v).ok().flatten().filter(|p|p.valid()),
                 "weather_saved" => s.weather_saved=serde_json::from_str::<Vec<crate::weather::Position>>(&v).unwrap_or_default().into_iter().filter(|p|p.valid()).collect(),
@@ -522,8 +500,8 @@ impl Settings {
                 _ => {}
             }
         }
-        // 音乐页与 AI 额度页已下线：老配置里开着也要关掉，避免出现空白页。
-        s.visible_pages[0]=false;s.visible_pages[6]=false;
+        // 音乐、AI 额度、邮箱与日程页已下线：老配置里开着也要关掉，避免出现空白页。
+        s.visible_pages[0]=false;s.visible_pages[5]=false;s.visible_pages[6]=false;s.visible_pages[7]=false;
         if !s.visible_pages.contains(&true) { s.visible_pages[1]=true; }
         // 旧版只有一个指定城市：迁移进已保存列表，升级后下拉框里能直接看到它。
         if let Some(position)=s.weather_position.clone().filter(|p|p.label==s.weather_city) {
@@ -605,18 +583,7 @@ impl Settings {
                 ("lunch_rest".into(), (self.lunch_rest as u8).to_string()),
                 ("lunch_start".into(), self.lunch_start.to_string()),
                 ("lunch_end".into(), self.lunch_end.to_string()),
-                ("mail_enabled".into(), (self.mail_enabled as u8).to_string()),
-                ("mail_sync_operations".into(),(self.mail_sync_operations as u8).to_string()),
-                ("mail_code_only_notifications".into(), (self.mail_code_only_notifications as u8).to_string()),
-                ("mail_code".into(), (self.mail_code as u8).to_string()),
-                ("mail_code_popup".into(), (self.mail_code_popup as u8).to_string()),
-                ("mail_code_hide_seconds".into(), self.mail_code_hide_seconds.to_string()),
-                ("mail_interval".into(), self.mail_interval.to_string()),
-                ("mail_ics".into(), self.mail_ics.to_string()),
-                ("ignored_mail_events".into(), serde_json::to_string(&self.ignored_mail_events).unwrap()),
-                ("calendar_prompt".into(), (self.calendar_prompt as u8).to_string()),
-                ("calendar_auto_sync".into(), (self.calendar_auto_sync as u8).to_string()),
-                ("clipboard_history".into(), (self.clipboard_history as u8).to_string()),
+                                                                                                        ("clipboard_history".into(), (self.clipboard_history as u8).to_string()),
                 ("weather_city".into(), self.weather_city.clone()),
                 ("weather_position".into(), serde_json::to_string(&self.weather_position).unwrap()),
                 ("weather_saved".into(), serde_json::to_string(&self.weather_saved).unwrap()),
