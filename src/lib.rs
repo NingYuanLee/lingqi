@@ -39,6 +39,7 @@ pub mod skin_paint;
 pub mod icons;
 pub mod input;
 pub mod clipboard;
+pub mod notify_privacy;
 pub mod side_dock;
 mod task_picker;
 pub mod model;

@@ -474,7 +474,7 @@ impl App {
         self.notification_bell_until=self.t+4.5;
         let title=app.chars().filter(|c|!c.is_control()).take(80).collect();
         let body=if self.settings.notification_preview {
-            body.chars().filter(|c|!c.is_control()).take(300).collect::<String>()
+            crate::notify_privacy::sanitize(&body.chars().filter(|c|!c.is_control()).take(300).collect::<String>())
         }else{"收到新通知 · 内容已隐藏".into()};
         self.enqueue_alert(Alert{source:AlertSource::External(id),title,body,page:usize::MAX,at:self.t,duration:4.5,bluetooth:None,unread},false);
     }

@@ -1587,7 +1587,7 @@ fn wheel_navigation_reaches_every_page_in_both_directions(){
     h.app.shelf.items.clear();h.app.todos.items.clear();
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.hover(H::local(210.0,18.0),0.3);
-    for (delta,pages) in [(-40.0,[2,3,4,5,7,8,10,1]),(40.0,[10,8,7,5,4,3,2,1])] {
+    for (delta,pages) in [(-40.0,[2,3,4,8,10,1]),(40.0,[10,8,4,3,2,1])] {
         for page in pages {
             h.wheel(delta);
             assert_eq!(h.app.page,page,"滚轮翻页不能被空的置物架或待办卡住");
@@ -1604,10 +1604,10 @@ fn wheel_from_tall_page_allows_movement_in_previous_page_bounds() {
     let edge=H::local(70.0,165.0);
     let inner=H::local(70.0,80.0);
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    h.app.go(7,1.0);
+    h.app.go(8,1.0);
     h.hover(edge,0.8);
     h.wheel(40.0);
-    assert_eq!(h.app.page,5);
+    assert_eq!(h.app.page,4);
     for _ in 0..90 {h.frame(vec![]);}
     assert!(h.app.open && !h.hit.contains(edge),"原位保留翻页意图，岛外仍可点击桌面");
     assert!((h.app.h.pos-PH).abs()<0.1 && (h.hit.height()-PH-2.0).abs()<0.1,"矮页应使用自身高度");
@@ -1617,14 +1617,14 @@ fn wheel_from_tall_page_allows_movement_in_previous_page_bounds() {
     h.hover(H::local(250.0,157.0),0.4);
     assert!(h.app.open,"轻微穿过新页边缘再移回来不应误收起");
     h.wheel(40.0);
-    assert_eq!(h.app.page,4);
+    assert_eq!(h.app.page,3);
     h.hover(inner,0.5);
     assert!(h.app.open && !h.hit.contains(edge),"移入新页后恢复该页高度");
     h.hover(edge,0.5);
     assert!(!h.app.open,"重新移出新页应正常收起");
 
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    h.app.go(7,1.0);
+    h.app.go(8,1.0);
     h.hover(H::local(70.0,PH-1.0),0.8);
     h.wheel(40.0);
     h.hover(edge,0.4);
@@ -1645,14 +1645,14 @@ fn side_docks_keep_both_edges_when_turning_to_a_shorter_page() {
         for _ in 0..60 {side_frame(&mut h,Some(resident));}
         assert!(h.app.open);
         for sign in [-1.0,1.0] {
-            h.app.go(7,1.0);
+            h.app.go(8,1.0);
             let tall=side_frame(&mut h,Some(resident)).hit;
             let edge=tall.center()+Vec2::new(0.0,sign*83.0);
             for _ in 0..45 {side_frame(&mut h,Some(edge));}
             side_frame_events(&mut h,Some(edge),vec![egui::Event::MouseWheel {
                 unit:egui::MouseWheelUnit::Point,delta:Vec2::new(0.0,40.0),modifiers:Default::default(),
             }]);
-            assert_eq!(h.app.page,5);
+            assert_eq!(h.app.page,4);
             let moved=edge+Vec2::new(65.0,4.0*sign);
             for _ in 0..45 {side_frame(&mut h,Some(moved));}
             let out=side_frame(&mut h,Some(moved));
@@ -1683,7 +1683,7 @@ fn wheel_scrolls_lists_only_inside_content_and_respects_edges(){
         h.hover(H::local(300.0,60.0),0.25);h.wheel(-40.0);
         assert_eq!(h.app.page,page,"内容溢出时滚到底也应留在本页");
         h.app.show_page(page);h.hover(H::local(210.0,18.0),0.3);h.wheel(-40.0);
-        assert_eq!(h.app.page,page+1,"顶栏滚轮不应被内容列表拦截");
+        assert_eq!(h.app.page,if page==4{8}else{page+1},"顶栏滚轮不应被内容列表拦截");
     }
 }
 
@@ -1724,7 +1724,7 @@ fn wheel_overflowing_todos_stay_at_both_edges(){
             assert_eq!(h.app.page,4,"待办溢出后滚动到首尾都不应翻页，条数 {count}");
             assert_eq!(h.app.todo_first,first);
         }
-        for (delta,page) in [(-40.0,5),(40.0,3)]{
+        for (delta,page) in [(-40.0,8),(40.0,3)]{
             h.app.show_page(4);h.hover(H::local(100.0,60.0),0.3);h.wheel(delta);
             assert_eq!(h.app.page,page,"待办列表外仍应允许滚轮翻页");
         }
@@ -1997,9 +1997,9 @@ fn battery_module_can_disable_only_the_power_warning() {
 fn page_visibility_skips_hidden_pages_in_every_navigation_control() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
-    for page in [1,3,4,6,7,8,9,10] {h.app.set_page_visible(page,false);}
+    for page in [1,3,4,6,7,9,10] {h.app.set_page_visible(page,false);}
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    for expected in [5,2,5] {
+    for expected in [8,2,8] {
         h.click(H::local(398.0,68.0));
         assert_eq!(h.app.page,expected);
         h.hover(H::local(300.0,60.0),0.7);
@@ -2009,13 +2009,13 @@ fn page_visibility_skips_hidden_pages_in_every_navigation_control() {
     assert_eq!(h.app.page,2,"底部圆点应仅包含启用的页面");
     h.hover(H::local(300.0,60.0),0.7);
     h.frame(vec![egui::Event::Key{key:egui::Key::ArrowRight,physical_key:None,pressed:true,repeat:false,modifiers:Default::default()}]);
-    assert_eq!(h.app.page,5);
+    assert_eq!(h.app.page,8);
     h.frame(vec![egui::Event::Key{key:egui::Key::ArrowRight,physical_key:None,pressed:false,repeat:false,modifiers:Default::default()}]);
     h.hover(H::local(300.0,60.0),0.7);
     h.frame(vec![egui::Event::MouseWheel{unit:egui::MouseWheelUnit::Point,delta:Vec2::new(0.0,40.0),modifiers:Default::default()}]);
     assert_eq!(h.app.page,2,"滚轮应跳过隐藏页面");
     h.click(H::local(21.0,68.0));
-    assert_eq!(h.app.page,5);
+    assert_eq!(h.app.page,8);
 }
 
 #[test]
@@ -5409,12 +5409,12 @@ fn closed_modules_stop_their_reminders_and_timers(){
 
 #[test]
 fn every_module_settings_tab_maps_to_its_page(){
-    let titles=["通用","","专注","健康","待办","置物","消息提醒","邮箱","日程","关于","页面管理","","天气","外观","位置","系统性能","无线设备"];
+    let titles=["通用","","专注","健康","待办","置物","消息提醒","","","关于","页面管理","","天气","外观","位置","系统性能","无线设备"];
     let mut pages:Vec<_>=(0..titles.len()).filter_map(crate::extras::settings_tab_module).collect();
     for tab in 0..titles.len() {
         if let Some(page)=crate::extras::settings_tab_module(tab) {assert!(crate::app::PAGE_NAMES[page].chars().next()==titles[tab].chars().next(),"{} ↔ {}",titles[tab],crate::app::PAGE_NAMES[page]);}
     }
-    pages.sort();assert_eq!(pages,vec![1,2,3,4,5,7,8,9,10],"每个功能页面各有一个设置分页");
+    pages.sort();assert_eq!(pages,vec![1,2,3,4,8,9,10],"每个功能页面各有一个设置分页");
     assert_eq!(crate::app::PAGE_SETTINGS_TABS[crate::app::BLUETOOTH_PAGE],crate::extras::SETTINGS_TAB_WIRELESS);
 }
 
