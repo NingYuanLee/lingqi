@@ -80,12 +80,12 @@ fn pill_shadow(painter:&egui::Painter,rect:Rect,radius:f32,strength:f32){
         painter.rect_filled(r,radius+grow*0.8,Color32::from_black_alpha((255.0*a*strength) as u8));
     }
 }
-pub(crate) const PAGE_NAMES: [&str; 11] = ["音乐", "专注", "健康", "置物架", "待办", "邮箱", "AI 额度", "日程", "天气", "系统性能", "无线设备"];
+pub(crate) const PAGE_NAMES: [&str; 11] = ["", "专注", "健康", "置物架", "待办", "邮箱", "", "日程", "天气", "系统性能", "无线设备"];
 pub(crate) const PAGE_SHORTCUT_KEYS: [&str; PAGE_NAMES.len()] = [
     "music", "focus", "health", "shelf", "tasks", "mail", "", "calendar", "weather",
     "performance", "wireless",
 ];
-pub(crate) const PAGE_SETTINGS_TABS: [usize; 11] = [1,2,3,5,4,7,11,8,12,15,crate::extras::SETTINGS_TAB_WIRELESS];
+pub(crate) const PAGE_SETTINGS_TABS: [usize; 11] = [2,2,3,5,4,7,crate::extras::SETTINGS_TAB_PAGES,8,12,15,crate::extras::SETTINGS_TAB_WIRELESS];
 
 // ---------- 动效参数 ----------
 /// 悬停意图缓冲：光标停留这么久才真正展开（期间药丸轻微胀大作为反馈），防误触。

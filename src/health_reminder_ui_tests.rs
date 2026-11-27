@@ -82,16 +82,14 @@ fn health_actions_clear_pending_and_keep_messenger_unread(){
 }
 
 #[test]
-fn health_notice_body_and_lyrics_badge_confirm_without_recording_water(){
+fn health_notice_body_confirms_without_recording_water(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
-    for lyrics in [false,true]{
-        let mut h=H::new();h.frame(vec![]);
-        h.app.alert("喝水时间到了","喝点水吧",2,false);for _ in 0..60{h.frame(vec![]);}
-        if lyrics{h.click_notice_badge();}else{h.click_text("喝水时间到了");}
-        assert!(!h.app.health_pending[0] && h.app.notice.is_none());
-        assert_eq!(h.app.water.drunk_ml,0);
-        assert!((h.app.last_reminder-h.t).abs()<0.1);
-    }
+    let mut h=H::new();h.frame(vec![]);
+    h.app.alert("喝水时间到了","喝点水吧",2,false);for _ in 0..60{h.frame(vec![]);}
+    h.click_text("喝水时间到了");
+    assert!(!h.app.health_pending[0] && h.app.notice.is_none());
+    assert_eq!(h.app.water.drunk_ml,0);
+    assert!((h.app.last_reminder-h.t).abs()<0.1);
 }
 
 #[test]

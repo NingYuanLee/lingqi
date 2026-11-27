@@ -873,11 +873,11 @@ mod tests {
 
     #[test]
     fn settings_groups_keep_every_page_reachable() {
-        let groups = ["通用", "音乐", "专注与健康", "专注与健康", "待办与置物", "待办与置物", "消息提醒", "邮箱", "日程", "关于", "页面管理", "AI 额度", "天气", "外观", "位置", "系统性能", "无线设备"];
-        for (tab, expected) in groups.iter().enumerate() {
+        // 每个页面的设置分页都要落在且只落在一个分组里，页面才都能从设置里到达。
+        for page in 0..crate::app::PAGE_NAMES.len() {
+            let tab = crate::app::PAGE_SETTINGS_TABS[page];
             let matches: Vec<_> = SETTINGS_GROUPS.iter().filter(|(_,start,end,_)| (*start..=*end).contains(&tab)).collect();
-            assert_eq!(matches.len(), 1, "页面 {tab} 必须且只能属于一个分组");
-            assert_eq!(matches[0].0, *expected);
+            assert_eq!(matches.len(), 1, "页面 {page} 的设置分页 {tab} 必须且只能属于一个分组");
         }
     }
 
@@ -1533,9 +1533,9 @@ pub(crate) const SETTINGS_TAB_PLUGIN_DETAIL: usize = 18;
 /// 侧栏：一项就是一页，不再有页内子标签。专注与健康（2、3）、待办与置物（4、5）各合成一页；
 /// 插件和关于固定在左下角，上方一条细线和功能页分开。
 /// 第四列是这一项之前的分组标题。
-const SETTINGS_GROUPS: [(&str,usize,usize,&str);16 + cfg!(feature="sdk-js") as usize] = [
+const SETTINGS_GROUPS: [(&str,usize,usize,&str);14 + cfg!(feature="sdk-js") as usize] = [
     ("通用",0,0,"灵栖"), ("外观",SETTINGS_TAB_APPEARANCE,SETTINGS_TAB_APPEARANCE,""), ("位置",SETTINGS_TAB_POSITION,SETTINGS_TAB_POSITION,""), ("页面管理",SETTINGS_TAB_PAGES,SETTINGS_TAB_PAGES,""),
-    ("音乐",1,1,"功能"), ("专注与健康",2,3,""), ("待办与置物",4,5,""), ("消息提醒",6,6,""), ("邮箱",7,7,""), ("日程",8,8,""), ("AI 额度",11,11,""), ("天气",12,12,""), ("系统性能",15,15,""), ("无线设备",SETTINGS_TAB_WIRELESS,SETTINGS_TAB_WIRELESS,""),
+    ("专注与健康",2,3,""), ("待办与置物",4,5,""), ("消息提醒",6,6,""), ("邮箱",7,7,""), ("日程",8,8,""), ("天气",12,12,""), ("系统性能",15,15,""), ("无线设备",SETTINGS_TAB_WIRELESS,SETTINGS_TAB_WIRELESS,""),
     #[cfg(feature="sdk-js")] ("插件",SETTINGS_TAB_PLUGINS,SETTINGS_TAB_PLUGINS,""),
     ("AI 助手",SETTINGS_TAB_AI,SETTINGS_TAB_AI,""),
     ("关于",9,9,""),

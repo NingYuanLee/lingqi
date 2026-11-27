@@ -51,7 +51,7 @@ fn material_foreground_and_shadow_return_to_the_base_skin_when_disabled() {
     h.app.settings.skin = Skin::Classic;
     h.app.settings.island_shape = IslandShape::Pill;
     h.app.settings.pet = false;
-    h.app.show_page(0);
+    h.app.show_page(1);
     for _ in 0..50 { h.frame(Vec::new()); }
 
     let canvas = Rect::from_min_size(Pos2::ZERO, Vec2::new(WIN_W, WIN_H));
@@ -795,7 +795,7 @@ fn imported_ics_calendar_frame_cost() {
         assert_eq!(h.app.calendar.local.len(),count as usize);
         h.app.open_calendar(None);h.hover(H::local(300.0,40.0),0.2);
         let at=std::time::Instant::now();for _ in 0..3 {h.frame(vec![]);}let frames=at.elapsed()/3;
-        h.app.show_page(0);h.hover(H::local(300.0,40.0),0.2);
+        h.app.show_page(1);h.hover(H::local(300.0,40.0),0.2);
         let at=std::time::Instant::now();for _ in 0..3 {h.frame(vec![]);}let other=at.elapsed()/3;
         println!("count={count} same_day={same_day} import_ms={:.2} calendar_frame_ms={:.2} other_frame_ms={:.2}",import.as_secs_f64()*1000.0,frames.as_secs_f64()*1000.0,other.as_secs_f64()*1000.0);
     }
@@ -1133,7 +1133,7 @@ fn oled_shift_waits_for_the_panel_to_finish_closing() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
     h.app.settings.oled_shift=true;
-    h.app.show_page(0);
+    h.app.show_page(1);
     h.hover(H::local(200.0,60.0),5.0);
     assert!(h.app.open);
     h.cursor=Some(Pos2::new(600.0,180.0));
@@ -1875,7 +1875,7 @@ fn hover_expands_with_overshoot_and_leave_collapses() {
 fn browser_minimal_closes_the_open_island_but_still_allows_deliberate_hover(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.app.settings.browser_minimal=true;
-    h.app.show_page(0);h.hover(H::local(300.0,60.0),0.8);
+    h.app.show_page(1);h.hover(H::local(300.0,60.0),0.8);
     assert!(h.app.open);
     h.browser_at_top=Some(true);h.frame(vec![]);
     assert!(!h.app.open,"切到浏览器时不能继续保留展开状态遮挡标签栏");
@@ -1918,7 +1918,7 @@ fn minimal_hover_requires_continuous_deliberate_contact() {
     h.hover(inside,0.7);
     assert!(h.app.open,"在刘海内持续停留仍应展开");
     h.click(H::local(398.0,68.0));
-    assert_eq!(h.app.page,1,"展开后应能正常操作面板");
+    assert_eq!(h.app.page,2,"展开后应能正常操作面板");
 }
 
 #[test]
@@ -1985,15 +1985,15 @@ fn arrows_and_dots_switch_pages() {
     let mut h = H::new();
     h.hover(Pos2::new(WIN_W / 2.0, 12.0), 1.0);
     h.click(H::local(398.0, 68.0));
-    assert_eq!(h.app.page, 1);
+    assert_eq!(h.app.page, 2);
     h.hover(H::local(300.0, 60.0), 0.8);
     h.click(H::local(21.0, 68.0));
-    assert_eq!(h.app.page, 0);
+    assert_eq!(h.app.page, 1);
     h.hover(H::local(300.0, 60.0), 0.8);
     h.click(H::local(398.0, 68.0));
     h.hover(H::local(300.0, 60.0), 0.8);
     h.click(H::local(398.0, 68.0));
-    assert_eq!(h.app.page, 2);
+    assert_eq!(h.app.page, 3);
 }
 
 #[test]
@@ -2002,7 +2002,7 @@ fn wheel_navigation_reaches_every_page_in_both_directions(){
     h.app.shelf.items.clear();h.app.todos.items.clear();
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.hover(H::local(210.0,18.0),0.3);
-    for (delta,pages) in [(-40.0,[1,2,3,4,5,6,7,8,10,0]),(40.0,[10,8,7,6,5,4,3,2,1,0])] {
+    for (delta,pages) in [(-40.0,[2,3,4,5,7,8,10,1]),(40.0,[10,8,7,5,4,3,2,1])] {
         for page in pages {
             h.wheel(delta);
             assert_eq!(h.app.page,page,"滚轮翻页不能被空的置物架或待办卡住");
@@ -2019,7 +2019,7 @@ fn wheel_from_tall_page_allows_movement_in_previous_page_bounds() {
     let edge=H::local(70.0,165.0);
     let inner=H::local(70.0,80.0);
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    h.app.go(6,1.0);
+    h.app.go(7,1.0);
     h.hover(edge,0.8);
     h.wheel(40.0);
     assert_eq!(h.app.page,5);
@@ -2039,7 +2039,7 @@ fn wheel_from_tall_page_allows_movement_in_previous_page_bounds() {
     assert!(!h.app.open,"重新移出新页应正常收起");
 
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    h.app.go(6,1.0);
+    h.app.go(7,1.0);
     h.hover(H::local(70.0,PH-1.0),0.8);
     h.wheel(40.0);
     h.hover(edge,0.4);
@@ -2060,7 +2060,7 @@ fn side_docks_keep_both_edges_when_turning_to_a_shorter_page() {
         for _ in 0..60 {side_frame(&mut h,Some(resident));}
         assert!(h.app.open);
         for sign in [-1.0,1.0] {
-            h.app.go(6,1.0);
+            h.app.go(7,1.0);
             let tall=side_frame(&mut h,Some(resident)).hit;
             let edge=tall.center()+Vec2::new(0.0,sign*83.0);
             for _ in 0..45 {side_frame(&mut h,Some(edge));}
@@ -2213,15 +2213,16 @@ fn page_turn_fades_old_content_in_place_and_slides_new_content_without_rebound()
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
     let mut h=H::new();
     h.app.settings.pet=false;
-    let labels=["暂无音乐","专注时间"];
+    // 健康页的标题随提醒状态变化（待活动 / 等待提醒 / 已关闭 / 分钟后提醒），按候选文案匹配。
+    let labels: [&[&str];3] = [&[], &["专注时间"], &["喝一口"]];
     let body_text=|h:&H,page:usize| h.shapes.iter().find_map(|shape|match &shape.shape {
-        egui::Shape::Text(text) if text.galley.text()==labels[page] && text.fallback_color.a()>2
+        egui::Shape::Text(text) if labels[page].contains(&text.galley.text()) && text.fallback_color.a()>2
             =>Some((text.pos.x,text.fallback_color.a())),
         _=>None,
     });
     h.hover(H::local(210.0,18.0),1.2);
 
-    for (wheel,target,direction) in [(false,1,1.0),(false,0,-1.0),(true,1,1.0),(true,0,-1.0)] {
+    for (wheel,target,direction) in [(false,2,1.0),(false,1,-1.0),(true,2,1.0),(true,1,-1.0)] {
         let previous=h.app.page();
         let (old_x,old_alpha)=body_text(&h,previous).expect("切页前应能看到正文");
         if wheel {
@@ -2256,21 +2257,21 @@ fn page_turn_fades_old_content_in_place_and_slides_new_content_without_rebound()
     // 滚轮可以在正文滑入、标题尚未出现时反向切回。
     h.wheel(-40.0);
     for _ in 0..4 {h.frame(vec![]);}
-    assert_eq!(h.app.page(),1);
-    let (sliding_x,_)=body_text(&h,1).expect("反向前应已出现专注正文");
+    assert_eq!(h.app.page(),2);
+    let (sliding_x,_)=body_text(&h,2).expect("反向前应已出现健康正文");
     h.wheel(40.0);
-    assert_eq!(h.app.page(),0);
-    let (fading_x,_)=body_text(&h,1).expect("反向后应保留专注正文淡出");
+    assert_eq!(h.app.page(),1);
+    let (fading_x,_)=body_text(&h,2).expect("反向后应保留健康正文淡出");
     assert!((fading_x-sliding_x).abs()<5.0,"淡出位置应接续上一个滑入帧");
     for _ in 0..12 {
-        if let Some((x,_))=body_text(&h,1) {
+        if let Some((x,_))=body_text(&h,2) {
             assert!((x-fading_x).abs()<0.05,"中途反向后旧正文应停在当前位置");
         }
         assert!(!h.shapes.iter().any(|shape|matches!(&shape.shape,egui::Shape::Text(text)
-            if text.galley.text()=="番茄" && text.fallback_color.a()>2)),"尚未出现的旧标题不应闪现");
+            if text.galley.text()=="健康" && text.fallback_color.a()>2)),"尚未出现的旧标题不应闪现");
         h.frame(vec![]);
     }
-    assert!(body_text(&h,1).is_none(),"中途反向也应完成旧页淡出");
+    assert!(body_text(&h,2).is_none(),"中途反向也应完成旧页淡出");
 }
 
 #[test]
@@ -2281,7 +2282,7 @@ fn wheel_page_transition_keeps_interactive_frames_after_input_stops() {
     h.hover(H::local(210.0,18.0),0.3);
     assert!(!h.interactive_transition);
     h.wheel(-40.0);
-    assert_eq!(h.app.page,1);
+    assert_eq!(h.app.page,2);
     assert!(h.interactive_transition);
     for _ in 0..18 {
         h.frame(vec![]);
@@ -2296,17 +2297,17 @@ fn wheel_handles_small_deltas_without_skipping_pages_on_bursts(){
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.hover(H::local(210.0,18.0),0.3);
     for _ in 0..16 {h.wheel(-0.5);}
-    assert_eq!(h.app.page,1,"高精度滚轮的小幅输入应能累积成一次翻页");
+    assert_eq!(h.app.page,2,"高精度滚轮的小幅输入应能累积成一次翻页");
     h.hover(H::local(210.0,18.0),0.3);
     for _ in 0..5 {h.wheel(-40.0);}
-    assert_eq!(h.app.page,2,"一次连续滚动不能瞬间跳过多个页面");
+    assert_eq!(h.app.page,3,"一次连续滚动不能瞬间跳过多个页面");
 }
 
 #[test]
 fn navigation_wraps_between_ten_pages_and_notification_settings_remain_accessible() {
     let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());let mut h=H::new();
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);h.click(H::local(21.0,68.0));assert_eq!(h.app.page,crate::app::BLUETOOTH_PAGE);
-    h.hover(H::local(300.0,60.0),0.8);h.click(H::local(398.0,68.0));assert_eq!(h.app.page,0);
+    h.hover(H::local(300.0,60.0),0.8);h.click(H::local(398.0,68.0));assert_eq!(h.app.page,1);
     h.app.open_settings_category(3);assert!(h.app.settings_open);assert_eq!(h.app.settings_tab,6);
 }
 
@@ -2413,7 +2414,7 @@ fn page_visibility_skips_hidden_pages_in_every_navigation_control() {
     let mut h=H::new();
     for page in [1,3,4,6,7,8,9,10] {h.app.set_page_visible(page,false);}
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
-    for expected in [2,5,0] {
+    for expected in [5,2,5] {
         h.click(H::local(398.0,68.0));
         assert_eq!(h.app.page,expected);
         h.hover(H::local(300.0,60.0),0.7);
@@ -2429,7 +2430,7 @@ fn page_visibility_skips_hidden_pages_in_every_navigation_control() {
     h.frame(vec![egui::Event::MouseWheel{unit:egui::MouseWheelUnit::Point,delta:Vec2::new(0.0,40.0),modifiers:Default::default()}]);
     assert_eq!(h.app.page,2,"滚轮应跳过隐藏页面");
     h.click(H::local(21.0,68.0));
-    assert_eq!(h.app.page,0);
+    assert_eq!(h.app.page,5);
 }
 
 #[test]
@@ -2439,9 +2440,9 @@ fn page_visibility_moves_away_from_hidden_page_and_keeps_one_page() {
     h.app.go(4,1.0);
     h.app.adding=true;
     h.app.set_page_visible(4,false);
-    assert_eq!(h.app.page,0);
+    assert_eq!(h.app.page,1);
     assert!(!h.app.is_editing());
-    for page in [0,1,3,5,6,7,8,9,10] {h.app.set_page_visible(page,false);}
+    for page in [1,3,5,6,7,8,9,10] {h.app.set_page_visible(page,false);}
     assert_eq!(h.app.page,2);
     h.app.set_page_visible(2,false);
     assert!(h.app.settings.visible_pages[2],"不能关闭最后一个页面");
@@ -2461,7 +2462,7 @@ fn page_visibility_does_not_reopen_hidden_pages_through_shortcuts_or_drops() {
     let mut h=H::new();
     h.app.set_page_visible(5,false);
     h.app.show_page(5);
-    assert_eq!(h.app.page,0);
+    assert_eq!(h.app.page,1);
     assert!(h.app.settings_open);
     assert_eq!(h.app.settings_tab,7,"隐藏页面的入口应进入对应设置");
     h.app.set_page_visible(3,false);
@@ -2469,7 +2470,7 @@ fn page_visibility_does_not_reopen_hidden_pages_through_shortcuts_or_drops() {
     std::fs::create_dir_all(crate::model::config_dir()).unwrap();
     std::fs::write(&file,"test").unwrap();
     h.app.on_drop(vec![file]);
-    assert_eq!(h.app.page,0);
+    assert_eq!(h.app.page,1);
     assert!(h.app.shelf.items.is_empty());
 }
 
@@ -4472,7 +4473,7 @@ fn page_resize_quota_calendar_weather_keep_date_and_grip_fixed() {
         h.app.settings.clock_seconds=long_clock;
         h.app.settings.clock_period=if long_clock {2}else{0};
         h.app.settings.island_size=105;
-        h.app.show_page(6);
+        h.app.show_page(7);
         let frame=|h:&mut H| {island_drag_frame(h,bounds,1.25,Some(Pos2::new(960.0,50.0)),None);};
         for _ in 0..60 {frame(&mut h);}
         let positions=|h:&H|{
@@ -4697,7 +4698,7 @@ fn low_power_notice_dismisses_without_opening_the_mail_page() {
     for _ in 0..60{h.frame(vec![]);}
     h.click_text("知道了");
     assert!(h.app.notice.is_none());
-    assert_eq!(h.app.page,0,"低电量提示只需确认关闭");
+    assert_eq!(h.app.page,1,"低电量提示只需确认关闭");
 }
 
 #[test]
@@ -6347,7 +6348,7 @@ fn automatic_minimal_hides_unread_hit_area_until_reopened(){
         assert!(out.notice_hit.is_none(),"{dock:?} 避让时未读仍占用鼠标区域");
         assert!(out.click_through,"{dock:?} 细条可感应悬停，点击应交给底下的程序");
         assert_eq!(h.app.pending_messengers.len(),2);
-        h.app.show_page(0);
+        h.app.show_page(1);
         for _ in 0..60 {side_frame_with(&mut h,None);}
         let opened=side_frame_with(&mut h,None);
         assert!(opened.notice_hit.is_some() && !opened.click_through);
@@ -7032,7 +7033,7 @@ fn wheel_short_lists_turn_pages(){
     h.app.calendar.view.day=day;h.app.calendar.view.month=crate::calendar::month_start(day);h.app.calendar.view.loaded=Some(h.app.calendar.view.month);
     for (count,ended,all_day) in [(0,false,false),(1,false,false),(5,false,false),(8,true,false),(4,false,true)]{
         h.app.calendar.view.events=(0..count).map(|i|crate::mail::Meeting{all_day,title:format!("日程 {i}"),start:if ended{start-7200}else{start+i*60},end:Some(if ended{start-3600}else{start+3600}),at:String::new(),uid:format!("wheel-{i}")}).collect();
-        for (delta,page) in [(-40.0,8),(40.0,6)]{
+        for (delta,page) in [(-40.0,8),(40.0,5)]{
             h.app.show_page(7);h.hover(H::local(300.0,160.0),0.5);h.wheel(delta);
             assert_eq!(h.app.page,page,"日历可见列表未溢出应翻页，条数 {count}");
         }
@@ -7060,7 +7061,7 @@ fn mail_reading_wheel_over_headers_never_turns_pages(){
     }
     h.click(H::local(350.0,48.0));assert!(h.app.mail.open_uid.is_none());
     h.hover(H::local(210.0,18.0),0.5);h.wheel(-120.0);
-    assert_eq!(h.app.page(),6,"返回列表后顶栏滚轮应恢复翻页");
+    assert_eq!(h.app.page(),7,"返回列表后顶栏滚轮应恢复翻页");
 }
 
 #[test]
@@ -7445,12 +7446,12 @@ fn closed_modules_stop_their_reminders_and_timers(){
 
 #[test]
 fn every_module_settings_tab_maps_to_its_page(){
-    let titles=["通用","音乐","专注","健康","待办","置物","消息提醒","邮箱","日程","关于","页面管理","AI 额度","天气","外观","位置","系统性能","无线设备"];
+    let titles=["通用","","专注","健康","待办","置物","消息提醒","邮箱","日程","关于","页面管理","","天气","外观","位置","系统性能","无线设备"];
     let mut pages:Vec<_>=(0..titles.len()).filter_map(crate::extras::settings_tab_module).collect();
     for tab in 0..titles.len() {
         if let Some(page)=crate::extras::settings_tab_module(tab) {assert!(crate::app::PAGE_NAMES[page].chars().next()==titles[tab].chars().next(),"{} ↔ {}",titles[tab],crate::app::PAGE_NAMES[page]);}
     }
-    pages.sort();assert_eq!(pages,(0..crate::app::PAGE_NAMES.len()).collect::<Vec<_>>(),"每个功能页面各有一个设置分页");
+    pages.sort();assert_eq!(pages,vec![1,2,3,4,5,7,8,9,10],"每个功能页面各有一个设置分页");
     assert_eq!(crate::app::PAGE_SETTINGS_TABS[crate::app::BLUETOOTH_PAGE],crate::extras::SETTINGS_TAB_WIRELESS);
 }
 
@@ -7828,3 +7829,5 @@ fn lingqi_island_gallery(){
         ).to_image().save(dest.join(format!("{name}.png"))).unwrap();
     }
 }
+
+
