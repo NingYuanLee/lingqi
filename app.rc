@@ -1,8 +1,8 @@
 #pragma code_page(65001)
 1 ICON "assets/lingqi.ico"
 1 VERSIONINFO
- FILEVERSION 0,1,2,0
- PRODUCTVERSION 0,1,2,0
+ FILEVERSION 0,1,3,0
+ PRODUCTVERSION 0,1,3,0
  FILEFLAGSMASK 0x3fL
  FILEFLAGS 0x0L
  FILEOS 0x40004L
@@ -17,8 +17,8 @@ BEGIN
             VALUE "InternalName", "Lingqi"
             VALUE "OriginalFilename", "lingqi.exe"
             VALUE "ProductName", "灵栖 Lingqi"
-            VALUE "ProductVersion", "0.1.2"
-            VALUE "FileVersion", "0.1.2"
+            VALUE "ProductVersion", "0.1.3"
+            VALUE "FileVersion", "0.1.3"
             VALUE "CompanyName", "Lingqi"
             VALUE "LegalCopyright", "Copyright (c) 2026 Lingqi"
         END
