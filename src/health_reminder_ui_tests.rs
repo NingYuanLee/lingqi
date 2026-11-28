@@ -266,3 +266,15 @@ fn system_notify_defaults_on_and_persists(){
     h.app.settings.system_notify=true;h.app.settings.save();
     assert!(crate::model::Settings::load().system_notify);
 }
+
+/// 收起时的健康提醒入口要完整落在岛体高度内：贴着顶边会被裁掉一半，红点也看不见。
+#[test]
+fn health_badges_stay_inside_the_bar_height(){
+    let _g=ENV_LOCK.lock().unwrap_or_else(|e|e.into_inner());
+    let mut h=due();
+    for kind in ["water","sit"] {
+        let rect=badge(&h,kind);
+        assert!(rect.top()>=0.0,"{kind} 入口不能超出岛体顶边（top={}）",rect.top());
+        assert!(rect.bottom()<=crate::app::BAR_H,"{kind} 入口不能超出岛体底边（bottom={}）",rect.bottom());
+    }
+}

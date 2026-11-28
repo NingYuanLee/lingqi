@@ -4892,3 +4892,4 @@ fn shoot_unread(h:&mut H,raster:&mut crate::preview_raster::Raster,dest:&std::pa
         raster.free_textures(&output.textures_delta);
     }
 }
+

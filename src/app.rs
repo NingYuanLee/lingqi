@@ -1786,12 +1786,7 @@ impl App {
         if bottom {origin.y=panel.top();}
         let clip = panel.intersect(win);
         let base = Card::new(ui, origin, clip);
-        // 收起时健康提醒的常驻入口（喝水/活动）。
-        // 收起时健康提醒的常驻入口（喝水/活动），画在岛体右侧。
-        if !self.open {
-            let badge_card=Card::new(ui,origin,win);
-            self.draw_health_badges(&badge_card,panel,!self.side(),&mut cmds);
-        }
+        // 健康提醒的常驻入口改到桌宠之后画（见下方），否则会被桌宠盖住。
         self.cursor_local = env.cursor.map(|p| base.to_local(p));
 
         let mut top_bar_notice=None;
@@ -1871,6 +1866,11 @@ impl App {
             } else {
                 self.pet.draw(&pet_card,pet_x,self.t,palette);
             }
+        }
+        // 健康提醒的常驻入口：必须画在桌宠之后，否则会被桌宠盖住看不见。
+        if !self.open {
+            let badge_card=Card::new(ui,origin,win);
+            self.draw_health_badges(&badge_card,panel,!self.side(),&mut cmds);
         }
         let previous_scroll=self.content_scroll.take();
         let mut page_transition=false;
@@ -2120,16 +2120,19 @@ impl App {
         // 竖向停靠时入口竖排，贴着岛体一侧。
         let count=health.len() as f32;
         let side=self.dock().is_side();
-        let (base_x,base_y)=if side {(panel.min.x+4.0,panel.min.y+8.0)}else{(panel.max.x+6.0,panel.min.y+4.0)};
-        let base_x=base_x-c.origin.x;
-        let base_y=base_y-c.origin.y;
+        // 入口放在岛体药丸内部、常驻内容（电量、时钟、性能环…）的右侧。
+        // 之前画在岛体外侧：被岛体边缘裁掉一半；按顶边定位：另一半被顶边裁掉，
+        // 红点整个跑到屏幕外；按局部 x 放：又落在岛体左边界之外。
+        // 这里用岛体自身的右边界来定位，图标与红点都在药丸内、且不被内容压住。
+        let (base_x,base_y)=if side {(4.0,12.0)}else{(panel.max.x-10.0-c.origin.x,14.0)};
         for (i,kind) in health.iter().enumerate(){
             let x=if side {base_x}else{base_x+step*i as f32};
             let y=if side {base_y+step*i as f32}else{base_y};
             kind.icon(c,x,y,0.7);
             c.circle(x+8.0,y-7.0,2.6,Color32::from_rgb(255,59,48));
-            let button=if side {c.hit(base_x,base_y+step*i as f32,32.0,step,kind.id().to_string())}
-                        else {c.hit(base_x+step*i as f32,base_y,step,BAR_H,kind.id().to_string())};
+            // 点击区以图标为中心，不要偏上半格。
+            let button=if side {c.hit(base_x,base_y+step*i as f32-6.0,32.0,step,kind.id().to_string())}
+                        else {c.hit(base_x+step*i as f32,base_y-13.0,step,26.0,kind.id().to_string())};
             if crate::paint::bar_tooltip(button,format!("{} · 点击确认，重新计时",kind.label())).clicked(){self.confirm_health_reminder(*kind);}
         }
         let _=(horizontal,cmds);
@@ -2820,6 +2823,7 @@ impl App {
             self.side_bar(&c,panel.width(),panel.height(),env,resident_day);
         }
         if reveal>0.004 {self.shared_header(&base.faded(reveal),base.origin.x+PW/2.0,1.0,reveal,env,None);}
+        self.draw_health_badges(base,panel,true,&mut Vec::new());
     }
 
     fn update_pet(&mut self, env: &Env, cx: f32, top:f32) {
