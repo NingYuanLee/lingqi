@@ -1234,7 +1234,7 @@ fn run() -> eframe::Result<()> {
     }
     // 自动重启或「立即重启」拉起的新进程：先等旧进程退出，再做单实例检查。
     diagnostics::wait_for_previous_instance();
-    // 单实例（与原版同名互斥体）
+    // 单实例：互斥体名已改为 Lingqi，与原版互不干扰
     #[cfg(windows)]
     if !profiling_island() && !lingqi::tray::single_instance() {
         if !lingqi::tray::activate_existing(false) {
