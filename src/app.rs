@@ -1311,37 +1311,6 @@ impl App {
         }
     }
 
-    /// 多时区：当前各时区的显示内容。
-    fn worldclock_views(&self)->Vec<crate::worldclock::ZoneView>{
-        let now=chrono::Utc::now();
-        let local=crate::worldclock::local_offset_seconds();
-        self.settings.world_zones.iter().filter_map(|zone|crate::worldclock::view(zone,now,local)).collect()
-    }
-    /// 多时区在常驻条上占的宽度。
-    fn worldclock_width(&self,views:&[crate::worldclock::ZoneView])->f32{
-        if views.is_empty(){return 0.0;}
-        views.iter().map(|view|self.worldclock_text_w(&view.time)+10.0).sum::<f32>()-10.0
-    }
-    fn worldclock_text_w(&self,text:&str)->f32{
-        text.chars().count() as f32*5.6+2.0
-    }
-    /// 常驻条上的多时区时钟：只显示时间，城市名放在悬停提示里。
-    fn draw_worldclock(&mut self,c:&Card,cx:f32,layout:&Layout){
-        let Some(x)=layout.x[bar::WORLDCLOCK] else{return;};
-        let views=self.worldclock_views();
-        if views.is_empty(){return;}
-        let total=self.worldclock_width(&views).min(layout.widths[bar::WORLDCLOCK]+0.5);
-        let mut left=cx+x-total/2.0;
-        for view in &views{
-            let w=self.worldclock_text_w(&view.time);
-            if left+w>cx+x+total/2.0+0.5 {break;}
-            c.text(left,17.0,&view.time,10.0,W::Regular,theme::WHITE,H::Left);
-            let tip=format!("{} · {}",view.label,view.offset);
-            let hit=c.hit(left-2.0,2.0,w+4.0,26.0,("worldclock",&view.label)).on_hover_text(tip);
-            if hit.clicked(){self.open_settings();}
-            left+=w+10.0;
-        }
-    }
     pub(crate) fn pet_enabled(&self)->bool {self.settings.pet && !self.effective_minimal() && !self.side()}
     pub(crate) fn pet_space(&self)->f32 {if self.pet_enabled(){44.0}else{0.0}}
     fn lyric_focus_space(&self)->f32 {if self.pomo.running{crate::focus_bar::LYRIC_WIDTH+10.0}else{0.0}}
@@ -1542,12 +1511,6 @@ impl App {
         }
         if let Some(extra)=self.weather_pill_extra(&ctx){ layout.widen(bar::WEATHER,extra); }
         if resident_day.is_none() && !self.settings.show_clock {layout.hide_clock();}
-        // 放不下整组时不挤压其他常驻项，整组隐藏。
-        let zones=self.worldclock_views();
-        if !zones.is_empty(){
-            let zone_w=self.worldclock_width(&zones);
-            if zone_w<=self.resident_limit()-layout.width-12.0 {layout.append_worldclock(zone_w);}
-        }
         #[cfg(feature="sdk-js")]
         {
             let suppress = self.effective_minimal() || self.notice.is_some() || self.hud_alpha > 0.003
@@ -2812,7 +2775,6 @@ impl App {
         if compact_alpha>0.004 {
             let c=base.faded(compact_alpha);let c=if compact_alpha<0.8{c.ghost()}else{c};
             if let Some(x)=layout.x[bar::PERFORMANCE] {self.performance_bar(&c,local_cx+x);}
-            self.draw_worldclock(&c,local_cx,&layout);
             if let Some(x)=layout.x[bar::WEATHER] { self.draw_pill_weather(&c,local_cx+x,&layout); }
             #[cfg(feature="sdk-js")]
             {

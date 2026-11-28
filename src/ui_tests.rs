@@ -3547,7 +3547,7 @@ fn page_order_drag_applies_on_release_and_saves() {
     }
     for _ in 0..3 {draw(&mut h,vec![]);}
     let point=|h:&H,label:&str|h.shapes.iter().find_map(|s|match &s.shape {egui::Shape::Text(t) if t.galley.text()==label && s.clip_rect.contains(t.visual_bounding_rect().left_center())=>Some(t.visual_bounding_rect().left_center()),_=>None}).unwrap();
-    let from=point(&h,"播放控制与同步歌词")+egui::vec2(-18.0,-6.0);
+    let from=point(&h,"临时收纳文件位置")+egui::vec2(-18.0,-6.0);
     let to=point(&h,"喝水与久坐提醒");
     let button=|pos,pressed|egui::Event::PointerButton{pos,button:egui::PointerButton::Primary,pressed,modifiers:Default::default()};
     draw(&mut h,vec![egui::Event::PointerMoved(from),button(from,true)]);
@@ -3555,7 +3555,7 @@ fn page_order_drag_applies_on_release_and_saves() {
     draw(&mut h,vec![egui::Event::PointerMoved(to)]);
     assert_eq!(h.app.settings.page_order,[0,1,2,3,4,5,6,7,8,9,10]);
     draw(&mut h,vec![button(to,false)]);
-    assert_eq!(h.app.settings.page_order,[1,2,0,3,4,5,6,7,8,9,10]);
+    assert_eq!(h.app.settings.page_order,[0,1,3,2,4,5,6,7,8,9,10]);
     assert_eq!(crate::model::Settings::load().page_order,h.app.settings.page_order);
 }
 

@@ -279,7 +279,8 @@ pub struct Settings {
     pub pet: bool,
     pub pet_style: PetStyle,
     /// 多时区：IANA 时区名列表（如 Asia/Shanghai）。
-    pub world_zones: Vec<String>,
+    /// 主时钟与日期使用的时区（IANA 名）。
+    pub timezone: String,
     /// AI 助手总开关。关掉时不联网、不读凭据、零开销。
     pub ai_enabled: bool,
     /// 允许 AI 改动本机数据（加待办、设定提醒）。
@@ -369,7 +370,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, pet_style: PetStyle::Generated, world_zones: Vec::new(), ai_enabled: false, ai_allow_actions: false, ai_context_clipboard: false, ai_model: String::new(), minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [false,true,true,true,true,false,false,false,true,false,false], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_page_shortcuts: true, show_clock: true, resident_date: ResidentDate::Off, show_battery: true, show_weather: true, show_performance: true, performance_bar: Default::default(), performance_metrics: 7, performance_view: Default::default(), clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, show_bluetooth:true, bluetooth_pinned:Vec::new(), bluetooth_resident_style:0, bluetooth_resident_custom:false, bluetooth_battery_notifications:true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, system_notify: true, sound: false, hide_fullscreen: true, exclude_from_capture: false, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
+        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, pet_style: PetStyle::Generated, timezone: crate::worldclock::DEFAULT_TIMEZONE.to_string(), ai_enabled: false, ai_allow_actions: false, ai_context_clipboard: false, ai_model: String::new(), minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [false,true,true,true,true,false,false,false,true,false,false], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_page_shortcuts: true, show_clock: true, resident_date: ResidentDate::Off, show_battery: true, show_weather: true, show_performance: true, performance_bar: Default::default(), performance_metrics: 7, performance_view: Default::default(), clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, show_bluetooth:true, bluetooth_pinned:Vec::new(), bluetooth_resident_style:0, bluetooth_resident_custom:false, bluetooth_battery_notifications:true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, system_notify: true, sound: false, hide_fullscreen: true, exclude_from_capture: false, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
     }
 }
 
@@ -420,7 +421,10 @@ impl Settings {
                 "oled_shift" => s.oled_shift = v != "0",
                 "pet" => s.pet = v == "1" || v.eq_ignore_ascii_case("true"),
                 "pet_style" => s.pet_style = PetStyle::parse(&v),
-                "world_zones" => s.world_zones = serde_json::from_str(&v).unwrap_or_default(),
+                "timezone" => {
+            let zone = v.trim().trim_matches('"').to_string();
+            if crate::worldclock::valid(&zone) { s.timezone = zone; }
+        }
                 "ai_enabled" => s.ai_enabled = v == "1" || v.eq_ignore_ascii_case("true"),
                 "ai_allow_actions" => s.ai_allow_actions = v == "1" || v.eq_ignore_ascii_case("true"),
                 "ai_context_clipboard" => s.ai_context_clipboard = v == "1" || v.eq_ignore_ascii_case("true"),
@@ -508,7 +512,9 @@ impl Settings {
         }
         // 音乐、AI 额度、邮箱与日程页已下线：老配置里开着也要关掉，避免出现空白页。
         // 已下线的页（音乐/邮箱/额度/日程/蓝牙）一律关掉，免得导航里出现空页面。
-    for page in REMOVED_PAGES {s.visible_pages[page]=false;}
+    for page in REMOVED_PAGES {s.visible_pages[page]=false;}
+    // 老配置里是多时区列表：取第一个作为主时区，没有就用默认的北京时间。
+    if s.timezone.trim().is_empty() {s.timezone = crate::worldclock::DEFAULT_TIMEZONE.to_string();}
         if !s.visible_pages.contains(&true) { s.visible_pages[1]=true; }
         // 旧版只有一个指定城市：迁移进已保存列表，升级后下拉框里能直接看到它。
         if let Some(position)=s.weather_position.clone().filter(|p|p.label==s.weather_city) {
@@ -533,7 +539,7 @@ impl Settings {
                 ("settings_theme".into(),self.settings_theme.key().into()),
                 ("pet".into(), if self.pet { "1".to_string() } else { "0".to_string() }),
                 ("pet_style".into(), self.pet_style.key().into()),
-                ("world_zones".into(), serde_json::to_string(&self.world_zones).unwrap_or_default()),
+                ("timezone".into(), self.timezone.clone()),
                 ("ai_enabled".into(), if self.ai_enabled { "1".to_string() } else { "0".to_string() }),
                 ("ai_allow_actions".into(), if self.ai_allow_actions { "1".to_string() } else { "0".to_string() }),
                 ("ai_context_clipboard".into(), if self.ai_context_clipboard { "1".to_string() } else { "0".to_string() }),

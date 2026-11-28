@@ -6,7 +6,10 @@ fn settings_old_tab_numbers_open_merged_pages(){
     use crate::extras::settings_tab_group_for_tests as group;
     assert_eq!(group(2),"专注与健康");assert_eq!(group(3),"专注与健康");
     assert_eq!(group(4),"待办与置物");assert_eq!(group(5),"待办与置物");
-    assert_eq!(group(6),"消息提醒");
+    // 消息提醒(6)、邮箱(7)、日程(8)、无线设备已下线，不再有侧栏项。
+    for tab in [6,7,8,crate::extras::SETTINGS_TAB_WIRELESS] {
+        assert_eq!(group(tab),"通用","已下线的分页不应再指向某个功能页");
+    }
     assert_eq!(group(0),"通用");assert_eq!(group(13),"外观");assert_eq!(group(14),"位置");
     assert_eq!(group(10),"页面管理");assert_eq!(group(9),"关于");
 }

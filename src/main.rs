@@ -371,7 +371,7 @@ impl Shell {
     }
 
     fn env(&mut self, ctx: &egui::Context) -> Env {
-        let (clock, today, date) = local_now();
+        let (clock, today, date) = lingqi::worldclock::now(&self.app.settings.timezone);
         // 电量变化很慢，每 5 秒读一次就够
         if self.sys.2.ready(Duration::from_secs(5)) {
             let (b, c) = read_power();
@@ -929,16 +929,6 @@ mod repaint_tests {
 }
 
 #[cfg(windows)]
-fn local_now() -> (String, String, String) {
-    use windows::Win32::System::SystemInformation::GetLocalTime;
-    let st = unsafe { GetLocalTime() };
-    let wd = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-    (
-        format!("{:02}:{:02}:{:02}", st.wHour, st.wMinute, st.wSecond),
-        format!("{:04}-{:02}-{:02}", st.wYear, st.wMonth, st.wDay),
-        format!("{}月{}日 {}", st.wMonth, st.wDay, wd[(st.wDayOfWeek as usize).min(6)]),
-    )
-}
 
 #[cfg(not(windows))]
 fn local_now() -> (String, String, String) {
@@ -1168,7 +1158,7 @@ fn run_self_backend() -> Result<(), String> {
         frames += 1;
         // 每帧的运行环境：时间、电量、光标、锁屏。
         env.t = started.elapsed().as_secs_f64();
-        let (clock, today, date) = local_now();
+        let (clock, today, date) = lingqi::worldclock::now(&app.settings.timezone);
         env.clock = clock;
         env.today = today;
         env.date = date;

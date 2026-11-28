@@ -549,7 +549,9 @@ mod tests {
     fn settings_groups_keep_every_page_reachable() {
         // 每个页面的设置分页都要落在且只落在一个分组里，页面才都能从设置里到达。
         for page in 0..crate::app::PAGE_NAMES.len() {
-            let tab = crate::app::PAGE_SETTINGS_TABS[page];
+            // 已下线的页（音乐/邮箱/额度/日程/蓝牙）不再有设置入口。
+if crate::model::REMOVED_PAGES.contains(&page) {continue;}
+let tab = crate::app::PAGE_SETTINGS_TABS[page];
             let matches: Vec<_> = SETTINGS_GROUPS.iter().filter(|(_,start,end,_)| (*start..=*end).contains(&tab)).collect();
             assert_eq!(matches.len(), 1, "页面 {page} 的设置分页 {tab} 必须且只能属于一个分组");
         }
@@ -1169,9 +1171,9 @@ pub(crate) const SETTINGS_TAB_PLUGIN_DETAIL: usize = 18;
 /// 侧栏：一项就是一页，不再有页内子标签。专注与健康（2、3）、待办与置物（4、5）各合成一页；
 /// 插件和关于固定在左下角，上方一条细线和功能页分开。
 /// 第四列是这一项之前的分组标题。
-const SETTINGS_GROUPS: [(&str,usize,usize,&str);14 + cfg!(feature="sdk-js") as usize] = [
+const SETTINGS_GROUPS: [(&str,usize,usize,&str);10 + cfg!(feature="sdk-js") as usize] = [
     ("通用",0,0,"灵栖"), ("外观",SETTINGS_TAB_APPEARANCE,SETTINGS_TAB_APPEARANCE,""), ("位置",SETTINGS_TAB_POSITION,SETTINGS_TAB_POSITION,""), ("页面管理",SETTINGS_TAB_PAGES,SETTINGS_TAB_PAGES,""),
-    ("专注与健康",2,3,""), ("待办与置物",4,5,""), ("消息提醒",6,6,""), ("邮箱",7,7,""), ("日程",8,8,""), ("天气",12,12,""), ("系统性能",15,15,""), ("无线设备",SETTINGS_TAB_WIRELESS,SETTINGS_TAB_WIRELESS,""),
+    ("专注与健康",2,3,""), ("待办与置物",4,5,""), ("天气",12,12,""), ("系统性能",15,15,""),
     #[cfg(feature="sdk-js")] ("插件",SETTINGS_TAB_PLUGINS,SETTINGS_TAB_PLUGINS,""),
     ("AI 助手",SETTINGS_TAB_AI,SETTINGS_TAB_AI,""),
     ("关于",9,9,""),
@@ -1486,7 +1488,6 @@ impl App {
                         ui.add_enabled_ui(on,|ui|{
                             settings_label(ui,"岛上常驻");
                             settings_card(ui,|ui|{
-                                resident_setting_row(ui,"无线设备电量","收起时显示，最多两台",on,&mut self.settings.show_bluetooth);
                                 if self.settings.show_bluetooth {
                                     settings_separator(ui);
                                 }
@@ -1573,8 +1574,6 @@ impl App {
                             resident_setting_row(ui,"天气","天气图标和温度，点击打开天气页",
                                 self.module_on(crate::app::WEATHER_PAGE),&mut self.settings.show_weather);
                             ui.separator();
-                            resident_setting_row(ui,"无线设备电量","收起时显示，最多两台",
-                                self.module_on(crate::app::BLUETOOTH_PAGE),&mut self.settings.show_bluetooth);
                             ui.separator();
                             ui.add_enabled_ui(self.module_on(crate::app::PERFORMANCE_PAGE),|ui|setting_row(ui,"系统性能","点击常驻指标打开性能页",&mut self.settings.show_performance));
                             ui.separator();
@@ -1593,7 +1592,10 @@ impl App {
                             let mut jump=None;
                             let row_w=ui.available_width();
                             for (index,page) in self.settings.page_order.into_iter().enumerate() {
-                                if index>0 {ui.separator();}
+                                
+// 已下线的页不再出现：内容已经没有了，开关也没有意义。
+if crate::model::REMOVED_PAGES.contains(&page) {continue;}
+if index>0 {ui.separator();}
                                 let mut visible=self.settings.visible_pages[page];
                                 let can_change=!visible || self.settings.visible_pages.iter().filter(|enabled|**enabled).count()>1;
                                 let row=ui.push_id(("page-order",page),|ui|ui.horizontal(|ui|{
@@ -1669,45 +1671,49 @@ impl App {
                             } else {
                                 settings_control_row_right(ui,"日期常驻",date_modes);
                             }
-                        });
-                        settings_label(ui,"多时区");
-                        settings_card(ui,|ui|{
-                            ui.label(egui::RichText::new("在常驻条上并排显示多个城市的当前时间。").size(12.0).color(settings_color(ctx,Color32::from_gray(180),Color32::from_gray(75))));
-                            ui.add_space(4.0);
-                            let zones=self.settings.world_zones.clone();
-                            if zones.is_empty(){
-                                ui.label(egui::RichText::new("还没有添加时区。").size(12.0).color(ui.visuals().weak_text_color()));
-                            }else{
-                                for zone in &zones{
-                                    ui.horizontal(|ui|{
-                                        ui.label(egui::RichText::new(format!("{} · {}",crate::worldclock::short_label(zone),zone)).size(12.0));
-                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui|{
-                                            if ui.small_button("移除").clicked(){
-                                                self.settings.world_zones.retain(|item|item!=zone);
-                                                self.settings.save();
-                                            }
-                                        });
-                                    });
-                                }
-                            }
-                            ui.add_space(4.0);
-                            ui.horizontal(|ui|{
-                                ui.add_sized([(ui.available_width()-56.0).max(120.0),27.0],egui::TextEdit::singleline(&mut self.world_zone_input).hint_text("时区名，如 Asia/Shanghai"));
-                                if ui.add_sized([48.0,27.0],egui::Button::new("添加")).clicked(){
-                                    let input=self.world_zone_input.trim().to_string();
-                                    self.world_zone_input.clear();
-                                    if crate::worldclock::valid(&input){
-                                        let mut next=self.settings.world_zones.clone();
-                                        next.push(input);
-                                        self.settings.world_zones=crate::worldclock::normalize(&next);
-                                        self.settings.save();
+                            ui.separator();
+                            // 时区：岛上的时间与日期按这里选的时区显示，默认北京时间。
+                            let popup=egui::Id::new("timezone-options");
+                            let mut picked=None;
+                            let response=ui.horizontal(|ui|{
+                                ui.label(egui::RichText::new("时区").size(12.0));
+                                let input=ui.add_sized([(ui.available_width()-120.0).max(140.0),27.0],egui::TextEdit::singleline(&mut self.world_zone_input)
+                                    .id_salt("timezone-input").hint_text("搜索城市或地区，如 Shanghai"));
+                                let arrow=ui.add_sized([30.0,27.0],egui::Button::new("").corner_radius(7.0)).on_hover_text("选择时区");
+                                if input.changed()||input.clicked(){ui.memory_mut(|m|m.open_popup(popup));}
+                                if arrow.clicked(){ui.memory_mut(|m|m.toggle_popup(popup));}
+                                input.union(arrow)
+                            }).inner;
+                            let query=self.world_zone_input.trim().to_string();
+                            egui::popup::popup_below_widget(ui,popup,&response,egui::popup::PopupCloseBehavior::CloseOnClickOutside,|ui|{
+                                ui.spacing_mut().item_spacing.y=2.0;
+                                let weak=ui.visuals().weak_text_color();
+                                let current=self.settings.timezone.clone();
+                                let mut option=|ui:&mut egui::Ui,zone:&str|{
+                                    let chosen=zone==current;
+                                    if ui.selectable_label(chosen,crate::worldclock::display_name(zone)).clicked(){picked=Some(zone.to_string());}
+                                };
+                                if query.is_empty(){
+                                    ui.label(egui::RichText::new("常用时区").size(12.0).color(weak));
+                                    for zone in crate::worldclock::COMMON_TIMEZONES{option(ui,zone);}
+                                }else{
+                                    let hits=crate::worldclock::search(&query);
+                                    if hits.is_empty(){
+                                        ui.label(egui::RichText::new("没找到这个时区，试试英文城市名").size(12.0).color(weak));
                                     }else{
-                                        self.world_zone_note="时区名无效，请用 IANA 名称，如 Asia/Shanghai".into();
+                                        egui::ScrollArea::vertical().max_height(220.0).show(ui,|ui|{
+                                            for zone in hits{option(ui,zone);}
+                                        });
                                     }
                                 }
                             });
-                            if !self.world_zone_note.is_empty(){settings_hint(ui,&self.world_zone_note);}
-                            settings_hint(ui,"最多 4 个时区；填 IANA 名称，日期按夏令时自动调整。");
+                            if let Some(zone)=picked{
+                                self.world_zone_input.clear();
+                                self.settings.timezone=zone;
+                                self.settings.save();
+                                ctx.request_repaint_of(egui::ViewportId::ROOT);
+                            }
+                            settings_hint(ui,&format!("当前时区：{}。岛上的时间与日期按它显示，夏令时自动生效。",crate::worldclock::display_name(&self.settings.timezone)));
                         });
                         settings_label(ui,"启动");
                         settings_card(ui,|ui|{
