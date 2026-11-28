@@ -22,6 +22,7 @@ pub mod tessellate;
 pub mod text;
 
 pub use backend::Backend;
+pub use host::Host;
 pub use run_loop as render_loop;
 pub use window::IslandWindow;
 pub use renderer::{Renderer, ScreenDescriptor};

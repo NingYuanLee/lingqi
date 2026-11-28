@@ -57,13 +57,13 @@ pub fn to_egui_events(events: &[KeyEvent]) -> Vec<Event> {
     out
 }
 
-/// 跑消息循环，直到 `frame` 返回 false。
+/// 跑消息循环，直到 `frame` 返回 None。
 ///
-/// `frame` 在 egui 的上下文里画这一帧；返回 false 表示退出。
+/// `frame` 在 egui 的上下文里画这一帧；返回下一次该等多久（None 表示退出）。
 pub fn run(
     host: &mut Host,
     screen_rect: Rect,
-    mut frame: impl FnMut(&eframe::egui::Context) -> bool,
+    mut frame: impl FnMut(&eframe::egui::Context) -> Option<std::time::Duration>,
 ) -> Result<(), String> {
     let mut time = 0.0f64;
     loop {
@@ -76,8 +76,15 @@ pub fn run(
             ..Default::default()
         };
         time += 1.0 / 60.0;
+        let mut wait = std::time::Duration::from_millis(16);
         let mut keep_going = true;
-        let output = host.ctx.run(raw, |ctx| keep_going = frame(ctx));
+        let output = host.ctx.run(raw, |ctx| {
+            if let Some(delay) = frame(ctx) {
+                wait = delay;
+            } else {
+                keep_going = false;
+            }
+        });
         host.sync_fonts();
         let pixels_per_point = host.ctx.pixels_per_point();
         let primitives = host.ctx.tessellate(output.shapes, pixels_per_point);
@@ -86,6 +93,8 @@ pub fn run(
             break;
         }
         pump_messages();
+        // 按应用给的节奏等待：静止时几乎不占 CPU，形变动画时跟得上帧率。
+        std::thread::sleep(wait);
     }
     Ok(())
 }

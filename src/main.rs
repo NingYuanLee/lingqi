@@ -1121,7 +1121,117 @@ fn disable_material(app: &mut App, ctx: &egui::Context, error: String, _installe
     }
 }
 
+/// 自研渲染后端：不用 eframe，自己建窗口与 DirectComposition 交换链。
+///
+/// 失败时由调用方回退到 egui，并把原因写进诊断——不能让用户对着一个空窗口发呆。
+#[cfg(windows)]
+fn run_self_backend() -> Result<(), String> {
+    use lingqi::render::{render_loop, Host, IslandWindow};
+    let settings = lingqi::model::Settings::load();
+    let scale = settings.island_scale();
+    let width = (app::CANVAS_W * scale).round() as i32;
+    let height = (app::WIN_H * scale).round() as i32;
+    use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN};
+    let screen_width = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+    let x = ((screen_width - width) / 2).max(0);
+    let origin_x = x as f32 / scale;
+    let window = IslandWindow::new(width, height, x, 0)?;
+    let mut host = Host::new(window.hwnd(), width as u32, height as u32)?;
+    host.ctx.set_pixels_per_point(scale);
+    // 诊断：自研后端启动信息（窗口大小、缩放、后端名）。
+    lingqi::resources::append_log(
+        &lingqi::model::config_dir().join("diagnostics"),
+        "renderer-self",
+        &format!("灵栖自研渲染后端启动｜窗口 {}x{}｜缩放 {scale}｜适配器 {}", width, height, host.adapter_name()),
+    );
+
+    let mut app = App::new(&host.ctx, Options::default());
+    app.migrate_merged_switches();
+    let started = std::time::Instant::now();
+    // 后台采样：电量、网络与输入法状态。
+    let mut system_rx = lingqi::system::observe(host.ctx.clone(), lingqi::system::Snapshot::default(), None);
+    let canvas = eframe::egui::Rect::from_min_size(
+        eframe::egui::Pos2::ZERO,
+        eframe::egui::vec2(app::CANVAS_W, app::WIN_H),
+    );
+    let mut env = Env::default();
+    let mut repaint = std::time::Duration::from_millis(16);
+    let mut frames: u64 = 0;
+    let mut last_log = std::time::Instant::now();
+    // 基准模式：不按节奏等待，连续出帧，用来量渲染器的真实吞吐。
+    let bench_frames: u64 = std::env::var("LINGQI_SELF_BENCH")
+        .ok()
+        .and_then(|value| value.trim().parse().ok())
+        .unwrap_or(0);
+    let bench_started = std::time::Instant::now();
+    render_loop::run(&mut host, canvas, |ctx| {
+        frames += 1;
+        // 每帧的运行环境：时间、电量、光标、锁屏。
+        env.t = started.elapsed().as_secs_f64();
+        let (clock, today, date) = local_now();
+        env.clock = clock;
+        env.today = today;
+        env.date = date;
+        env.screen_locked = lingqi::system::screen_locked();
+        env.idle_seconds = Some(lingqi::system::idle_seconds());
+        env.desktop_cursor = desktop_cursor();
+        // 自研后端没有 egui 的窗口输入，光标位置要自己换算成窗口内坐标：
+        // 岛体的悬停展开靠它。
+        if let Some((desktop_x, desktop_y)) = env.desktop_cursor {
+            env.cursor = Some(eframe::egui::Pos2::new(
+                desktop_x as f32 / scale - origin_x,
+                desktop_y as f32 / scale,
+            ));
+        } else {
+            env.cursor = None;
+        }
+        while let Ok(observation) = system_rx.try_recv() {
+            env.volume = observation.system.volume;
+            env.network = Some(observation.system.network);
+        }
+        // 岛体画在自己的临时 Ui 里：egui 收集形状，交给自写渲染器呈现。
+        let mut ui = eframe::egui::Ui::new(
+            ctx.clone(),
+            eframe::egui::Id::new(("lingqi-self", true)),
+            eframe::egui::UiBuilder::new().max_rect(canvas),
+        );
+        let out = app.frame(&mut ui, canvas, &env);
+        repaint = out.repaint_after;
+        if bench_frames > 0 && frames >= bench_frames {
+            let elapsed = bench_started.elapsed().as_secs_f64();
+            lingqi::resources::append_log(
+                &lingqi::model::config_dir().join("diagnostics"),
+                "renderer-self",
+                &format!(
+                    "自研后端基准：{frames} 帧耗时 {elapsed:.2}s → {:.1} 帧/秒",
+                    frames as f64 / elapsed.max(f64::EPSILON)
+                ),
+            );
+            std::process::exit(0);
+        }
+        if last_log.elapsed().as_secs() >= 5 {
+            lingqi::resources::append_log(
+                &lingqi::model::config_dir().join("diagnostics"),
+                "renderer-self",
+                &format!("自研后端已出 {frames} 帧｜本次等待 {:?}", repaint),
+            );
+            frames = 0;
+            last_log = std::time::Instant::now();
+        }
+        // 基准模式下不等待：连续出帧，量渲染器的真实吞吐。
+        Some(if bench_frames > 0 { std::time::Duration::ZERO } else { repaint })
+    })
+}
 fn run() -> eframe::Result<()> {
+    // 自研渲染后端：显式要求时才用（LINGQI_RENDERER_BACKEND=self）。
+    if lingqi::render::Backend::from_env().is_self_rendered() {
+        match run_self_backend() {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                diagnostics::report("自研渲染后端启动失败，已回退到 egui。", &error);
+            }
+        }
+    }
     // 自动重启或「立即重启」拉起的新进程：先等旧进程退出，再做单实例检查。
     diagnostics::wait_for_previous_instance();
     // 单实例（与原版同名互斥体）

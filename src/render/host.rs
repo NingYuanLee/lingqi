@@ -8,6 +8,22 @@ use crate::render::renderer::{Renderer, ScreenDescriptor};
 use crate::render::surface::{configure, create_surface, CompositionTarget};
 use windows::Win32::Foundation::HWND;
 
+/// 描述符表上限。DX12 会按这个上限预建整张描述符表：默认 100 万项约 61MB，
+/// 65536 项约 4MB，对灵栖的几张纹理仍然有上千倍余量。
+const MAX_BINDINGS: u32 = 65_536;
+
+/// 设备上限：小块显存分配 + 收紧描述符表。
+///
+/// 与 egui 路径（见 `graphics.rs`）保持一致，否则同一张显卡上两个后端的
+/// 内存占用会差出几百 MB——那不是渲染器的问题，是 DX12 分配器的默认块大小。
+fn small_limits() -> wgpu::Limits {
+    wgpu::Limits {
+        max_texture_dimension_2d: 8192,
+        max_non_sampler_bindings: MAX_BINDINGS,
+        ..wgpu::Limits::downlevel_webgl2_defaults()
+    }
+}
+
 /// 自研后端的宿主。
 pub struct Host {
     /// 岛体窗口。
@@ -24,6 +40,8 @@ pub struct Host {
     pub renderer: Renderer,
     /// egui 上下文（自己跑，不用 eframe）。
     pub ctx: eframe::egui::Context,
+    /// 适配器名字（诊断用）。
+    adapter_name: String,
     config: wgpu::SurfaceConfiguration,
 }
 
@@ -44,7 +62,8 @@ impl Host {
             &wgpu::DeviceDescriptor {
                 label: Some("lingqi-render"),
                 required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                required_limits: small_limits(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
                 ..Default::default()
             },
             None,
@@ -66,6 +85,7 @@ impl Host {
         configure(&surface, &device, &config, &target)?;
         // 渲染器要先建好：Host 的字段按顺序求值，先把 device 移进去就借不到了。
         let renderer = Renderer::new(&device, format, true);
+        let adapter_name = adapter.get_info().name.clone();
 
         Ok(Host {
             hwnd,
@@ -75,6 +95,7 @@ impl Host {
             target,
             renderer,
             ctx: eframe::egui::Context::default(),
+            adapter_name: adapter_name,
             config,
         })
     }
@@ -140,5 +161,10 @@ impl Host {
     /// 渲染器实例（测试与诊断用）。
     pub fn renderer(&self) -> &Renderer {
         &self.renderer
+    }
+
+    /// 适配器名字（写诊断用）。
+    pub fn adapter_name(&self) -> String {
+        self.adapter_name.clone()
     }
 }
