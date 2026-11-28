@@ -255,6 +255,12 @@ impl ResidentDate {
     }
 }
 
+/// 已经下线、不再有内容的页号。
+///
+/// 音乐（0）、邮箱（5）、AI 额度（6）、日程（7）、蓝牙（10）在瘦身时整块拿掉，
+/// 页号保留空洞以免老配置错位。这些页必须从导航里消失，也不该出现在默认设置里。
+pub const REMOVED_PAGES: [usize; 5] = [0, 5, 6, 7, 10];
+
 #[derive(Clone, Debug)]
 pub struct Settings {
     pub display_id: String,
@@ -363,7 +369,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, pet_style: PetStyle::Generated, world_zones: Vec::new(), ai_enabled: false, ai_allow_actions: false, ai_context_clipboard: false, ai_model: String::new(), minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [false,true,true,true,true,true,false,false,true,false,true], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_page_shortcuts: true, show_clock: true, resident_date: ResidentDate::Off, show_battery: true, show_weather: true, show_performance: true, performance_bar: Default::default(), performance_metrics: 7, performance_view: Default::default(), clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, show_bluetooth:true, bluetooth_pinned:Vec::new(), bluetooth_resident_style:0, bluetooth_resident_custom:false, bluetooth_battery_notifications:true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, system_notify: true, sound: false, hide_fullscreen: true, exclude_from_capture: false, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
+        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, oled_shift: false, dock: Dock::Top, settings_theme: Default::default(), pet: true, pet_style: PetStyle::Generated, world_zones: Vec::new(), ai_enabled: false, ai_allow_actions: false, ai_context_clipboard: false, ai_model: String::new(), minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [false,true,true,true,true,false,false,false,true,false,false], page_order: [0,1,2,3,4,5,6,7,8,9,10], show_page_shortcuts: true, show_clock: true, resident_date: ResidentDate::Off, show_battery: true, show_weather: true, show_performance: true, performance_bar: Default::default(), performance_metrics: 7, performance_view: Default::default(), clock_12h: false, clock_period: 0, clock_seconds: false, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, show_bluetooth:true, bluetooth_pinned:Vec::new(), bluetooth_resident_style:0, bluetooth_resident_custom:false, bluetooth_battery_notifications:true, read_notifications:false, wechat_notifications:false, wecom_notifications:false, feishu_notifications:false, dingtalk_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, system_notify: true, sound: false, hide_fullscreen: true, exclude_from_capture: false, avoid_top_bar: true, top_bar_on_top: false, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, sit_remind: true, sit_minutes: 60, lunch_rest: true, lunch_start: 720, lunch_end: 810, clipboard_history: true, weather_city: String::new(), weather_position: None, weather_saved: Vec::new(), render_compat: false, render_compat_reason: String::new() }
     }
 }
 
@@ -501,7 +507,8 @@ impl Settings {
             }
         }
         // 音乐、AI 额度、邮箱与日程页已下线：老配置里开着也要关掉，避免出现空白页。
-        s.visible_pages[0]=false;s.visible_pages[5]=false;s.visible_pages[6]=false;s.visible_pages[7]=false;
+        // 已下线的页（音乐/邮箱/额度/日程/蓝牙）一律关掉，免得导航里出现空页面。
+    for page in REMOVED_PAGES {s.visible_pages[page]=false;}
         if !s.visible_pages.contains(&true) { s.visible_pages[1]=true; }
         // 旧版只有一个指定城市：迁移进已保存列表，升级后下拉框里能直接看到它。
         if let Some(position)=s.weather_position.clone().filter(|p|p.label==s.weather_city) {

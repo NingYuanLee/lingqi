@@ -768,7 +768,10 @@ impl App {
         let clipboard_on = settings.clipboard_history;
         let (bw, bh) = if settings.minimal { (BAR_W_MIN, BAR_H_MIN) } else { (BAR_W, BAR_H) };
         let focus_seconds=settings.focus_minutes as f32*60.0;
-        let initial_page=settings.page_order.iter().copied().find(|page|settings.visible_pages[*page]).unwrap_or(0);
+        // 初始页必须是还在的页：已下线的页（音乐/邮箱/额度/日程/蓝牙）不能兜底。
+    let initial_page=settings.page_order.iter().copied()
+        .find(|page|settings.visible_pages[*page]&&!model::REMOVED_PAGES.contains(page))
+        .unwrap_or(FOCUS_PAGE);
         let mut weather=crate::weather::State::load(&settings.weather_city,settings.weather_position.as_ref());
         Self {
             forced_open_until:0.0, settings_open:false, settings_window:std::sync::Arc::new(std::sync::Mutex::new(crate::settings_window::State::load())), displays:Vec::new(), browser_at_top:false, browser_minimal_active:false, glass_tint:0.0, fluid:Default::default(), fluid_origin:Pos2::ZERO, fluid_art:None, fluid_title:String::new(), screen:None, horizontal_width:WIN_W, settings_focus_requested:false, settings_tab:0, settings_category:0, notification_apps:model::NotificationApps::load(), subpage:None, task_dialog:None,
@@ -1052,6 +1055,8 @@ impl App {
 
     fn navigation_pages(&self) -> impl Iterator<Item=usize> + '_ {
         self.settings.page_order.iter().copied()
+            // 已下线的页一律跳过：老配置里可能还开着，但内容已经没有了。
+            .filter(|page|!model::REMOVED_PAGES.contains(page))
             .filter(|page|self.settings.visible_pages[*page])
             .chain(PAGE_NAMES.len()..PAGE_NAMES.len()+self.status_page_count())
     }

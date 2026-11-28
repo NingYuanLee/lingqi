@@ -1581,7 +1581,7 @@ fn wheel_navigation_reaches_every_page_in_both_directions(){
     h.app.shelf.items.clear();h.app.todos.items.clear();
     h.hover(Pos2::new(WIN_W/2.0,12.0),1.0);
     h.hover(H::local(210.0,18.0),0.3);
-    for (delta,pages) in [(-40.0,[2,3,4,8,10,1]),(40.0,[10,8,4,3,2,1])] {
+    for (delta,pages) in [(-40.0,[2,3,4,8,1]),(40.0,[8,4,3,2,1])] {
         for page in pages {
             h.wheel(delta);
             assert_eq!(h.app.page,page,"滚轮翻页不能被空的置物架或待办卡住");
@@ -2013,7 +2013,7 @@ fn page_visibility_moves_away_from_hidden_page_and_keeps_one_page() {
     h.app.set_page_visible(4,false);
     assert_eq!(h.app.page,1);
     assert!(!h.app.is_editing());
-    for page in [1,3,5,6,7,8,9,10] {h.app.set_page_visible(page,false);}
+    for page in [1,3,8,9] {h.app.set_page_visible(page,false);}
     assert_eq!(h.app.page,2);
     h.app.set_page_visible(2,false);
     assert!(h.app.settings.visible_pages[2],"不能关闭最后一个页面");
@@ -2021,10 +2021,10 @@ fn page_visibility_moves_away_from_hidden_page_and_keeps_one_page() {
     h.click(H::local(398.0,68.0));
     h.click(H::local(21.0,68.0));
     assert_eq!(h.app.page,2);
-    h.app.set_page_visible(5,true);
+    h.app.set_page_visible(9,true);
     h.hover(H::local(300.0,60.0),0.7);
     h.click(H::local(398.0,68.0));
-    assert_eq!(h.app.page,5,"重新开启的页面应恢复导航");
+    assert_eq!(h.app.page,9,"重新开启的页面应恢复导航");
 }
 
 #[test]
@@ -3036,7 +3036,10 @@ fn page_arrows_stay_at_same_position_across_pages_and_docks() {
         let mut h=H::new();
         h.app.settings.dock=dock;
         h.app.settings.visible_pages.fill(true);
-        let pages=h.app.settings.page_order;
+        // 已下线的页不再参与导航：音乐/邮箱/额度/日程/蓝牙。
+        for page in crate::model::REMOVED_PAGES {h.app.settings.visible_pages[page]=false;}
+        let pages:Vec<usize>=h.app.settings.page_order.iter().copied()
+            .filter(|page|h.app.settings.visible_pages[*page]).collect();
         h.app.show_page(pages[0]);
         for _ in 0..100 {frame_control_draw(&mut h,None,vec![]);}
 
