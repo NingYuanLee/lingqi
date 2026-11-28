@@ -21,6 +21,7 @@ pub mod dcomp;
 pub mod net;
 pub mod render;
 pub mod sprite;
+pub mod smtc;
 pub mod worldclock;
 pub mod oled_shift;
 pub mod app;

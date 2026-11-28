@@ -182,9 +182,18 @@ fn context_render_lists_every_available_field() {
         performance: Some(Performance { cpu: Some(12.0), ram: Some(58.0), gpu: None }),
         clipboard: Some("订单号 A1234567".into()),
         city: Some("佛山".into()),
+        now_playing: Some("起风了 — 买辣椒也用券".into()),
     };
     let rendered = context.render();
-    for needle in ["本地时间", "天气：佛山", "电量：76%", "CPU 12%", "剪贴板：", "常驻城市：佛山"] {
+    for needle in [
+        "本地时间",
+        "天气：佛山",
+        "电量：76%",
+        "CPU 12%",
+        "剪贴板：",
+        "常驻城市：佛山",
+        "正在播放：起风了",
+    ] {
         assert!(rendered.contains(needle), "上下文里应含 {needle}，实际：{rendered}");
     }
     assert!(!rendered.contains("None"));

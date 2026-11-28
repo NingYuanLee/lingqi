@@ -47,6 +47,8 @@ pub struct IslandContext {
     pub performance: Option<Performance>,
     pub clipboard: Option<String>,
     pub city: Option<String>,
+    /// 现在正在播放的曲目（标题 — 作者）。
+    pub now_playing: Option<String>,
 }
 
 /// 采集用的原料。`App` 侧负责填好，这里只管组装。
@@ -57,6 +59,8 @@ pub struct Sources {
     pub performance: Option<Performance>,
     pub clipboard: Option<String>,
     pub city: Option<String>,
+    /// 现在正在播放的曲目（标题 — 作者）。
+    pub now_playing: Option<String>,
 }
 
 /// 采集一次上下文。缺失项留空，不编造。
@@ -70,6 +74,7 @@ pub fn collect(sources: &Sources) -> IslandContext {
         performance: sources.performance,
         clipboard: sources.clipboard.as_deref().and_then(clipboard_for_prompt),
         city: sources.city.clone(),
+        now_playing: sources.now_playing.clone(),
     }
 }
 
@@ -84,6 +89,9 @@ impl IslandContext {
             } else {
                 lines.push(format!("本地时间：{time}（{zone}）"));
             }
+        }
+        if let Some(playing) = &self.now_playing {
+            lines.push(format!("正在播放：{playing}"));
         }
         if let Some(weather) = &self.weather {
             let mut line = format!(

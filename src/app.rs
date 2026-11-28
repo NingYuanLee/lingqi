@@ -749,8 +749,12 @@ pub struct App {
     pub(crate) resident_power: (Option<u8>,bool),
 }
 
+/// 现在正在播放的曲目（后台线程写入，AI 上下文读取）。
+static NOW_PLAYING: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
 impl App {
     pub fn new(ctx: &egui::Context, opts: Options) -> Self {
+        Self::spawn_now_playing_watch();
         theme::load_fonts(ctx);
         egui_extras::install_image_loaders(ctx);
         ctx.set_theme(egui::ThemePreference::Dark);
@@ -1250,6 +1254,28 @@ impl App {
         self.todos.save();
         self.todo_pop.vel += 6.0;
     }
+    /// 现在正在播放的曲目。WinRT 的查询要几十到几百毫秒，放后台线程做，
+    /// 这里只读缓存。
+    fn ai_now_playing(&self) -> Option<String> {
+        NOW_PLAYING.lock().ok().and_then(|slot| slot.clone())
+    }
+
+    /// 后台采集「正在播放」。系统媒体会话的查询是 WinRT 异步调用，
+    /// 放在 UI 线程上会卡住。
+    fn spawn_now_playing_watch() {
+        std::thread::Builder::new()
+            .name("lingqi-now-playing".into())
+            .spawn(|| loop {
+                let playing = crate::smtc::current();
+                let text = (!playing.is_empty()).then(|| playing.describe());
+                if let Ok(mut slot) = NOW_PLAYING.lock() {
+                    *slot = text;
+                }
+                std::thread::sleep(std::time::Duration::from_secs(5));
+            })
+            .ok();
+    }
+
     /// 采集本机状态给 AI。只在真正要发请求时调用一次，不进每帧路径。
     pub(crate) fn ai_sources(&self)->crate::ai::context::Sources {
         use crate::ai::context::{Performance,Sources,Weather};
@@ -1276,6 +1302,7 @@ impl App {
             city:(!self.settings.weather_city.trim().is_empty())
                 .then(||self.settings.weather_city.clone())
                 .or_else(||self.settings.weather_saved.first().map(|position|position.label.clone())),
+            now_playing:self.ai_now_playing(),
         }
     }
 
