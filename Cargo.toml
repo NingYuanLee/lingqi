@@ -26,7 +26,7 @@ required-features = ["record"]
 record = []
 
 material = [
-  "dep:bytemuck", "dep:pollster",
+  "dep:bytemuck",
   "eframe/direct-composition",
   "windows/Graphics", "windows/Graphics_Capture", "windows/Graphics_DirectX", "windows/Graphics_DirectX_Direct3D11",
   "windows/Win32_Graphics_Direct3D", "windows/Win32_Graphics_Direct3D11",
@@ -68,7 +68,7 @@ eframe = { version = "0.31", default-features = false, features = ["glow", "defa
 
 [target.'cfg(windows)'.dependencies]
 bytemuck = { version = "1", features = ["derive"], optional = true }
-pollster = { version = "0.4", optional = true }
+pollster = "0.4"
 zip = { version = "9.7", default-features = false, features = ["deflate-flate2"] }
 ureq = { version = "2.12", default-features = false, features = ["native-tls"] }
 clipboard-win = "5.4.3"

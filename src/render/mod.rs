@@ -12,10 +12,18 @@
 //! 走这里。两者共用同一套顶点布局与混合方式，输出应当逐像素一致
 //! （见 `tests/render_parity.rs`）。
 
+pub mod backend;
+pub mod run_loop;
+pub mod window;
+pub mod surface;
+pub mod host;
 pub mod renderer;
 pub mod tessellate;
 pub mod text;
 
+pub use backend::Backend;
+pub use run_loop as render_loop;
+pub use window::IslandWindow;
 pub use renderer::{Renderer, ScreenDescriptor};
 pub use tessellate::ShapeTessellator;
 pub use text::TextState;

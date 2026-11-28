@@ -145,6 +145,32 @@
 - 图形安装包（NSIS）暂缺：构建机拿不到 NSIS（choco/winget 都需要管理员权限），
   先以 ZIP + `安装灵栖.cmd` 便携安装脚本代替。
 
+## 5.1.2 自研渲染后端（自写 wgpu 渲染器 + DirectComposition）
+
+渲染内核已经在仓库里（`src/render/`），并且**真的跑通了**：
+
+| 模块 | 职责 |
+| --- | --- |
+| `text.rs` | 字体与字形图集（epaint 的 Fonts） |
+| `tessellate.rs` | 形状 → 渲染原语（与后端无关） |
+| `renderer.rs` | 自写的 wgpu 渲染器：自己的管线、顶点/索引缓冲、裁剪矩形、纹理与采样器 |
+| `shader.wgsl` | 自己的着色器（改写自 egui-wgpu，许可已在第三方声明里） |
+| `backend.rs` | 后端开关：`LINGQI_RENDERER_BACKEND=self` 走自研内核，否则走 egui-wgpu |
+| `surface.rs` | DirectComposition 透明交换链（D3D11 → IDXGIDevice → DCompositionCreateDevice2 → visual） |
+| `host.rs` | 宿主：自己的 wgpu 设备、交换链与 egui 上下文，负责呈现 |
+| `window.rs` | 岛体窗口与键盘事件收集 |
+| `run_loop.rs` | 消息循环：窗口消息 → egui → 细分 → 自写渲染器 → 呈现 |
+
+验证：
+
+- **细分对拍**：同一组形状，egui 的 `Context::tessellate` 与本模块的细分结果逐字节一致。
+- **像素对拍**：同一组原语分别交给 egui-wgpu 与自写渲染器渲染到离屏纹理，
+  读回逐像素比较，差异不超过 1/255。
+- **端到端冒烟**（`tests/render_self_backend.rs`）：真的建窗口、建 DComp 交换链、
+  跑一帧 egui、用自写渲染器呈现到交换链。已通过。
+
+岛体之外的像素是真透明（交换链的 alpha），不是「画成透明色」。
+
 ## 5.1.1 分发：图形安装包与更新通道
 
 - **图形安装包**：`installer/Lingqi.nsi`（NSIS 3）→ `Lingqi-Setup-v0.1.4.exe`（5.6 MB）。
